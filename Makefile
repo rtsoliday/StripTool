@@ -46,35 +46,35 @@ else ifeq ($(HAVE_LEGACY),)
 	@echo "EPICS Base and Motif development files are required for legacy StripTool."
 	@exit 1
 else
-	$(MAKE) -C striptool EPICS_BASE="$(EPICS_BASE)"
+	+$(MAKE) -C striptool EPICS_BASE="$(EPICS_BASE)"
 endif
 
 qtstriptool:
-	$(QT_SUBMAKE)
+	+$(QT_SUBMAKE)
 
 test-qtstriptool:
-	$(QT_SUBMAKE) test
+	+$(QT_SUBMAKE) test
 
 test-qtstriptool-core:
-	$(QT_SUBMAKE) test-core
+	+$(QT_SUBMAKE) test-core
 
 test-qtstriptool-config:
-	$(QT_SUBMAKE) test-config
+	+$(QT_SUBMAKE) test-config
 
 test-qtstriptool-ui:
-	$(QT_SUBMAKE) test-ui
+	+$(QT_SUBMAKE) test-ui
 
 test-qtstriptool-performance:
-	$(QT_SUBMAKE) test-performance
+	+$(QT_SUBMAKE) test-performance
 
 test-qtstriptool-ioc:
-	$(QT_SUBMAKE) test-ioc TEST_PV="$(TEST_PV)"
+	+$(QT_SUBMAKE) test-ioc TEST_PV="$(TEST_PV)"
 
 test-qtstriptool-visual:
-	$(QT_SUBMAKE) test-visual
+	+$(QT_SUBMAKE) test-visual
 
 test-qt-versions:
-	$(MAKE) -C qtstriptool EPICS_BASE="$(EPICS_BASE)" test-qt-versions
+	+$(MAKE) -C qtstriptool EPICS_BASE="$(EPICS_BASE)" test-qt-versions
 
 test-ioc: test-qtstriptool-ioc
 
@@ -116,11 +116,11 @@ else
 endif
 
 clean:
-	$(MAKE) -C striptool clean
-	$(MAKE) -C qtstriptool clean
+	+$(MAKE) -C striptool clean
+	+$(MAKE) -C qtstriptool clean
 
 distclean:
-	$(MAKE) -C striptool distclean
-	$(MAKE) -C qtstriptool distclean
+	+$(MAKE) -C striptool distclean
+	+$(MAKE) -C qtstriptool distclean
 	rmdir bin/$(OS)-$(ARCH) bin 2>/dev/null || true
 	rm -rf O.package

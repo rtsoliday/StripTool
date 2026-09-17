@@ -479,7 +479,7 @@ int     StripConfig_setattr (StripConfig *scfg, ...)
             
 	case STRIPCONFIG_TIME_NUM_SAMPLES:
 	  tmp.i = va_arg (ap, int);
-	  if (tmp.u != scfg->Time.num_samples)
+	  if (tmp.i != scfg->Time.num_samples)
 	  {
 	    tmp.i = max (tmp.i, STRIPMIN_TIME_NUM_SAMPLES);
 	    tmp.i = min (tmp.i, STRIPMAX_TIME_NUM_SAMPLES);
@@ -935,8 +935,8 @@ int     StripConfig_write       (StripConfig            *scfg,
 			scfg->Curves.Detail[j].precision,
 			num_buf, 31);
 		  fprintf (f, "%-*s%s\n", LEFT_COLUMNWIDTH, fbuf, num_buf);
-		  break;
 		}
+		break;
 	    case SCFGMASK_CURVE_SCALE:
 		fprintf
 		  (f, "%-*s%d\n",
@@ -1544,6 +1544,7 @@ static int      read_oldformat  (StripConfig            *scfg,
 void    StripConfig_reset_details       (StripConfig *scfg,
   StripCurveDetail *detail)
 {
+  (void)scfg;
   strcpy (detail->egu, STRIPDEF_CURVE_EGU);
   strcpy (detail->comment, STRIPDEF_CURVE_COMMENT);
   detail->precision     = STRIPDEF_CURVE_PRECISION;

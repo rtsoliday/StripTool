@@ -1008,11 +1008,11 @@ XjLegendValueUpdateItem    (Widget         w,
 
   static char nameL[128]; /* Albert */
   char * name= nameStart;
-  memset(nameL,0,128);
-  memset(nameL,' ',40);
-  if(strlen(nameStart)<40) {
-  strncpy(nameL,nameStart,strlen(nameStart));
-  name = (char *) nameL;
+  memset(nameL, 0, sizeof nameL);
+  memset(nameL, ' ', 40);
+  if(nameStart && strlen(nameStart)<40) {
+  memcpy(nameL, nameStart, strlen(nameStart));
+  name = nameL;
   }
 
   /* copy args */

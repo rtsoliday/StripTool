@@ -1411,7 +1411,7 @@ ComputeTimeTics         (AxisWidget cw)
   double    a, b;
   double    delta;
   time_t    a_secs, b_secs, secs;
-  struct tm cal = {0, 0};
+  struct tm cal = {0};
   int       best;
   int       i;
   int *     tm_field = 0;
@@ -1761,8 +1761,8 @@ ComputeTimeTics         (AxisWidget cw)
       else
       {
         strftime (buf, BUF_SIZE, TimeFormats[best], localtime (&secs));
-        strncpy (cw->axis.tic_labels[i], buf, AXIS_MAX_LABEL);
-        cw->axis.tic_labels[i][AXIS_MAX_LABEL] = 0;
+        snprintf (cw->axis.tic_labels[i], sizeof cw->axis.tic_labels[i],
+          "%.32s", buf);
       }
 
       *tm_field += interval;
@@ -1819,8 +1819,8 @@ ComputeTimeTics         (AxisWidget cw)
         }
         else sprintf (buf, "%d", (int)(r-b));
         
-        strncpy (cw->axis.tic_labels[i], buf, AXIS_MAX_LABEL);
-        cw->axis.tic_labels[i][AXIS_MAX_LABEL] = 0;
+        snprintf (cw->axis.tic_labels[i], sizeof cw->axis.tic_labels[i],
+          "%.32s", buf);
       }
 
       r -= m_minor * q;
@@ -1934,8 +1934,8 @@ ComputeNormalTics       (AxisWidget cw)
     {
       cw->axis.tic_lengths[i] = AXIS_MAJOR_TIC_LENGTH;
       sprintf (buf, "%-.*g", AXIS_MAX_DIGITS+10, r*(q/p));
-      strncpy (cw->axis.tic_labels[i], buf, AXIS_MAX_LABEL);
-      cw->axis.tic_labels[i][AXIS_MAX_LABEL] = 0;
+      snprintf (cw->axis.tic_labels[i], sizeof cw->axis.tic_labels[i],
+        "%.32s", buf);
     }
 
     else cw->axis.tic_lengths[i] = AXIS_MINOR_TIC_LENGTH;
@@ -1952,8 +1952,8 @@ ComputeNormalTics       (AxisWidget cw)
     cw->axis.tic_offsets[i] = cw->axis.log_epsilon_offset;
     cw->axis.tic_lengths[i] = AXIS_MAJOR_TIC_LENGTH+2;
     sprintf (buf, "%c1e%-d", PLUS_MINUS, (int)cw->axis.log_epsilon);
-    strncpy (cw->axis.tic_labels[i], buf, AXIS_MAX_LABEL);
-    cw->axis.tic_labels[i][AXIS_MAX_LABEL] = 0;
+    snprintf (cw->axis.tic_labels[i], sizeof cw->axis.tic_labels[i],
+      "%.32s", buf);
     i++;
   }
 
@@ -2032,8 +2032,8 @@ ComputeLogTics  (AxisWidget cw)
         if (ABS (fmod (r, m_major)) <= DBL_EPSILON)
         {
           sprintf (buf, "1e%-d", (int)r);
-          strncpy (cw->axis.tic_labels[i], buf, AXIS_MAX_LABEL);
-          cw->axis.tic_labels[i][AXIS_MAX_LABEL] = 0;
+          snprintf (cw->axis.tic_labels[i], sizeof cw->axis.tic_labels[i],
+            "%.32s", buf);
         }
         else
         {
@@ -2081,8 +2081,8 @@ ComputeLogTics  (AxisWidget cw)
         if (ABS (fmod (r, m_major)) <= DBL_EPSILON)
         {
           sprintf (buf, "-1e%-d", (int)-r);
-          strncpy (cw->axis.tic_labels[i], buf, AXIS_MAX_LABEL);
-          cw->axis.tic_labels[i][AXIS_MAX_LABEL] = 0;
+          snprintf (cw->axis.tic_labels[i], sizeof cw->axis.tic_labels[i],
+            "%.32s", buf);
         }
         else
         {
@@ -2104,8 +2104,8 @@ ComputeLogTics  (AxisWidget cw)
     cw->axis.tic_offsets[i] = cw->axis.log_epsilon_offset;
     cw->axis.tic_lengths[i] = AXIS_MAJOR_TIC_LENGTH+2;
     sprintf (buf, "%c1e%-d", PLUS_MINUS, (int)cw->axis.log_epsilon);
-    strncpy (cw->axis.tic_labels[i], buf, AXIS_MAX_LABEL);
-    cw->axis.tic_labels[i][AXIS_MAX_LABEL] = 0;
+    snprintf (cw->axis.tic_labels[i], sizeof cw->axis.tic_labels[i],
+      "%.32s", buf);
     i++;
   }
 
@@ -3083,4 +3083,3 @@ untransform_normalized_values (AxisTransform          transform,
     }
   }
 }
-

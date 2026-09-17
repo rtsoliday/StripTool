@@ -830,7 +830,6 @@ static void StripGraph_plotdata (StripGraphInfo *sgi)
   struct timeval        dt_new, dt_cur; /* interval width (time) */
   double                dl_new, dl_cur; /* interval width (real) */
   double                db = 0.0;       /* bin width (real) */
-  double                dl;             /* interval width (real) */
   double                l_min, l_max;   /* min, max (real) */
   int                   b_min, b_max;   /* min, max (quantized) */
   int                   n_shift = 0;
@@ -887,7 +886,6 @@ static void StripGraph_plotdata (StripGraphInfo *sgi)
     sgi->plotted_t0 = sgi->t0;
     sgi->plotted_t1 = sgi->t1;
     db = dl_new / (sgi->window_rect.width - 1);
-    dl = dl_new;
     method = SDS_REFRESH_ALL;
   }
 
@@ -919,7 +917,6 @@ static void StripGraph_plotdata (StripGraphInfo *sgi)
     r = time2dbl (&sgi->plotted_t1);
     dbl2time (&sgi->plotted_t1, r + (n_shift * db));
 
-    dl = dl_cur;
     method = SDS_JOIN_NEW;
   }
 
@@ -1163,7 +1160,7 @@ int     StripGraph_dumpdata_csv     (StripGraph the_sgi, FILE *f)
 /*
  * StripGraph_print
  */
-void StripGraph_print (StripGraph the_sgi)
+void StripGraph_print (StripGraph BOGUS(the_sgi))
 {
   fprintf (stdout, "StripGraph_print() is under construction :)\n");
 }
@@ -1301,7 +1298,7 @@ static void     callback        (Widget w, XtPointer client, XtPointer call)
 }
 
 
-static void     crossing_event_handler    (Widget           w,
+static void     crossing_event_handler    (Widget           BOGUS(w),
                                            XtPointer        data,
                                            XCrossingEvent   *event,
                                            Boolean          *BOGUS(dispatch))
@@ -1322,7 +1319,7 @@ static void     crossing_event_handler    (Widget           w,
 }
 
 
-static void     motion_event_handler      (Widget           w,
+static void     motion_event_handler      (Widget           BOGUS(w),
                                            XtPointer        data,
                                            XMotionEvent     *event,
                                            Boolean          *BOGUS(dispatch))
@@ -1407,7 +1404,7 @@ void CurveLegendRefresh(StripCurveInfo *c, StripGraph sg, double a)
            sgi->curves[i]->details->scale == STRIPSCALE_LOG_10?
            "log10 (%g, %g) VAL=%g" : "(%g, %g) VAL=%g",
            sgi->curves[i]->details->min, sgi->curves[i]->details->max,
-	   sgi->curves[i]->get_value(sgi->curves[i]->func_data) );
+	   a);
 
         XjLegendValueUpdateItem
           (sgi->legend,

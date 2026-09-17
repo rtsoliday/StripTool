@@ -83,8 +83,8 @@ FetchStatus     StripHistory_fetch      (StripHistory           the_shi,
                                          struct timeval         *begin,
                                          struct timeval         *end,
                                          StripHistoryResult     *result,
-                                         StripHistoryCallback   callback,
-                                         void                   *call_data)
+                                         StripHistoryCallback   BOGUS(callback),
+                                         void                   *BOGUS(call_data))
 {
 
   unsigned long err;
@@ -134,8 +134,8 @@ FetchStatus     StripHistory_fetch      (StripHistory           the_shi,
 
  /* StripHistory_cancel
  */
-void    StripHistory_cancel     (StripHistory           the_shi,
-                                 StripHistoryResult     *result)
+void    StripHistory_cancel     (StripHistory           BOGUS(the_shi),
+                                 StripHistoryResult     *BOGUS(result))
 {
 }
 /* StripHistoryResult_release
@@ -143,6 +143,9 @@ void    StripHistory_cancel     (StripHistory           the_shi,
 void  StripHistoryResult_release    (StripHistory           BOGUS(the_shi),
                                      StripHistoryResult     *result)
 {
+#if !defined(USE_AAPI) && !defined(USE_CAR)
+  (void)result;
+#endif
 #ifdef USE_AAPI
 AAPI_Result_release(result);
 #endif

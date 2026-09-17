@@ -436,9 +436,14 @@ static int convertNameToFullPath(const char *name, char *pathName, int nChars)
   int retVal = 1;
   
   if(isPath(name)) {
+    size_t nameLength;
+
     /* Is a full path name */
-    strncpy(pathName, name, nChars);
-    pathName[nChars-1] = '\0';
+    if(nChars <= 0) return 0;
+    nameLength = strlen(name);
+    if(nameLength >= (size_t)nChars) nameLength = (size_t)nChars - 1;
+    memcpy(pathName, name, nameLength);
+    pathName[nameLength] = '\0';
   } else {
     char currentDirectoryName[STRIP_PATH_MAX];
     

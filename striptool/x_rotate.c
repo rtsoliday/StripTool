@@ -517,14 +517,22 @@ int                     nbytes, row_inc, saved_nbyterows;
                                 continue;
                         }
         
-                        if (c & 0x80) *outp |= mask; outp += row_inc;
-                        if (c & 0x40) *outp |= mask; outp += row_inc;
-                        if (c & 0x20) *outp |= mask; outp += row_inc;
-                        if (c & 0x10) *outp |= mask; outp += row_inc;
-                        if (c & 0x08) *outp |= mask; outp += row_inc;
-                        if (c & 0x04) *outp |= mask; outp += row_inc;
-                        if (c & 0x02) *outp |= mask; outp += row_inc;
-                        if (c & 0x01) *outp |= mask; outp += row_inc;
+                        if (c & 0x80) *outp |= mask;
+                        outp += row_inc;
+                        if (c & 0x40) *outp |= mask;
+                        outp += row_inc;
+                        if (c & 0x20) *outp |= mask;
+                        outp += row_inc;
+                        if (c & 0x10) *outp |= mask;
+                        outp += row_inc;
+                        if (c & 0x08) *outp |= mask;
+                        outp += row_inc;
+                        if (c & 0x04) *outp |= mask;
+                        outp += row_inc;
+                        if (c & 0x02) *outp |= mask;
+                        outp += row_inc;
+                        if (c & 0x01) *outp |= mask;
+                        outp += row_inc;
                 }
             }
         }
@@ -556,14 +564,22 @@ int                     nbytes, row_inc, saved_nbyterows;
                                 continue;
                         }
         
-                        if (c & 0x80) *outp |= mask; outp -= row_inc;
-                        if (c & 0x40) *outp |= mask; outp -= row_inc;
-                        if (c & 0x20) *outp |= mask; outp -= row_inc;
-                        if (c & 0x10) *outp |= mask; outp -= row_inc;
-                        if (c & 0x08) *outp |= mask; outp -= row_inc;
-                        if (c & 0x04) *outp |= mask; outp -= row_inc;
-                        if (c & 0x02) *outp |= mask; outp -= row_inc;
-                        if (c & 0x01) *outp |= mask; outp -= row_inc;
+                        if (c & 0x80) *outp |= mask;
+                        outp -= row_inc;
+                        if (c & 0x40) *outp |= mask;
+                        outp -= row_inc;
+                        if (c & 0x20) *outp |= mask;
+                        outp -= row_inc;
+                        if (c & 0x10) *outp |= mask;
+                        outp -= row_inc;
+                        if (c & 0x08) *outp |= mask;
+                        outp -= row_inc;
+                        if (c & 0x04) *outp |= mask;
+                        outp -= row_inc;
+                        if (c & 0x02) *outp |= mask;
+                        outp -= row_inc;
+                        if (c & 0x01) *outp |= mask;
+                        outp -= row_inc;
                 }
             }
         }
@@ -579,4 +595,3 @@ int                     nbytes, row_inc, saved_nbyterows;
 
         return 0;
 }
-

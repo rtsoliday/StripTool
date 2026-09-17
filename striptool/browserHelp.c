@@ -73,7 +73,6 @@ int callBrowser(Display *dpy, char *url, char *bookmark)
     int (*oldhandler)(Display *, XErrorEvent *);
     static Window netscapew=(Window)0;
     static pid_t pid=0;
-    int status;
     char command[BUFSIZ];
     char *envstring;
 
@@ -114,9 +113,9 @@ int callBrowser(Display *dpy, char *url, char *bookmark)
 #if DEBUG
 	    printf("execute(before): cmd=%s\n",command);
 #endif	    
-	    status=execute(command);
+	    execute(command);
 #if DEBUG
-	    printf("execute(after): cmd=%s status=%d\n",command,status);
+	    printf("execute(after): cmd=%s\n",command);
 #endif	    
 	    return 1;
 	}
@@ -146,9 +145,9 @@ int callBrowser(Display *dpy, char *url, char *bookmark)
 #if DEBUG
     printf("execute(before): cmd=%s\n",command);
 #endif    
-    status=execute(command);
+    execute(command);
 #if DEBUG
-    printf("execute(after): cmd=%s status=%d\n",command,status);
+    printf("execute(after): cmd=%s\n",command);
 #endif    
 
   /* Raise the window */

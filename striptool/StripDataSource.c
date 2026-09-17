@@ -724,6 +724,7 @@ StripDataSource_init_range      (StripDataSource        the_sds,
   struct timeval        t1, t_tmp;
   struct timeval        h0, h1, *h_end;
   long                  r0, r1 = 0;
+  long                  hidx_t0, hidx_t1;
   int                   have_data = 0;
   int                   i;
 
@@ -878,14 +879,19 @@ StripDataSource_init_range      (StripDataSource        the_sds,
       if ((compare_times (&h0, h_end) < 0) &&
 	  (cd->history.fetch_stat == FETCH_DONE))
       {
-        cd->hidx_t0 = find_date_idx
+        hidx_t0 = find_date_idx
           (&h0, cd->history.times, cd->history.n_points,
 		cd->history.n_points, cd->history.n_points - 1, SDS_GTE);
-        cd->hidx_t1 = find_date_idx
+        hidx_t1 = find_date_idx
           (h_end, cd->history.times, cd->history.n_points,
 		cd->history.n_points, cd->history.n_points - 1, SDS_LTE);
 
-        have_data |= ((cd->hidx_t0 >= 0) && (cd->hidx_t1 >= cd->hidx_t0));
+        if ((hidx_t0 >= 0) && (hidx_t1 >= hidx_t0))
+        {
+          cd->hidx_t0 = (size_t)hidx_t0;
+          cd->hidx_t1 = (size_t)hidx_t1;
+          have_data = 1;
+        }
       }
     }
   if (radioChange)  radioChange=0;
@@ -1643,6 +1649,7 @@ StripDataSource_dump    (StripDataSource        the_sds,
   StripDataSourceInfo   *sds = (StripDataSourceInfo *)the_sds;
   char                  buf[SDS_DUMP_FIELDWIDTH+1];
   int                   i, j;
+  size_t                data_index;
   struct timeval Start,End;
   struct timeval StartCopy,EndCopy;
   CurveData *cd;
@@ -1727,27 +1734,29 @@ StripDataSource_dump    (StripDataSource        the_sds,
 
   if (sds->idx_t0 != sds->idx_t1) 
   {
-    for (i = sds->idx_t0; i != sds->idx_t1; i = (i+1) % sds->buf_size)
+    for (data_index = sds->idx_t0; data_index != sds->idx_t1;
+         data_index = (data_index+1) % sds->buf_size)
     {
-	if(compare_times(&(sds->times[i]),&End)>0) 
-	{if(DEBUG1)printf("T[%d]>End   break\n",i); break;}
-	if(compare_times(&(sds->times[i]),&Start)<0) 
+	if(compare_times(&(sds->times[data_index]),&End)>0)
+	{if(DEBUG1)printf("T[%zu]>End   break\n",data_index); break;}
+	if(compare_times(&(sds->times[data_index]),&Start)<0)
 	{if(DEBUG1)
-	  printf("Start > T[%d]=%s",i,ctime((const time_t *)&(sds->times[i].tv_sec))); 
+	  printf("Start > T[%zu]=%s",data_index,
+	    ctime((const time_t *)&(sds->times[data_index].tv_sec)));
 	continue;}
-	if(DEBUG1)printf("Good i=%d\n",i);
+	if(DEBUG1)printf("Good i=%zu\n",data_index);
 	
 	/* (b-1) */
 	memset(buf,0,SDS_DUMP_FIELDWIDTH+1);
 	strftime(buf, SDS_DUMP_FIELDWIDTH, "%m/%d/%Y %H:%M:%S",
-	  localtime ((const time_t *)&(sds->times[i].tv_sec)));
-	fprintf (outfile, "%s.%06d\t",buf,(int)sds->times[i].tv_usec); 
+	  localtime ((const time_t *)&(sds->times[data_index].tv_sec)));
+	fprintf (outfile, "%s.%06d\t",buf,(int)sds->times[data_index].tv_usec);
 	/* (b-2) */
 	for (j = 0; j < STRIP_MAX_CURVES; j++)
 	  if (sds->buffers[j].curve)
 	  {
-	    if (sds->buffers[j].stat[i] & DATASTAT_PLOTABLE)
-		fprintf (outfile, "%g\t",sds->buffers[j].val[i]);
+	    if (sds->buffers[j].stat[data_index] & DATASTAT_PLOTABLE)
+		fprintf (outfile, "%g\t",sds->buffers[j].val[data_index]);
 	    else fprintf (outfile, "%s\t",SDS_DUMP_BADVALUESTR);
 	  }
 	
@@ -1776,6 +1785,7 @@ StripDataSource_dump_csv    (StripDataSource        the_sds,
   StripDataSourceInfo   *sds = (StripDataSourceInfo *)the_sds;
   char                  buf[SDS_DUMP_FIELDWIDTH+1];
   int                   i, j;
+  size_t                data_index;
   struct timeval Start,End;
   struct timeval StartCopy,EndCopy;
   CurveData *cd;
@@ -1861,27 +1871,29 @@ StripDataSource_dump_csv    (StripDataSource        the_sds,
 
   if (sds->idx_t0 != sds->idx_t1) 
   {
-    for (i = sds->idx_t0; i != sds->idx_t1; i = (i+1) % sds->buf_size)
+    for (data_index = sds->idx_t0; data_index != sds->idx_t1;
+         data_index = (data_index+1) % sds->buf_size)
     {
-	if(compare_times(&(sds->times[i]),&End)>0) 
-	{if(DEBUG1)printf("T[%d]>End   break\n",i); break;}
-	if(compare_times(&(sds->times[i]),&Start)<0) 
+	if(compare_times(&(sds->times[data_index]),&End)>0)
+	{if(DEBUG1)printf("T[%zu]>End   break\n",data_index); break;}
+	if(compare_times(&(sds->times[data_index]),&Start)<0)
 	{if(DEBUG1)
-	  printf("Start > T[%d]=%s",i,ctime(&(sds->times[i].tv_sec))); 
+	  printf("Start > T[%zu]=%s",data_index,
+	    ctime(&(sds->times[data_index].tv_sec)));
 	continue;}
-	if(DEBUG1)printf("Good i=%d\n",i);
+	if(DEBUG1)printf("Good i=%zu\n",data_index);
 	
 	/* (b-1) */
 	memset(buf,0,SDS_DUMP_FIELDWIDTH+1);
 	strftime(buf, SDS_DUMP_FIELDWIDTH, "%m/%d/%Y %H:%M:%S",
-	  localtime (&(sds->times[i].tv_sec)));
-	fprintf (outfile, "%s.%06d",buf,(int)sds->times[i].tv_usec); 
+	  localtime (&(sds->times[data_index].tv_sec)));
+	fprintf (outfile, "%s.%06d",buf,(int)sds->times[data_index].tv_usec);
 	/* (b-2) */
 	for (j = 0; j < STRIP_MAX_CURVES; j++)
 	  if (sds->buffers[j].curve)
 	  {
-	    if (sds->buffers[j].stat[i] & DATASTAT_PLOTABLE)
-		fprintf (outfile, ",%g",sds->buffers[j].val[i]);
+	    if (sds->buffers[j].stat[data_index] & DATASTAT_PLOTABLE)
+		fprintf (outfile, ",%g",sds->buffers[j].val[data_index]);
 	    else fprintf (outfile, ",%s",SDS_DUMP_BADVALUESTR);
 	  }
 	

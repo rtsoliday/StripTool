@@ -1526,7 +1526,8 @@ StripDialog     StripDialog_init        (Widget parent, StripConfig *cfg)
         
 
     XtRealizeWidget (sd->shell);
-    XtMapWidget (sd->current_page = sd->pages[SDPAGE_CURVES]);
+    sd->current_page = sd->pages[SDPAGE_CURVES];
+    XtMapWidget (sd->current_page);
     XmProcessTraversal (sd->connect_txt, XmTRAVERSE_CURRENT);    
     XUnmapWindow (sd->display, XtWindow (sd->shell));
 
@@ -2948,7 +2949,8 @@ static void     gropt_slider_cb (Widget         BOGUS(1),
 }
 
 
-static void      gropt_xgrid_cb  (Widget w, XtPointer data, XtPointer call)
+static void      gropt_xgrid_cb  (Widget BOGUS(w), XtPointer data,
+                                  XtPointer call)
 {
   XmRowColumnCallbackStruct   *cbs = (XmRowColumnCallbackStruct *)call;
   StripDialogInfo             *sd = (StripDialogInfo *)data;
@@ -2965,7 +2967,8 @@ static void      gropt_xgrid_cb  (Widget w, XtPointer data, XtPointer call)
 }
   
   
-static void      gropt_ygrid_cb  (Widget w, XtPointer data, XtPointer call)
+static void      gropt_ygrid_cb  (Widget BOGUS(w), XtPointer data,
+                                  XtPointer call)
 {
   XmRowColumnCallbackStruct   *cbs = (XmRowColumnCallbackStruct *)call;
   StripDialogInfo             *sd = (StripDialogInfo *)data;
@@ -3135,7 +3138,8 @@ static void bogus_cb (Widget BOGUS(1), XtPointer BOGUS(2), XtPointer BOGUS(3))
 }
 
 
-static void     wmdelete_cb     (Widget w, XtPointer data, XtPointer BOGUS(1))
+static void     wmdelete_cb     (Widget BOGUS(w), XtPointer data,
+                                 XtPointer BOGUS(1))
 {
   StripDialogInfo       *sd = (StripDialogInfo *)data;
 
@@ -3156,7 +3160,7 @@ static void     ctrl_btn_cb     (Widget w, XtPointer data, XtPointer BOGUS(1))
 }
 
 
-static void     tabs_cb (Widget w, XtPointer data, XtPointer call)
+static void     tabs_cb (Widget BOGUS(w), XtPointer data, XtPointer call)
 {
   XgTabsCallbackStruct  *cbs = (XgTabsCallbackStruct *)call;
   StripDialogInfo       *sd = (StripDialogInfo *)data;

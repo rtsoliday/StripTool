@@ -64,6 +64,8 @@
  */
 #if defined(__cplusplus) || defined(C_plusplus)
 #  define BOGUS(x)
+#elif defined(__GNUC__)
+#  define BOGUS(x)      BOGUS_ARG_ ## x __attribute__((unused))
 #else
 #  define BOGUS(x)      BOGUS_ARG_ ## x
 #endif
@@ -257,4 +259,3 @@ char *timeStamp(void);
 void convertDirDelimiterToWIN32(char *pathName);
 
 #endif
-

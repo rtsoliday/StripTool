@@ -32,7 +32,9 @@ unsigned long getHistory(StripHistory     the_shi,
 		  double**         data,
 		  unsigned long *  count)
 {
-  struct timeval right_endpoint;   /* right end for AAPI request */
+#if defined(USE_ARCHIVE_RECORD) || defined(USE_AAPI) || defined(USE_CAR)
+  struct timeval right_endpoint;   /* right end for archive request */
+#endif
   unsigned long commonCount=0;
   int i;
 
@@ -47,8 +49,10 @@ unsigned long getHistory(StripHistory     the_shi,
   long returnedCountAAPI=0;
 
   *count=0;
+#if defined(USE_ARCHIVE_RECORD) || defined(USE_AAPI) || defined(USE_CAR)
   right_endpoint.tv_sec = end->tv_sec;
   right_endpoint.tv_usec = end->tv_usec;
+#endif
 
 #ifdef   USE_ARCHIVE_RECORD
   if(getArchiveRecord(name,begin,end,
@@ -171,6 +175,5 @@ if(DEBUG1) printf("history req is here\n");
   
   return (0);
 }
-
 
 

@@ -293,7 +293,7 @@ static char     *StripWindowTypeStr[STRIPWINDOW_COUNT] =
   "Graph",
 };
 
-typedef void    (*fsdlg_functype)       (Strip, char *);
+typedef int     (*fsdlg_functype)       (Strip, char *);
 
 /* ====== Static Data ====== */
 static struct timeval   tv;
@@ -327,7 +327,7 @@ static int      X_error_handler         (Display *, XErrorEvent *);
 static int      X_ignore_error          (Display *, XErrorEvent *);
 #ifdef TRAP_XT_ERRORS
 void            Xt_warning_handler      (String msg);
-void            Xt_error_handler        (String msg);
+void            Xt_error_handler        (String msg) _X_NORETURN;
 #endif
 
 static void     dlgrequest_connect      (void *, void *);
@@ -1793,8 +1793,8 @@ int     Strip_dumpdata  (Strip the_strip, char *fname)
   {
     if (DFSDLG_TGL_COUNT > 1)
     {
-      for (i = 0; i < DFSDLG_TGL_COUNT; i++)
-        if (XmToggleButtonGetState(si->fs_tgl[i])) break;
+	for (i = 0; i < DFSDLG_TGL_COUNT; i++)
+	  if (XmToggleButtonGetState(si->fs_tgl[i])) break;
 	switch (i)
 	{
 	case DFSDLG_TGL_ASCII:
@@ -1908,7 +1908,6 @@ static void     Strip_graphdrop_handle  (Widget         w,
   Widget                        dc;
   XmDropProcCallback            drop_data;
   XmDropTransferEntryRec        xfer_entries[10];
-  XmDropTransferEntry           xfer_list;
   Cardinal                      n_export_targets;
   Atom                          *export_targets;
   Atom                          COMPOUND_TEXT;
@@ -1945,7 +1944,6 @@ static void     Strip_graphdrop_handle  (Widget         w,
   {
     xfer_entries[0].target = COMPOUND_TEXT;
     xfer_entries[0].client_data = (char *)si;
-    xfer_list = xfer_entries;
     XtSetArg (args[n], XmNdropTransfers, xfer_entries); n++;
     XtSetArg (args[n], XmNnumDropTransfers, 1); n++;
     XtSetArg (args[n], XmNtransferProc, Strip_graphdrop_xfer); n++;
@@ -2409,7 +2407,6 @@ static void     Strip_eventmgr          (XtPointer arg, XtIntervalId *BOGUS(id))
 			  STRIPCURVE_CHECK_CONNECT);
 		    n++;
 		  }
-		  if (n > 0) ; /* do nothing */
 		}
 	  break;
       }
@@ -2553,7 +2550,7 @@ static void     Strip_printer_init      (StripInfo *si)
 /*
  * Strip_ignorexerror
  */
-void     Strip_ignorexerror     (StripInfo *si, int browse)
+void     Strip_ignorexerror     (StripInfo *BOGUS(si), int BOGUS(browse))
 {
 }
 
@@ -2591,8 +2588,6 @@ static void     Strip_setbrowsemode     (StripInfo *si, int browse)
  */
 static void     callback        (Widget w, XtPointer client, XtPointer call)
 {
-  static int                    x, y;
-
   XmDrawingAreaCallbackStruct   *cbs;
   XEvent                        *event;
   StripInfo                     *si;
@@ -3050,9 +3045,6 @@ static void     callback        (Widget w, XtPointer client, XtPointer call)
     
     if (event->xany.type == ButtonPress)
     {
-	x = event->xbutton.x;
-	y = event->xbutton.y;
-	
 	/* if this is the third button, then popup the menu */
 	if (event->xbutton.button == Button3)
 	{
@@ -3079,7 +3071,7 @@ static void     callback        (Widget w, XtPointer client, XtPointer call)
 
             statusChanged = False;
             /* if not paused, pause the graph by putting it in browse mode */
-            if (!si->status & STRIPSTAT_BROWSE_MODE) {
+            if (!(si->status & STRIPSTAT_BROWSE_MODE)) {
               statusChanged = True;
               Strip_setbrowsemode (si, True);
             }
@@ -3480,7 +3472,7 @@ static void     PopupMenu_cb    (Widget w, XtPointer client, XtPointer BOGUS(1))
   PopupMenuItem item = (PopupMenuItem)client;
   StripInfo     *si;
 #ifndef WIN32
-  char          cmd_buf[256];
+  char          cmd_buf[512];
   pid_t         pid;
 #endif  
 
@@ -3613,7 +3605,7 @@ static void     PopupMenu_cb    (Widget w, XtPointer client, XtPointer BOGUS(1))
     break;
         
   case POPUPMENU_DUMP:
-    fsdlg_popup ((Strip)si, (fsdlg_functype)Strip_dumpdata);
+    fsdlg_popup (si, Strip_dumpdata);
     break;
         
   case POPUPMENU_RETRY:
@@ -3749,8 +3741,7 @@ static void     PrinterDialog_cb        (Widget         w,
     b = si->print_info.printer;
     if (str)
     {
-	char *a = str;
-	while (*a) *b++ = *a++; *b = 0;
+	snprintf (b, sizeof si->print_info.printer, "%s", str);
 	XtFree (str);
     }
     
@@ -3759,8 +3750,7 @@ static void     PrinterDialog_cb        (Widget         w,
     b = si->print_info.device;
     if (str)
     {
-	char *a = str;
-	while (*a) *b++ = *a++; *b = 0;
+	snprintf (b, sizeof si->print_info.device, "%s", str);
 	XtFree (str);
     }
   }

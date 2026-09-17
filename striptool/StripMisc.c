@@ -558,7 +558,8 @@ int Question_popup(XtAppContext app, Widget wparent, char * question)
 /*
  * Question_cb
  */
-static void Question_cb(Widget w, XtPointer clientdata, XtPointer calldata)
+static void Question_cb(Widget BOGUS(w), XtPointer clientdata,
+  XtPointer calldata)
 {
   int *answer = (int *)clientdata;
   XmAnyCallbackStruct *cbs = (XmAnyCallbackStruct *)calldata;
