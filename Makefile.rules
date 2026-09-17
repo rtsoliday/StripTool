@@ -1,0 +1,159 @@
+# Shared platform and dependency discovery for both implementations.
+ifneq ($(filter Windows Windows_NT,$(OS)),)
+OS := Windows
+ARCH := $(if $(filter AMD64 amd64,$(PROCESSOR_ARCHITECTURE)),x86_64,$(PROCESSOR_ARCHITECTURE))
+else
+OS := $(shell uname -s)
+ARCH := $(shell uname -m)
+endif
+ifneq ($(filter CYGWIN% MINGW% MSYS% Windows_NT,$(OS)),)
+OS := Windows
+endif
+
+RULES_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+PKG_CONFIG ?= pkg-config
+PYTHON ?= $(if $(filter Windows,$(OS)),python,python3)
+OBJ_DIR ?= O.$(OS)-$(ARCH)
+BIN_DIR ?= $(RULES_DIR)bin/$(OS)-$(ARCH)
+
+EPICS_HOST_ARCH_PATHS = lib/perl/EpicsHostArch.pl src/tools/EpicsHostArch.pl startup/EpicsHostArch.pl
+find_epics_host_arch = $(firstword $(wildcard $(addprefix $(1)/,$(EPICS_HOST_ARCH_PATHS))))
+
+# Retain installation into an EPICS extensions tree when checked out as
+# <extensions>/src/StripTool. Standalone builds install only under this repo.
+EXTENSIONS_TOP := $(abspath $(RULES_DIR)../..)
+ifeq ($(notdir $(abspath $(RULES_DIR)..)),src)
+ifeq ($(words $(wildcard $(EXTENSIONS_TOP)/configure/CONFIG $(EXTENSIONS_TOP)/configure/RELEASE)),2)
+TOP := $(EXTENSIONS_TOP)
+EXPLICIT_EPICS_BASE := $(EPICS_BASE)
+include $(TOP)/configure/RELEASE
+ifneq ($(EXPLICIT_EPICS_BASE),)
+EPICS_BASE := $(EXPLICIT_EPICS_BASE)
+endif
+INSTALL_LOCATION ?= $(TOP)
+EPICS_INSTALL_DIR := $(abspath $(or $(INSTALL_LOCATION_EXTENSIONS),$(INSTALL_LOCATION)))
+endif
+endif
+
+EPICS_SEARCH_PATHS = /usr/local/oag/base $(RULES_DIR)epics-base \
+                     $(RULES_DIR)../epics-base $(RULES_DIR)../../../base \
+                     $(HOME)/epics/base $(HOME)/epics/base-7.0
+EPICS_BASE ?= $(firstword $(foreach base,$(EPICS_SEARCH_PATHS),\
+               $(if $(wildcard $(base)/include/cadef.h),$(base))))
+ifneq ($(strip $(EPICS_BASE)),)
+EPICS_BASE := $(abspath $(EPICS_BASE))
+HAVE_EPICS := 1
+ifeq ($(OS),Windows)
+EPICS_HOST_ARCH ?= windows-x64
+endif
+ifeq ($(origin EPICS_HOST_ARCH),undefined)
+EPICS_HOST_ARCH_SCRIPT := $(call find_epics_host_arch,$(EPICS_BASE))
+ifneq ($(EPICS_HOST_ARCH_SCRIPT),)
+EPICS_HOST_ARCH := $(shell perl "$(EPICS_HOST_ARCH_SCRIPT)")
+endif
+endif
+endif
+
+ifneq ($(strip $(EPICS_INSTALL_DIR)),)
+EPICS_BIN_DIR := $(EPICS_INSTALL_DIR)/bin/$(EPICS_HOST_ARCH)
+endif
+
+ifneq ($(OS),Windows)
+X_INCLUDE_DIRS = /usr/include /usr/local/include /opt/local/include \
+                 /opt/X11/include /usr/X11/include /opt/homebrew/include
+MOTIF_INC ?= $(firstword $(foreach dir,$(X_INCLUDE_DIRS),\
+               $(if $(wildcard $(dir)/Xm/Xm.h),$(dir))))
+X11_INC ?= $(firstword $(foreach dir,$(X_INCLUDE_DIRS),\
+             $(if $(wildcard $(dir)/X11/Xlib.h),$(dir))))
+X_LIBRARY_DIRS = $(MOTIF_LIB) $(X11_LIB) \
+                 $(patsubst %/include,%/lib,$(MOTIF_INC) $(X11_INC)) \
+                 /usr/lib64 /usr/lib/$(ARCH)-linux-gnu /usr/lib \
+                 /usr/local/lib /opt/local/lib /opt/X11/lib /usr/X11/lib \
+                 /opt/homebrew/lib
+EPICS_SHARED_EXT := $(if $(filter Darwin,$(OS)),dylib,so)
+find_x_library = $(firstword $(foreach dir,$(X_LIBRARY_DIRS),\
+                   $(wildcard $(dir)/lib$(1).$(EPICS_SHARED_EXT) \
+                                    $(dir)/lib$(1).a)))
+XM_LIB := $(call find_x_library,Xm)
+XMU_LIB := $(call find_x_library,Xmu)
+XPM_LIB := $(call find_x_library,Xpm)
+XT_LIB := $(call find_x_library,Xt)
+X11_LIB := $(call find_x_library,X11)
+XEXT_LIB := $(call find_x_library,Xext)
+XP_LIB := $(call find_x_library,Xp)
+HAVE_MOTIF := $(if $(and $(MOTIF_INC),$(XM_LIB),$(X11_INC),$(X11_LIB)),1)
+endif
+
+HAVE_LEGACY := $(if $(and $(HAVE_EPICS),$(HAVE_MOTIF)),1)
+
+ifeq ($(OS),Windows)
+QT_VERSION ?= 6
+QT_DIR ?= C:/Qt/6.11.2/msvc2022_64
+QT_DIR := $(subst \,/,$(QT_DIR))
+HAVE_QT := $(if $(wildcard $(QT_DIR)/include/QtWidgets/QtWidgets),1)
+QT_CFLAGS = /DQT_NO_DEBUG /DQT_CORE_LIB /DQT_GUI_LIB /DQT_WIDGETS_LIB /DQT_PRINTSUPPORT_LIB \
+            /I"$(QT_DIR)/include" /I"$(QT_DIR)/include/QtCore" \
+            /I"$(QT_DIR)/include/QtGui" /I"$(QT_DIR)/include/QtWidgets" \
+            /I"$(QT_DIR)/include/QtPrintSupport"
+QT_LIBS = "$(QT_DIR)/lib/Qt$(QT_VERSION)Widgets.lib" \
+          "$(QT_DIR)/lib/Qt$(QT_VERSION)Gui.lib" \
+          "$(QT_DIR)/lib/Qt$(QT_VERSION)PrintSupport.lib" \
+          "$(QT_DIR)/lib/Qt$(QT_VERSION)Core.lib"
+QT_TEST_CFLAGS = /DQT_TESTLIB_LIB /I"$(QT_DIR)/include/QtTest"
+QT_TEST_LIBS = "$(QT_DIR)/lib/Qt$(QT_VERSION)Test.lib"
+MOC_QT_CFLAGS = -DQT_NO_DEBUG -DQT_CORE_LIB -DQT_GUI_LIB \
+                -DQT_WIDGETS_LIB -DQT_PRINTSUPPORT_LIB -DQT_TESTLIB_LIB \
+                -I"$(QT_DIR)/include" -I"$(QT_DIR)/include/QtCore" \
+                -I"$(QT_DIR)/include/QtGui" -I"$(QT_DIR)/include/QtWidgets" \
+                -I"$(QT_DIR)/include/QtPrintSupport" \
+                -I"$(QT_DIR)/include/QtTest"
+MOC = "$(QT_DIR)/bin/moc.exe"
+RCC = "$(QT_DIR)/bin/rcc.exe"
+else
+QT6_AVAILABLE := $(shell $(PKG_CONFIG) --exists Qt6Widgets 2>/dev/null && echo 1)
+QT5_AVAILABLE := $(shell $(PKG_CONFIG) --atleast-version=5.15 Qt5Widgets 2>/dev/null && echo 1)
+QMAKE6 ?= qmake6
+ifeq ($(QT6_AVAILABLE),)
+QT6_QMAKE_VERSION := $(shell $(QMAKE6) -query QT_VERSION 2>/dev/null)
+ifneq ($(filter 6.%,$(QT6_QMAKE_VERSION)),)
+QT6_HEADERS := $(shell $(QMAKE6) -query QT_INSTALL_HEADERS 2>/dev/null)
+QT6_LIB_DIR := $(shell $(QMAKE6) -query QT_INSTALL_LIBS 2>/dev/null)
+QT6_TOOL_DIRS := $(shell $(QMAKE6) -query QT_HOST_LIBEXECS 2>/dev/null) \
+                 $(shell $(QMAKE6) -query QT_HOST_BINS 2>/dev/null)
+ifneq ($(wildcard $(QT6_HEADERS)/QtWidgets/QtWidgets),)
+QT6_QMAKE_AVAILABLE := 1
+endif
+endif
+endif
+QT_VERSION ?= $(if $(or $(QT6_AVAILABLE),$(QT6_QMAKE_AVAILABLE)),6,5)
+HAVE_QT := $(if $(filter 6,$(QT_VERSION)),$(or $(QT6_AVAILABLE),$(QT6_QMAKE_AVAILABLE)),$(QT5_AVAILABLE))
+ifeq ($(QT_VERSION),6)
+ifeq ($(QT6_QMAKE_AVAILABLE),1)
+qt_modules = $(sort $(1) Core $(if $(filter Widgets,$(1)),Gui))
+qt_cflags = -I$(QT6_HEADERS) $(foreach mod,$(call qt_modules,$(1)),-I$(QT6_HEADERS)/Qt$(mod) -DQT_$(shell echo $(mod) | tr '[:lower:]' '[:upper:]')_LIB)
+qt_libs = -L$(QT6_LIB_DIR) -Wl,-rpath,$(QT6_LIB_DIR) $(foreach mod,$(call qt_modules,$(1)),-lQt6$(mod))
+QT_TOOL_DIRS = $(QT6_TOOL_DIRS)
+else
+qt_cflags = $(shell $(PKG_CONFIG) --cflags $(addprefix Qt$(QT_VERSION),$(1)))
+qt_libs = $(shell $(PKG_CONFIG) --libs $(addprefix Qt$(QT_VERSION),$(1)))
+QT_CORE_PACKAGE = Qt$(QT_VERSION)Core
+QT_TOOL_DIRS = $(shell $(PKG_CONFIG) --variable=host_bins $(QT_CORE_PACKAGE)) \
+               $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_CORE_PACKAGE)) \
+               $(shell $(PKG_CONFIG) --variable=bindir $(QT_CORE_PACKAGE))
+endif
+else
+qt_cflags = $(shell $(PKG_CONFIG) --cflags $(addprefix Qt$(QT_VERSION),$(1)))
+qt_libs = $(shell $(PKG_CONFIG) --libs $(addprefix Qt$(QT_VERSION),$(1)))
+QT_CORE_PACKAGE = Qt$(QT_VERSION)Core
+QT_TOOL_DIRS = $(shell $(PKG_CONFIG) --variable=host_bins $(QT_CORE_PACKAGE)) \
+               $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_CORE_PACKAGE)) \
+               $(shell $(PKG_CONFIG) --variable=bindir $(QT_CORE_PACKAGE))
+endif
+QT_CFLAGS = $(call qt_cflags,Widgets PrintSupport)
+QT_LIBS = $(call qt_libs,Widgets PrintSupport)
+QT_TEST_CFLAGS = $(call qt_cflags,Test)
+QT_TEST_LIBS = $(call qt_libs,Test)
+MOC_QT_CFLAGS = $(QT_CFLAGS) $(QT_TEST_CFLAGS)
+MOC = $(firstword $(wildcard $(addsuffix /moc,$(QT_TOOL_DIRS))))
+RCC = $(firstword $(wildcard $(addsuffix /rcc,$(QT_TOOL_DIRS))))
+endif

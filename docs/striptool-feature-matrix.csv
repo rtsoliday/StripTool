@@ -1,0 +1,70 @@
+id,area,behavior,release_gate,legacy_evidence,qt_acceptance,status,notes
+CFG-001,Configuration,Read StripConfig 1.2 files,Preview,StripConfig.c:StripConfig_load,All canonical fixtures load to expected values,Not started,
+CFG-002,Configuration,Read pre-header legacy files,Replacement,StripConfig.c:read_oldformat,legacy-format.stp loads channels timing and limits,Not started,Writer need not emit old format
+CFG-003,Configuration,Write Motif-readable StripConfig 1.2 files,Replacement,StripConfig.c:StripConfig_write,Motif loads Qt output and values match,Not started,
+CFG-004,Configuration,Ignore unknown namespaces and attributes,Replacement,StripConfig.c:StripConfig_load,unknown-fields.stp loads known fields without failure,Not started,Warn for diagnosability
+CFG-005,Configuration,Derive NumSamples when omitted,Replacement,StripConfig.c:StripConfig_load,Derived value equals ceil Timespan divided by SampleInterval,Not started,
+CFG-006,Configuration,Reject newer unsupported format versions safely,Replacement,StripConfig.c:StripConfig_load,Clear error and no partial model mutation,Not started,
+CFG-007,Configuration,Select partial save and load groups,Replacement,StripDialog.c:FsDlgTglVal,Timing colors graph and curves can be selected independently,Not started,
+CFG-008,Configuration,Enforce ten valid curve indices,Replacement,StripDefines.h:STRIP_MAX_CURVES,Indices 0-9 work and 10 is rejected safely,Not started,Intentional correction of legacy out-of-bounds defect
+CFG-009,Configuration,Enforce name units comment and precision limits,Replacement,StripDefines.h and StripConfig.c,Boundary and overflow fixtures are handled safely,Not started,Negative tests required
+START-001,Startup,Load explicit path from first positional argument,Preview,StripTool.c:StripTool_main,Explicit readable file loads,Not started,
+START-002,Startup,Search current directory before STRIP_FILE_SEARCH_PATH,Replacement,StripTool.c:StripTool_open_file,Deterministic precedence test passes,Not started,
+START-003,Startup,Load local StripTool.stp when no explicit file succeeds,Replacement,StripTool.c:StripTool_main,Fallback test passes,Not started,
+START-004,Startup,Continue with compiled defaults when no file exists,Preview,StripTool.c:StripTool_main,Application opens with documented defaults,Not started,
+START-005,Startup,Use loaded basename as displayed title,Replacement,Strip.c:Strip_readconfig,Window title matches loaded basename,Not started,
+ENV-001,Environment,Honor STRIP_HELP_PATH,Replacement,Strip.c:Strip_init,Help action opens override URL,Not started,
+ENV-002,Environment,Replace relevant site and user X resources,Site decision,Strip.c:Strip_init,Mapping or intentional difference is documented,Decision needed,Qt will not parse arbitrary X resources
+ENV-003,Environment,Honor STRIP_DUMP_TYPE_DEFAULT equivalent,Replacement,Strip.c:file_selection_dialog,Dump dialog starts with requested type,Not started,
+ENV-004,Environment,Support EPICS_DISPLAY_PATH alias,Site decision,StripDefines.h:USE_OLD_FILE_SEARCH,Decision recorded and tested if retained,Decision needed,
+MODEL-001,Model,Support ten curves,Preview,StripDefines.h:STRIP_MAX_CURVES,Ten independently configured curves persist and render,Not started,
+MODEL-002,Model,Preserve graph and curve defaults,Preview,StripDefines.h and StripConfig_init,Default-model test matches baseline table,Not started,
+MODEL-003,Model,Use toolkit-neutral colors and geometry,Preview,StripConfig.h,Core model compiles without QtGui X11 or Motif types,Not started,
+CA-001,Acquisition,Connect and disconnect Channel Access PVs,Preview,StripCA.c,IOC integration test observes transitions,Not started,
+CA-002,Acquisition,Receive value units precision and display limits,Replacement,StripCA.c:info_callback,Metadata integration test passes,Not started,
+CA-003,Acquisition,Request description into curve comment,Replacement,StripCA.c:requestDescRecord,Description integration test passes,Not started,
+CA-004,Acquisition,Represent disconnect and reconnect state,Replacement,StripCA.c:connect_callback,IOC restart test recovers without stale subscription,Not started,
+CA-005,Acquisition,Retry disconnected channels,Replacement,StripCA.c:StripDAQ_retry_connections,Retry action has deterministic test,Not started,
+CA-006,Acquisition,Provide local CPU_Usage curve,Replacement,StripTool.c:request_connect,Local provider samples without CA channel,Not started,
+CA-007,Acquisition,Support CDEV data source,Site decision,StripCDEV.cc and Makefile,Operational need and support decision recorded,Decision needed,
+DATA-001,Data,Keep sample and refresh cadences independent,Preview,Strip.c and StripDataSource.c,Fake-clock tests demonstrate independent schedules,Not started,
+DATA-002,Data,Store timestamp value and status in bounded ring buffers,Preview,StripDataSource.h,Wrap resize and memory-bound tests pass,Not started,
+DATA-003,Data,Decimate samples for the visible range,Preview,StripDataSource.c:StripDataSource_render,Deterministic extrema-preserving render tests pass,Not started,
+DATA-004,Data,Join live and historical ranges,Replacement,StripDataSource.c and StripHistory.h,Boundary and overlap tests pass,Not started,
+PLOT-001,Plot,Render static linear curves,Preview,StripGraph.c,Golden image test passes,Not started,
+PLOT-002,Plot,Render multiple colored curves and Y axes,Preview,StripGraph.c,Golden image and axis-label tests pass,Not started,
+PLOT-003,Plot,Render base-10 logarithmic curves,Replacement,StripGraph.c and jlAxis.c,Positive invalid and boundary-value tests pass,Not started,
+PLOT-004,Plot,Render none some and all grid modes,Replacement,StripConfig.h:StripGridVisibility,Mode-specific golden images pass,Not started,
+PLOT-005,Plot,Apply configurable graph line width,Replacement,StripDialog.c:graph_linewidth_cb,Rendered stroke width changes,Not started,
+PLOT-006,Plot,Incrementally refresh and auto-scroll,Preview,Strip.c:timer_callback,Fake-clock UI test passes,Not started,
+PLOT-007,Plot,Pause and resume auto-scroll,Replacement,Strip.c:POPUPMENU_TOGGLE_SCROLL,Visible time range freezes and resumes correctly,Not started,
+PLOT-008,Plot,Pan zoom reset replot and auto-scale,Replacement,Strip.c:callback,Interaction tests preserve expected ranges,Not started,Include coarse and fine controls
+PLOT-009,Plot,Show pointer time and value location,Replacement,StripGraph.c:motion_event_handler,Pointer test updates readout,Not started,
+PLOT-010,Plot,Select a fixed from-to time range,Replacement,Strip.c:from_to,Validated range changes visible interval,Not started,
+ANN-001,Annotations,Create select edit move and delete annotations,Replacement,Annotation.c and Strip.c popup callbacks,UI workflow and persistence decisions are tested,Not started,Legacy configuration does not serialize annotations
+UI-001,Controls,Connect a PV from the controls window,Preview,StripDialog.c:connect_cb,PV is added to the first available row,Not started,
+UI-002,Controls,Modify and remove curve attributes,Preview,StripDialog.c,Model and graph update together,Not started,
+UI-003,Controls,Edit time span sample count and intervals,Preview,StripDialog.c:time_modify_cb,Validation and cancellation tests pass,Not started,
+UI-004,Controls,Edit graph and curve colors,Replacement,ColorDialog.c,Selection updates model and rendering,Not started,
+UI-005,Controls,Edit grids colored Y axes and line width,Replacement,StripDialog.c,Controls round-trip through model and config,Not started,
+UI-006,Windows,Show hide and raise graph and controls windows,Replacement,Strip.c and StripDialog.c,Window menu and dismiss workflows pass,Not started,
+UI-007,Help,Show version and help actions,Replacement,StripDialog.c:helpmenu_cb,About reports version and help uses desktop URL handler,Not started,
+OUT-001,Output,Dump visible data as text,Replacement,StripDataSource.c:StripDataSource_dump,Golden output fixture matches agreed format,Not started,
+OUT-002,Output,Dump visible data as CSV,Replacement,StripDataSource.c:StripDataSource_dump_csv,Golden CSV fixture matches agreed format,Not started,
+OUT-003,Output,Export graph snapshot,Replacement,Strip.c:POPUPMENU_SNAPSHOT,Image has expected dimensions and plotted content,Not started,Use Qt image export
+OUT-004,Output,Print graph,Replacement,Strip.c:Strip_print,PDF or virtual-printer integration test passes,Not started,Use Qt PrintSupport
+OUT-005,Output,Export SDDS,Site decision,StripDataSource.c and Makefile:USE_SDDS,Operational need and support decision recorded,Decision needed,Optional legacy compile path
+HIST-001,History,Run without an archive provider,Preview,StripHistoryNULL.c,Live plotting works with history disabled,Not started,
+HIST-002,History,Fetch and cancel asynchronous history requests,Replacement,StripHistory.h,Fake-provider lifecycle tests pass,Not started,
+HIST-003,History,Support current APS archive service,Site decision,StripHistoryAR+ArR.c and related files,Backend selected and IOC/archive tests pass,Decision needed,
+HIST-004,History,Retain CAR AAPI and LANL backends,Site decision,StripHistoryLANL*.cc and Makefile,Each retained backend has owner build and test environment,Decision needed,
+STYLE-001,Appearance,Provide recognizable legacy layout and colors,Replacement,StripFallback.h and screenshot checklist,Human-reviewed comparison accepted,Not started,Behavior takes precedence over pixel identity
+STYLE-002,Appearance,Allow standard Qt style override,Optional,QtALH precedent,-style or equivalent selects installed Qt style,Not started,
+PORT-001,Platform,Build with Qt 5.15 and Qt 6 on Linux,Replacement,QtALH and QtEDM precedent,CI or recorded clean builds pass,Not started,
+PORT-002,Platform,Build on macOS,Replacement,QtALH and QtEDM precedent,Recorded clean build and smoke test pass,Not started,
+PORT-003,Platform,Build on Windows without Motif,Replacement,Legacy Windows resources and QtALH precedent,MSVC build and smoke test pass,Not started,
+PERF-001,Performance,Maintain acceptable idle CPU use,Replacement,Legacy comparison run,Threshold is agreed and benchmark passes,Not started,
+PERF-002,Performance,Handle ten curves at minimum supported sample interval,Replacement,StripDefines.h limits,Sustained benchmark meets agreed loss and CPU thresholds,Not started,
+PERF-003,Performance,Remain memory-stable in long runs,Replacement,StripDataSource bounded design,Soak test stays within agreed bound,Not started,
+PERF-004,Performance,Render large historical ranges responsively,Replacement,StripDataSource render path,Benchmark meets agreed latency threshold,Not started,
+

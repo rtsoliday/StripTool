@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.epics.qtstriptool</id>
+  <name>Qt StripTool</name>
+  <summary>Display live EPICS process-variable trends</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>EPICS</project_license>
+  <description>
+    <p>Qt StripTool displays live, timestamped Channel Access data for up to
+    ten process variables and reads existing StripTool configuration files.</p>
+  </description>
+  <launchable type="desktop-id">org.epics.qtstriptool.desktop</launchable>
+  <provides><binary>qtstriptool</binary></provides>
+</component>

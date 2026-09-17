@@ -1,0 +1,18 @@
+StripConfig                   1.2
+Strip.Time.Timespan           300
+Strip.Time.NumSamples         7200
+Strip.Time.SampleInterval     1.000000
+Strip.Time.RefreshInterval    1.000000
+Strip.Option.GridXon          1
+Strip.Option.GridYon          1
+Strip.Option.AxisYcolorStat   1
+Strip.Option.GraphLineWidth   2
+Strip.Curve.0.Name            CPU_Usage
+Strip.Curve.0.Units           percent
+Strip.Curve.0.Comment         Built-in local visual baseline
+Strip.Curve.0.Precision       2
+Strip.Curve.0.Min             0
+Strip.Curve.0.Max             100
+Strip.Curve.0.Scale           0
+Strip.Curve.0.PlotStatus      1
+

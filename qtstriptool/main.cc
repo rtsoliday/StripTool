@@ -1,0 +1,56 @@
+#include "core/application.h"
+#include "core/config.h"
+#include "ui/main_window.h"
+#include <QApplication>
+#include <QDir>
+#include <QTextStream>
+#include <utility>
+int main(int argc, char** argv) {
+  QApplication application(argc, argv);
+  striptool::configureApplication(application);
+  const QStringList arguments = application.arguments();
+  if (arguments.contains(QStringLiteral("--help"))) {
+    QTextStream(stdout) << "Usage: qtstriptool [--help] [--version] [configuration.stp]\n";
+    return 0;
+  }
+  if (arguments.contains(QStringLiteral("--version"))) {
+    QTextStream(stdout) << striptool::versionText() << '\n';
+    return 0;
+  }
+  QString explicitName;
+  for (int i = 1; i < arguments.size(); ++i) {
+    if (!arguments[i].startsWith(QLatin1Char('-'))) {
+      explicitName = arguments[i];
+      break;
+    }
+  }
+  auto model = striptool::makeDefaultModel();
+  const auto explicitConfiguration = explicitName.isEmpty()
+                                         ? std::filesystem::path{}
+                                         : striptool::findConfigurationFile(
+                                               explicitName.toStdString(),
+                                               QDir::currentPath().toStdString(),
+                                               qEnvironmentVariable(
+                                                   "STRIP_FILE_SEARCH_PATH")
+                                                   .toStdString());
+  if (!explicitName.isEmpty() && explicitConfiguration.empty()) {
+    QTextStream(stderr) << "qtstriptool: cannot find " << explicitName
+                        << "; trying StripTool.stp\n";
+  }
+  const auto configuration = striptool::findStartupConfiguration(
+      explicitName.toStdString(), QDir::currentPath().toStdString(),
+      qEnvironmentVariable("STRIP_FILE_SEARCH_PATH").toStdString());
+  if (!configuration.empty()) {
+    const auto result = striptool::readConfigurationFile(configuration, model);
+    if (!result.success) {
+      QTextStream(stderr) << "qtstriptool: "
+                          << QString::fromStdString(result.diagnostics.front().message)
+                          << "; using prior defaults\n";
+    }
+  }
+  striptool::MainWindow window(std::move(model));
+  window.startAcquisition();
+  window.show();
+  window.showControls();
+  return application.exec();
+}

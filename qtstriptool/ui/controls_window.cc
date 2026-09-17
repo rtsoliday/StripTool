@@ -1,0 +1,353 @@
+#include "ui/controls_window.h"
+
+#include "core/application.h"
+#include "services/file_workflow.h"
+#include <QAction>
+#include <QCheckBox>
+#include <QColorDialog>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QGridLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QSpinBox>
+#include <QTabWidget>
+#include <QVBoxLayout>
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+
+namespace striptool {
+namespace {
+
+QColor toQColor(const Rgba16& color) {
+  return QColor::fromRgbF(color.red / 65535.0, color.green / 65535.0,
+                          color.blue / 65535.0, color.alpha / 65535.0);
+}
+
+Rgba16 fromQColor(const QColor& color) {
+  return {static_cast<std::uint16_t>(color.redF() * 65535.0 + 0.5),
+          static_cast<std::uint16_t>(color.greenF() * 65535.0 + 0.5),
+          static_cast<std::uint16_t>(color.blueF() * 65535.0 + 0.5),
+          static_cast<std::uint16_t>(color.alphaF() * 65535.0 + 0.5)};
+}
+
+QDoubleSpinBox* valueEditor(QWidget* parent) {
+  auto* editor = new QDoubleSpinBox(parent);
+  editor->setDecimals(8);
+  editor->setRange(-1e100, 1e100);
+  editor->setKeyboardTracking(false);
+  return editor;
+}
+
+}  // namespace
+
+ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
+    : QMainWindow(parent), model_(model) {
+  setObjectName(QStringLiteral("controlsWindow"));
+  setWindowTitle(tr("Qt StripTool Controls"));
+  resize(1040, 610);
+
+  auto* fileMenu = menuBar()->addMenu(tr("&File"));
+  fileMenu->setObjectName(QStringLiteral("controlsFileMenu"));
+  auto* open = fileMenu->addAction(tr("&Open…"));
+  open->setObjectName(QStringLiteral("openAction"));
+  auto* save = fileMenu->addAction(tr("&Save"));
+  save->setObjectName(QStringLiteral("saveAction"));
+  auto* saveAs = fileMenu->addAction(tr("Save &As…"));
+  saveAs->setObjectName(QStringLiteral("saveAsAction"));
+  fileMenu->addSeparator();
+  auto* defaults = fileMenu->addAction(tr("Restore &Defaults"));
+  defaults->setObjectName(QStringLiteral("defaultsAction"));
+  auto* dismiss = fileMenu->addAction(tr("&Dismiss"));
+  dismiss->setObjectName(QStringLiteral("dismissControlsAction"));
+
+  auto* windowMenu = menuBar()->addMenu(tr("&Window"));
+  windowMenu->setObjectName(QStringLiteral("controlsWindowMenu"));
+  auto* showGraph = windowMenu->addAction(tr("Show &Graph"));
+  showGraph->setObjectName(QStringLiteral("showGraphAction"));
+
+  auto* helpMenu = menuBar()->addMenu(tr("&Help"));
+  helpMenu->setObjectName(QStringLiteral("controlsHelpMenu"));
+  auto* about = helpMenu->addAction(tr("&About Qt StripTool"));
+  about->setObjectName(QStringLiteral("controlsAboutAction"));
+
+  auto* tabs = new QTabWidget(this);
+  tabs->setObjectName(QStringLiteral("controlsTabs"));
+  tabs->addTab(createCurvePage(), tr("Curves"));
+  tabs->addTab(createTimingPage(), tr("Timing"));
+  tabs->addTab(createAppearancePage(), tr("Appearance"));
+  setCentralWidget(tabs);
+
+  connect(open, &QAction::triggered, this, &ControlsWindow::openRequested);
+  connect(save, &QAction::triggered, this, &ControlsWindow::saveRequested);
+  connect(saveAs, &QAction::triggered, this, &ControlsWindow::saveAsRequested);
+  connect(showGraph, &QAction::triggered, this, &ControlsWindow::showGraphRequested);
+  connect(dismiss, &QAction::triggered, this, &QWidget::hide);
+  connect(defaults, &QAction::triggered, this, [this] {
+    FileWorkflow::restoreDefaults(*model_);
+    reloadFromModel();
+    emit modelChanged();
+    emit acquisitionConfigurationChanged();
+  });
+  connect(about, &QAction::triggered, this, [this] {
+    QMessageBox::about(this, tr("About Qt StripTool"), versionText());
+  });
+  reloadFromModel();
+}
+
+QWidget* ControlsWindow::createCurvePage() {
+  auto* page = new QWidget(this);
+  auto* layout = new QVBoxLayout(page);
+  auto* connectLayout = new QHBoxLayout;
+  pvEntry_ = new QLineEdit(page);
+  pvEntry_->setObjectName(QStringLiteral("pvEntry"));
+  pvEntry_->setPlaceholderText(tr("Process variable name"));
+  auto* connectButton = new QPushButton(tr("Connect"), page);
+  connectButton->setObjectName(QStringLiteral("connectButton"));
+  connectLayout->addWidget(new QLabel(tr("PV:"), page));
+  connectLayout->addWidget(pvEntry_, 1);
+  connectLayout->addWidget(connectButton);
+  layout->addLayout(connectLayout);
+
+  auto* rows = new QWidget(page);
+  auto* grid = new QGridLayout(rows);
+  const QStringList headings{tr("#"), tr("Name"), tr("Color"), tr("Plot"),
+                             tr("Scale"), tr("Precision"), tr("Minimum"),
+                             tr("Maximum"), QString(), QString()};
+  for (int column = 0; column < headings.size(); ++column)
+    grid->addWidget(new QLabel(headings[column], rows), 0, column);
+  for (std::size_t i = 0; i < curveRows_.size(); ++i) {
+    auto& row = curveRows_[i];
+    const QString suffix = QString::number(i);
+    grid->addWidget(new QLabel(QString::number(i + 1), rows), int(i + 1), 0);
+    row.name = new QLineEdit(rows);
+    row.name->setObjectName(QStringLiteral("curveName") + suffix);
+    row.name->setMaxLength(static_cast<int>(kMaximumCurveNameLength));
+    row.color = new QPushButton(tr("Color"), rows);
+    row.color->setObjectName(QStringLiteral("curveColor") + suffix);
+    row.plotted = new QCheckBox(rows);
+    row.plotted->setObjectName(QStringLiteral("curvePlotted") + suffix);
+    row.scale = new QComboBox(rows);
+    row.scale->setObjectName(QStringLiteral("curveScale") + suffix);
+    row.scale->addItems({tr("Linear"), tr("Log 10")});
+    row.precision = new QSpinBox(rows);
+    row.precision->setObjectName(QStringLiteral("curvePrecision") + suffix);
+    row.precision->setRange(0, 20);
+    row.minimum = valueEditor(rows);
+    row.minimum->setObjectName(QStringLiteral("curveMinimum") + suffix);
+    row.maximum = valueEditor(rows);
+    row.maximum->setObjectName(QStringLiteral("curveMaximum") + suffix);
+    row.modify = new QPushButton(tr("Modify"), rows);
+    row.modify->setObjectName(QStringLiteral("curveModify") + suffix);
+    row.remove = new QPushButton(tr("Remove"), rows);
+    row.remove->setObjectName(QStringLiteral("curveRemove") + suffix);
+    grid->addWidget(row.name, int(i + 1), 1);
+    grid->addWidget(row.color, int(i + 1), 2);
+    grid->addWidget(row.plotted, int(i + 1), 3, Qt::AlignCenter);
+    grid->addWidget(row.scale, int(i + 1), 4);
+    grid->addWidget(row.precision, int(i + 1), 5);
+    grid->addWidget(row.minimum, int(i + 1), 6);
+    grid->addWidget(row.maximum, int(i + 1), 7);
+    grid->addWidget(row.modify, int(i + 1), 8);
+    grid->addWidget(row.remove, int(i + 1), 9);
+    connect(row.modify, &QPushButton::clicked, this, [this, i] { applyCurve(i); });
+    connect(row.remove, &QPushButton::clicked, this, [this, i] { removeCurve(i); });
+    connect(row.color, &QPushButton::clicked, this,
+            [this, i] { chooseColor(model_->colors.curves[i], curveRows_[i].color); });
+  }
+  grid->setColumnStretch(1, 1);
+  auto* scroll = new QScrollArea(page);
+  scroll->setWidgetResizable(true);
+  scroll->setWidget(rows);
+  layout->addWidget(scroll);
+  connect(connectButton, &QPushButton::clicked, this, &ControlsWindow::connectEnteredPv);
+  connect(pvEntry_, &QLineEdit::returnPressed, this, &ControlsWindow::connectEnteredPv);
+  return page;
+}
+
+QWidget* ControlsWindow::createTimingPage() {
+  auto* page = new QWidget(this);
+  auto* form = new QFormLayout(page);
+  timespan_ = new QSpinBox(page);
+  timespan_->setObjectName(QStringLiteral("timespanSeconds"));
+  timespan_->setRange(1, std::numeric_limits<int>::max());
+  sampleCount_ = new QSpinBox(page);
+  sampleCount_->setObjectName(QStringLiteral("sampleCount"));
+  sampleCount_->setRange(1, 65536);
+  sampleInterval_ = valueEditor(page);
+  sampleInterval_->setObjectName(QStringLiteral("sampleInterval"));
+  sampleInterval_->setRange(0.01, 1e9);
+  refreshInterval_ = valueEditor(page);
+  refreshInterval_->setObjectName(QStringLiteral("refreshInterval"));
+  refreshInterval_->setRange(0.1, 1e9);
+  form->addRow(tr("History length (seconds):"), timespan_);
+  form->addRow(tr("Sample count:"), sampleCount_);
+  form->addRow(tr("Sample interval (seconds):"), sampleInterval_);
+  form->addRow(tr("Refresh interval (seconds):"), refreshInterval_);
+  auto updateTiming = [this] {
+    if (loading_) return;
+    model_->timing.timespanSeconds = static_cast<unsigned>(timespan_->value());
+    model_->timing.numberOfSamples = sampleCount_->value();
+    model_->timing.sampleIntervalSeconds = sampleInterval_->value();
+    model_->timing.refreshIntervalSeconds = refreshInterval_->value();
+    emit modelChanged();
+    emit acquisitionConfigurationChanged();
+  };
+  connect(timespan_, qOverload<int>(&QSpinBox::valueChanged), this,
+          [updateTiming](int) { updateTiming(); });
+  connect(sampleCount_, qOverload<int>(&QSpinBox::valueChanged), this,
+          [updateTiming](int) { updateTiming(); });
+  connect(sampleInterval_, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+          [updateTiming](double) { updateTiming(); });
+  connect(refreshInterval_, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+          [updateTiming](double) { updateTiming(); });
+  return page;
+}
+
+QWidget* ControlsWindow::createAppearancePage() {
+  auto* page = new QWidget(this);
+  auto* form = new QFormLayout(page);
+  foreground_ = new QPushButton(tr("Foreground"), page);
+  foreground_->setObjectName(QStringLiteral("foregroundColor"));
+  background_ = new QPushButton(tr("Background"), page);
+  background_->setObjectName(QStringLiteral("backgroundColor"));
+  gridColor_ = new QPushButton(tr("Grid"), page);
+  gridColor_->setObjectName(QStringLiteral("gridColor"));
+  xGrid_ = new QComboBox(page);
+  xGrid_->setObjectName(QStringLiteral("xGridMode"));
+  xGrid_->addItems({tr("None"), tr("Some"), tr("All")});
+  yGrid_ = new QComboBox(page);
+  yGrid_->setObjectName(QStringLiteral("yGridMode"));
+  yGrid_->addItems({tr("None"), tr("Some"), tr("All")});
+  coloredAxes_ = new QCheckBox(tr("Use curve colors for Y axes"), page);
+  coloredAxes_->setObjectName(QStringLiteral("coloredAxes"));
+  lineWidth_ = new QSpinBox(page);
+  lineWidth_->setObjectName(QStringLiteral("lineWidth"));
+  lineWidth_->setRange(0, 10);
+  form->addRow(tr("Foreground color:"), foreground_);
+  form->addRow(tr("Background color:"), background_);
+  form->addRow(tr("Grid color:"), gridColor_);
+  form->addRow(tr("X grid:"), xGrid_);
+  form->addRow(tr("Y grid:"), yGrid_);
+  form->addRow(QString(), coloredAxes_);
+  form->addRow(tr("Graph line width:"), lineWidth_);
+  connect(foreground_, &QPushButton::clicked, this,
+          [this] { chooseColor(model_->colors.foreground, foreground_); });
+  connect(background_, &QPushButton::clicked, this,
+          [this] { chooseColor(model_->colors.background, background_); });
+  connect(gridColor_, &QPushButton::clicked, this,
+          [this] { chooseColor(model_->colors.grid, gridColor_); });
+  const auto updateGraph = [this] {
+    if (loading_) return;
+    model_->graph.xGrid = static_cast<GridMode>(xGrid_->currentIndex());
+    model_->graph.yGrid = static_cast<GridMode>(yGrid_->currentIndex());
+    model_->graph.coloredYAxis = coloredAxes_->isChecked();
+    model_->graph.lineWidth = lineWidth_->value();
+    emit modelChanged();
+  };
+  connect(xGrid_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+          [updateGraph](int) { updateGraph(); });
+  connect(yGrid_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+          [updateGraph](int) { updateGraph(); });
+  connect(coloredAxes_, &QCheckBox::toggled, this,
+          [updateGraph](bool) { updateGraph(); });
+  connect(lineWidth_, qOverload<int>(&QSpinBox::valueChanged), this,
+          [updateGraph](int) { updateGraph(); });
+  return page;
+}
+
+void ControlsWindow::connectEnteredPv() {
+  const QString name = pvEntry_->text().trimmed();
+  if (name.isEmpty()) return;
+  for (std::size_t i = 0; i < model_->curves.size(); ++i) {
+    if (!model_->curves[i].nameSet) {
+      curveRows_[i].name->setText(name);
+      curveRows_[i].plotted->setChecked(true);
+      applyCurve(i);
+      pvEntry_->clear();
+      return;
+    }
+  }
+  QMessageBox::warning(this, tr("Curve Limit"), tr("All ten curve slots are in use."));
+}
+
+void ControlsWindow::applyCurve(std::size_t index) {
+  auto& curve = model_->curves[index];
+  const auto& row = curveRows_[index];
+  const std::string oldName = curve.name;
+  const bool wasActive = curve.nameSet;
+  const QString name = row.name->text().trimmed();
+  curve.name = name.toStdString();
+  curve.nameSet = !name.isEmpty();
+  curve.plotted = row.plotted->isChecked();
+  curve.scale = static_cast<ScaleMode>(row.scale->currentIndex());
+  curve.precision = row.precision->value();
+  curve.precisionSet = true;
+  curve.minimum = row.minimum->value();
+  curve.minimumSet = true;
+  curve.maximum = row.maximum->value();
+  curve.maximumSet = true;
+  emit modelChanged();
+  if (wasActive != curve.nameSet || oldName != curve.name)
+    emit acquisitionConfigurationChanged();
+}
+
+void ControlsWindow::removeCurve(std::size_t index) {
+  auto defaults = makeDefaultModel();
+  model_->curves[index] = defaults.curves[index];
+  reloadFromModel();
+  emit modelChanged();
+  emit acquisitionConfigurationChanged();
+}
+
+void ControlsWindow::chooseColor(Rgba16& color, QPushButton* button) {
+  const QColor selected = QColorDialog::getColor(toQColor(color), this);
+  if (!selected.isValid()) return;
+  color = fromQColor(selected);
+  updateColorButton(button, color);
+  emit modelChanged();
+}
+
+void ControlsWindow::updateColorButton(QPushButton* button, const Rgba16& color) {
+  const QColor value = toQColor(color);
+  const QColor text = value.lightnessF() < 0.5 ? Qt::white : Qt::black;
+  button->setStyleSheet(QStringLiteral("background:%1;color:%2")
+                            .arg(value.name(), text.name()));
+}
+
+void ControlsWindow::reloadFromModel() {
+  loading_ = true;
+  for (std::size_t i = 0; i < curveRows_.size(); ++i) {
+    const auto& curve = model_->curves[i];
+    auto& row = curveRows_[i];
+    row.name->setText(curve.nameSet ? QString::fromStdString(curve.name) : QString());
+    row.plotted->setChecked(curve.plotted);
+    row.scale->setCurrentIndex(static_cast<int>(curve.scale));
+    row.precision->setValue(curve.precision);
+    row.minimum->setValue(curve.minimum);
+    row.maximum->setValue(curve.maximum);
+    updateColorButton(row.color, model_->colors.curves[i]);
+  }
+  timespan_->setValue(static_cast<int>(model_->timing.timespanSeconds));
+  sampleCount_->setValue(model_->timing.numberOfSamples);
+  sampleInterval_->setValue(model_->timing.sampleIntervalSeconds);
+  refreshInterval_->setValue(model_->timing.refreshIntervalSeconds);
+  xGrid_->setCurrentIndex(static_cast<int>(model_->graph.xGrid));
+  yGrid_->setCurrentIndex(static_cast<int>(model_->graph.yGrid));
+  coloredAxes_->setChecked(model_->graph.coloredYAxis);
+  lineWidth_->setValue(model_->graph.lineWidth);
+  updateColorButton(foreground_, model_->colors.foreground);
+  updateColorButton(background_, model_->colors.background);
+  updateColorButton(gridColor_, model_->colors.grid);
+  loading_ = false;
+}
+
+}  // namespace striptool

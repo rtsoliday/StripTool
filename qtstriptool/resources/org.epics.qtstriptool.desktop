@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Qt StripTool
+Comment=Display live EPICS process-variable trends
+Exec=qtstriptool %f
+Icon=qtstriptool
+Terminal=false
+Categories=Science;Engineering;
+StartupNotify=true

@@ -1,0 +1,11 @@
+# Common recursive-build helpers. Application-specific compilation remains in
+# striptool/Makefile and, beginning with migration Step 3, qtstriptool/Makefile.
+.PHONY: prepare-output install-program
+
+prepare-output:
+	mkdir -p $(OBJ_DIR) $(BIN_DIR)
+
+install-program: $(PROGRAM) | prepare-output
+	cp -f $(PROGRAM) $(BIN_DIR)/
+	$(if $(EPICS_BIN_DIR),mkdir -p $(EPICS_BIN_DIR); cp -f $(PROGRAM) $(EPICS_BIN_DIR)/;)
+

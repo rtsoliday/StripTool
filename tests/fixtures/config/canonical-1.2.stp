@@ -1,0 +1,103 @@
+StripConfig                   1.2
+Strip.Time.Timespan           900
+Strip.Time.NumSamples         9000
+Strip.Time.SampleInterval     0.100000
+Strip.Time.RefreshInterval    0.500000
+Strip.Color.Background        65535     65535     65535
+Strip.Color.Foreground        0         0         0
+Strip.Color.Grid              49151     49151     49151
+Strip.Color.Color1            0         0         65535
+Strip.Color.Color2            32896     32896     0
+Strip.Color.Color3            42405     10794     10794
+Strip.Color.Color4            24415     40606     41120
+Strip.Color.Color5            65535     42405     0
+Strip.Color.Color6            41120     8224      41120
+Strip.Color.Color7            65535     0         0
+Strip.Color.Color8            65535     55255     0
+Strip.Color.Color9            48316     36751     36751
+Strip.Color.Color10           39578     52685     12850
+Strip.Option.GridXon          2
+Strip.Option.GridYon          1
+Strip.Option.AxisYcolorStat   1
+Strip.Option.GraphLineWidth   3
+Strip.Curve.0.Name            test:curve:01
+Strip.Curve.1.Name            test:curve:02
+Strip.Curve.2.Name            test:curve:03
+Strip.Curve.3.Name            test:curve:04
+Strip.Curve.4.Name            test:curve:05
+Strip.Curve.5.Name            test:curve:06
+Strip.Curve.6.Name            test:curve:07
+Strip.Curve.7.Name            test:curve:08
+Strip.Curve.8.Name            test:curve:09
+Strip.Curve.9.Name            test:curve:10
+Strip.Curve.0.Units           A
+Strip.Curve.1.Units           V
+Strip.Curve.2.Units           mm
+Strip.Curve.3.Units           degC
+Strip.Curve.4.Units           percent
+Strip.Curve.5.Units           Hz
+Strip.Curve.6.Units           W
+Strip.Curve.7.Units           Pa
+Strip.Curve.8.Units           mA
+Strip.Curve.9.Units           counts
+Strip.Curve.0.Comment         Linear reference curve
+Strip.Curve.1.Comment         Logarithmic reference curve
+Strip.Curve.2.Comment         Hidden reference curve
+Strip.Curve.3.Comment         Comment with internal spaces
+Strip.Curve.4.Comment         Curve five
+Strip.Curve.5.Comment         Curve six
+Strip.Curve.6.Comment         Curve seven
+Strip.Curve.7.Comment         Curve eight
+Strip.Curve.8.Comment         Curve nine
+Strip.Curve.9.Comment         Curve ten
+Strip.Curve.0.Precision       0
+Strip.Curve.1.Precision       1
+Strip.Curve.2.Precision       2
+Strip.Curve.3.Precision       3
+Strip.Curve.4.Precision       4
+Strip.Curve.5.Precision       5
+Strip.Curve.6.Precision       6
+Strip.Curve.7.Precision       7
+Strip.Curve.8.Precision       8
+Strip.Curve.9.Precision       20
+Strip.Curve.0.Min             -10
+Strip.Curve.1.Min             0.001
+Strip.Curve.2.Min             -2
+Strip.Curve.3.Min             -40
+Strip.Curve.4.Min             0
+Strip.Curve.5.Min             59.5
+Strip.Curve.6.Min             0
+Strip.Curve.7.Min             0.000001
+Strip.Curve.8.Min             -0.5
+Strip.Curve.9.Min             0
+Strip.Curve.0.Max             10
+Strip.Curve.1.Max             1000
+Strip.Curve.2.Max             2
+Strip.Curve.3.Max             120
+Strip.Curve.4.Max             100
+Strip.Curve.5.Max             60.5
+Strip.Curve.6.Max             5000
+Strip.Curve.7.Max             1
+Strip.Curve.8.Max             0.5
+Strip.Curve.9.Max             65535
+Strip.Curve.0.Scale           0
+Strip.Curve.1.Scale           1
+Strip.Curve.2.Scale           0
+Strip.Curve.3.Scale           0
+Strip.Curve.4.Scale           0
+Strip.Curve.5.Scale           0
+Strip.Curve.6.Scale           0
+Strip.Curve.7.Scale           1
+Strip.Curve.8.Scale           0
+Strip.Curve.9.Scale           0
+Strip.Curve.0.PlotStatus      1
+Strip.Curve.1.PlotStatus      1
+Strip.Curve.2.PlotStatus      0
+Strip.Curve.3.PlotStatus      1
+Strip.Curve.4.PlotStatus      1
+Strip.Curve.5.PlotStatus      1
+Strip.Curve.6.PlotStatus      1
+Strip.Curve.7.PlotStatus      1
+Strip.Curve.8.PlotStatus      1
+Strip.Curve.9.PlotStatus      1
+

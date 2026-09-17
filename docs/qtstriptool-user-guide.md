@@ -1,0 +1,129 @@
+# Qt StripTool user guide
+
+Qt StripTool displays timestamped EPICS Channel Access values for as many as
+ten process variables. The graph and controls windows share one configuration;
+changes made in Controls immediately affect the graph and acquisition.
+
+This guide describes the current **alpha**. Keep the legacy `StripTool`
+available for operational rollback until the compatibility release gates are
+closed.
+
+## Start the application
+
+```text
+qtstriptool [--help] [--version] [configuration.stp]
+```
+
+Qt also consumes its standard command-line options. For example,
+`qtstriptool -style fusion example.stp` uses Qt's Fusion style. Pass at most
+one configuration file; other application-specific switches are not defined.
+
+For a bare relative configuration name, Qt StripTool checks the current
+directory and then each directory in `STRIP_FILE_SEARCH_PATH`. Absolute paths
+and paths containing a directory component are used directly. If the explicit
+file cannot be loaded, the application tries `StripTool.stp` in the current
+directory and otherwise starts with compiled defaults.
+
+Useful environment variables are:
+
+| Variable | Current Qt behavior |
+|---|---|
+| `EPICS_CA_ADDR_LIST`, `EPICS_CA_AUTO_ADDR_LIST` and other EPICS CA variables | Used by EPICS Channel Access |
+| `STRIP_FILE_SEARCH_PATH` | Path-list used to find a bare startup `.stp` name |
+| `STRIP_HELP_PATH` | Local file opened by **Help > Help** when it exists |
+| `QT_QPA_PLATFORM`, `QT_STYLE_OVERRIDE` and standard Qt variables | Interpreted by Qt |
+
+Legacy X resource and printer environment variables are not consumed; see the
+known differences in the compatibility guide.
+
+## Configure curves
+
+The Controls window opens at startup and is available later through
+**Window > Show Controls**.
+
+1. Enter a PV in the **PV** field and select **Connect**, or enter a name in an
+   unused curve row.
+2. Set Plot, Linear or Log 10 scale, precision, minimum, maximum, and color.
+3. Select **Modify** to apply row edits. **Remove** frees the row and stops its
+   acquisition.
+4. Use the Timing tab to set history length, bounded sample count, sampling
+   interval, and independent display-refresh interval.
+5. Use Appearance for graph colors, grid density, colored Y axes, and line
+   width.
+
+`CPU_Usage` is a local pseudo-curve and does not open a Channel Access
+subscription. For logarithmic curves, choose positive limits; non-positive
+samples cannot be plotted on a base-10 scale.
+
+## Work with the graph
+
+The View menu can pause drawing, enable or disable auto-scroll, pan left or
+right, zoom in or out, auto-scale configured curves, reset the visible range,
+and force a replot. Moving the pointer over the plot updates the location
+readout.
+
+Annotations can be created and manipulated on the plot using its interaction
+controls. They are part of the runtime graph state; verify the desired
+annotation behavior before relying on them as a permanent operational record.
+
+**View > Historical Range** asks the configured history provider for the
+selected range and joins returned samples with live data. The distributed
+build intentionally uses `NoHistoryProvider`, so it reports that no archive is
+configured. Live buffering continues to work; an APS archive endpoint and
+provider must be supplied before production history is available.
+
+## Open, save, export, and print
+
+- **File > Open**, **Save**, and **Save As** read and write Motif-readable
+  `StripConfig 1.2` files. Open Recent is stored with Qt application settings.
+- **Restore Defaults** in Controls replaces the current model with compiled
+  defaults.
+- **Export Text** and **Export CSV** write currently buffered curve samples.
+- **Save Snapshot** writes the graph as PNG or JPEG according to the chosen
+  filename/filter.
+- **Print** and **Print Preview** render the graph through Qt PrintSupport.
+  Available printers and PDF support come from the platform's Qt print backend.
+
+Saving always writes the complete supported model. Legacy partial group
+load/save selection is not present. SDDS export is not built.
+
+## Launch-script and desktop migration
+
+Migrate one launcher at a time and preserve an explicit rollback command:
+
+```sh
+# old
+exec /opt/epics/extensions/bin/$EPICS_HOST_ARCH/StripTool "$config"
+
+# alpha trial
+exec /opt/epics/extensions/bin/$EPICS_HOST_ARCH/qtstriptool "$config"
+```
+
+Keep the `.stp` argument and relevant CA/search-path environment unchanged.
+Do not create a `StripTool` alias or replace the legacy binary during alpha.
+For a fast rollback, retain the old launcher or add a site-owned selector that
+names both executables explicitly.
+
+`make install-qt-package` installs
+`org.epics.qtstriptool.desktop` on Unix-like systems. Desktop databases may
+need their normal administrator refresh after package installation. The
+project does not register a system-wide `.stp` MIME type; sites that want file
+association should define and review one in their native package rather than
+changing the executable name.
+
+## Troubleshooting
+
+- **Build says EPICS Base is missing:** set `EPICS_BASE` to a built Base tree
+  containing `include/cadef.h` and host libraries.
+- **Build says Qt is missing:** install Qt Widgets/PrintSupport/Test development
+  files or select an installed major with `QT_VERSION=5|6`.
+- **PV remains disconnected:** verify the PV with site CA tools and check the
+  EPICS CA address-list environment and network path.
+- **Startup file is not found:** use an absolute path or inspect
+  `STRIP_FILE_SEARCH_PATH`; directory-containing paths are not searched.
+- **History reports no provider:** this is expected in the distributed alpha.
+- **Help shows built-in guidance:** set `STRIP_HELP_PATH` to an existing local
+  help file if site documentation is required.
+- **Visual or printer output differs from Motif:** Qt uses the active platform
+  style, fonts, DPI, and print backend. Review the appearance guide before
+  treating pixel differences as defects.

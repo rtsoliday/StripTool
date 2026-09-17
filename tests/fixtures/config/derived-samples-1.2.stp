@@ -1,0 +1,8 @@
+StripConfig                   1.2
+Strip.Time.Timespan           601
+Strip.Time.SampleInterval     0.250000
+Strip.Time.RefreshInterval    1.000000
+Strip.Curve.0.Name            test:derived:samples
+Strip.Curve.0.Scale           0
+Strip.Curve.0.PlotStatus      1
+

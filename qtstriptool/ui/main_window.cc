@@ -1,0 +1,395 @@
+#include "ui/main_window.h"
+#include "core/application.h"
+#include "services/export_service.h"
+#include "services/file_workflow.h"
+#include "services/history_provider.h"
+#include "services/acquisition_manager.h"
+#include "services/channel_access.h"
+#include "services/cpu_usage_provider.h"
+#include "ui/controls_window.h"
+#include "ui/history_dialog.h"
+#include "ui/plot_widget.h"
+#include <QAction>
+#include <QApplication>
+#include <QDateTime>
+#include <QDesktopServices>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QMenu>
+#include <QMenuBar>
+#include <QPainter>
+#include <QSettings>
+#include <QStatusBar>
+#include <QUrl>
+#include <QtPrintSupport/QPrintDialog>
+#include <QtPrintSupport/QPrintPreviewDialog>
+#include <QtPrintSupport/QPrinter>
+#include <algorithm>
+#include <chrono>
+#include <utility>
+namespace striptool {
+MainWindow::MainWindow(QWidget* parent) : MainWindow(makeDefaultModel(), parent) {}
+
+MainWindow::MainWindow(StripToolModel model, QWidget* parent)
+    : QMainWindow(parent), model_(std::move(model)) {
+  setObjectName(QStringLiteral("mainWindow"));
+  setWindowTitle(model_.filename.empty()
+                     ? applicationName()
+                     : QString::fromStdString(model_.title) +
+                           QStringLiteral(" — ") + applicationName());
+  resize(900, 620);
+  auto* fileMenu = menuBar()->addMenu(tr("&File"));
+  fileMenu->setObjectName(QStringLiteral("fileMenu"));
+  auto* openAction = fileMenu->addAction(tr("&Open…"));
+  openAction->setObjectName(QStringLiteral("graphOpenAction"));
+  auto* saveAction = fileMenu->addAction(tr("&Save"));
+  saveAction->setObjectName(QStringLiteral("graphSaveAction"));
+  auto* saveAsAction = fileMenu->addAction(tr("Save &As…"));
+  saveAsAction->setObjectName(QStringLiteral("graphSaveAsAction"));
+  recentMenu_ = fileMenu->addMenu(tr("Open &Recent"));
+  recentMenu_->setObjectName(QStringLiteral("recentFilesMenu"));
+  fileMenu->addSeparator();
+  auto* textAction = fileMenu->addAction(tr("Export &Text…"));
+  textAction->setObjectName(QStringLiteral("exportTextAction"));
+  auto* csvAction = fileMenu->addAction(tr("Export &CSV…"));
+  csvAction->setObjectName(QStringLiteral("exportCsvAction"));
+  auto* snapshotAction = fileMenu->addAction(tr("Save S&napshot…"));
+  snapshotAction->setObjectName(QStringLiteral("snapshotAction"));
+  fileMenu->addSeparator();
+  auto* printAction = fileMenu->addAction(tr("&Print…"));
+  printAction->setObjectName(QStringLiteral("printAction"));
+  auto* previewAction = fileMenu->addAction(tr("Print Pre&view…"));
+  previewAction->setObjectName(QStringLiteral("printPreviewAction"));
+  fileMenu->addSeparator();
+  auto* exitAction = fileMenu->addAction(tr("E&xit"));
+  exitAction->setObjectName(QStringLiteral("exitAction"));
+  connect(exitAction, &QAction::triggered, qApp, &QApplication::closeAllWindows);
+  auto* viewMenu = menuBar()->addMenu(tr("&View"));
+  viewMenu->setObjectName(QStringLiteral("viewMenu"));
+  auto* pauseAction = viewMenu->addAction(tr("&Pause"));
+  pauseAction->setObjectName(QStringLiteral("pauseAction"));
+  pauseAction->setCheckable(true);
+  auto* autoScrollAction = viewMenu->addAction(tr("&Auto Scroll"));
+  autoScrollAction->setObjectName(QStringLiteral("autoScrollAction"));
+  autoScrollAction->setCheckable(true);
+  autoScrollAction->setChecked(true);
+  viewMenu->addSeparator();
+  auto* panLeftAction = viewMenu->addAction(tr("Pan &Left"));
+  panLeftAction->setObjectName(QStringLiteral("panLeftAction"));
+  auto* panRightAction = viewMenu->addAction(tr("Pan &Right"));
+  panRightAction->setObjectName(QStringLiteral("panRightAction"));
+  auto* zoomInAction = viewMenu->addAction(tr("Zoom &In"));
+  zoomInAction->setObjectName(QStringLiteral("zoomInAction"));
+  auto* zoomOutAction = viewMenu->addAction(tr("Zoom &Out"));
+  zoomOutAction->setObjectName(QStringLiteral("zoomOutAction"));
+  auto* autoScaleAction = viewMenu->addAction(tr("Auto &Scale"));
+  autoScaleAction->setObjectName(QStringLiteral("autoScaleAction"));
+  auto* resetAction = viewMenu->addAction(tr("&Reset View"));
+  resetAction->setObjectName(QStringLiteral("resetAction"));
+  auto* replotAction = viewMenu->addAction(tr("Re&plot"));
+  replotAction->setObjectName(QStringLiteral("replotAction"));
+  auto* historyAction = viewMenu->addAction(tr("&Historical Range…"));
+  historyAction->setObjectName(QStringLiteral("historyAction"));
+  auto* windowMenu = menuBar()->addMenu(tr("&Window"));
+  windowMenu->setObjectName(QStringLiteral("windowMenu"));
+  auto* showControlsAction = windowMenu->addAction(tr("Show &Controls"));
+  showControlsAction->setObjectName(QStringLiteral("showControlsAction"));
+  auto* helpMenu = menuBar()->addMenu(tr("&Help"));
+  helpMenu->setObjectName(QStringLiteral("helpMenu"));
+  auto* aboutAction = helpMenu->addAction(tr("&About Qt StripTool"));
+  aboutAction->setObjectName(QStringLiteral("aboutAction"));
+  auto* helpAction = helpMenu->addAction(tr("&Help"));
+  helpAction->setObjectName(QStringLiteral("helpAction"));
+  plotWidget_ = new PlotWidget(this);
+  plotWidget_->setObjectName(QStringLiteral("plotArea"));
+  plotWidget_->setModel(model_);
+  setCentralWidget(plotWidget_);
+  controlsWindow_ = std::make_unique<ControlsWindow>(&model_);
+  historyProvider_ = std::make_unique<NoHistoryProvider>();
+  updateRecentFiles();
+  const auto chooseOpen = [this] {
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Open StripTool Configuration"), {}, tr("StripTool files (*.stp);;All files (*)"));
+    if (path.isEmpty()) return;
+    QString error;
+    if (!openConfiguration(path, &error)) QMessageBox::critical(this, tr("Open Failed"), error);
+  };
+  const auto chooseSave = [this](bool forceName) {
+    QString path = forceName ? QString() : QString::fromStdString(model_.filename);
+    if (path.isEmpty())
+      path = QFileDialog::getSaveFileName(
+          this, tr("Save StripTool Configuration"), QStringLiteral("StripTool.stp"),
+          tr("StripTool files (*.stp);;All files (*)"));
+    if (path.isEmpty()) return;
+    QString error;
+    if (!saveConfiguration(path, &error)) QMessageBox::critical(this, tr("Save Failed"), error);
+  };
+  connect(openAction, &QAction::triggered, this, chooseOpen);
+  connect(saveAction, &QAction::triggered, this, [chooseSave] { chooseSave(false); });
+  connect(saveAsAction, &QAction::triggered, this, [chooseSave] { chooseSave(true); });
+  connect(textAction, &QAction::triggered, this, [this] {
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export Text Data"), {},
+                                                       tr("Text files (*.txt);;All files (*)"));
+    if (path.isEmpty()) return;
+    QString error;
+    if (!exportData(path, false, &error)) QMessageBox::critical(this, tr("Export Failed"), error);
+  });
+  connect(csvAction, &QAction::triggered, this, [this] {
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export CSV Data"), {},
+                                                       tr("CSV files (*.csv);;All files (*)"));
+    if (path.isEmpty()) return;
+    QString error;
+    if (!exportData(path, true, &error)) QMessageBox::critical(this, tr("Export Failed"), error);
+  });
+  connect(snapshotAction, &QAction::triggered, this, [this] {
+    const QString path = QFileDialog::getSaveFileName(this, tr("Save Plot Snapshot"), {},
+                                                       tr("PNG images (*.png);;JPEG images (*.jpg)"));
+    if (path.isEmpty()) return;
+    QString error;
+    if (!saveSnapshot(path, &error)) QMessageBox::critical(this, tr("Snapshot Failed"), error);
+  });
+  const auto paintPlot = [this](QPrinter* printer) {
+    QPainter painter(printer);
+    const QRect page = printer->pageLayout().paintRectPixels(printer->resolution());
+    const QPixmap plot = plotWidget_->grab();
+    painter.drawPixmap(page, plot, plot.rect());
+  };
+  connect(printAction, &QAction::triggered, this, [this, paintPlot] {
+    QPrinter printer(QPrinter::HighResolution);
+    QPrintDialog dialog(&printer, this);
+    if (dialog.exec() == QDialog::Accepted) paintPlot(&printer);
+  });
+  connect(previewAction, &QAction::triggered, this, [this, paintPlot] {
+    QPrinter printer(QPrinter::HighResolution);
+    QPrintPreviewDialog preview(&printer, this);
+    connect(&preview, &QPrintPreviewDialog::paintRequested, this, paintPlot);
+    preview.exec();
+  });
+  connect(pauseAction, &QAction::toggled, plotWidget_, &PlotWidget::setPaused);
+  connect(autoScrollAction, &QAction::toggled, plotWidget_, &PlotWidget::setAutoScroll);
+  connect(panLeftAction, &QAction::triggered, this,
+          [this] { plotWidget_->pan(-0.25); });
+  connect(panRightAction, &QAction::triggered, this,
+          [this] { plotWidget_->pan(0.25); });
+  connect(zoomInAction, &QAction::triggered, this,
+          [this] { plotWidget_->zoom(0.5); });
+  connect(zoomOutAction, &QAction::triggered, this,
+          [this] { plotWidget_->zoom(2.0); });
+  connect(autoScaleAction, &QAction::triggered, this,
+          [this] { plotWidget_->autoScale(); });
+  connect(resetAction, &QAction::triggered, plotWidget_, &PlotWidget::resetView);
+  connect(replotAction, &QAction::triggered, plotWidget_, &PlotWidget::replot);
+  connect(historyAction, &QAction::triggered, this, &MainWindow::requestHistory);
+  connect(showControlsAction, &QAction::triggered, this, &MainWindow::showControls);
+  connect(controlsWindow_.get(), &ControlsWindow::modelChanged, this, [this] {
+    plotWidget_->setModel(model_);
+    setWindowTitle(model_.filename.empty()
+                       ? applicationName()
+                       : QString::fromStdString(model_.title) + QStringLiteral(" — ") +
+                             applicationName());
+  });
+  connect(controlsWindow_.get(), &ControlsWindow::acquisitionConfigurationChanged,
+          this, &MainWindow::restartAcquisition);
+  connect(controlsWindow_.get(), &ControlsWindow::showGraphRequested, this, [this] {
+    show();
+    raise();
+    activateWindow();
+  });
+  connect(controlsWindow_.get(), &ControlsWindow::openRequested, this, chooseOpen);
+  connect(controlsWindow_.get(), &ControlsWindow::saveRequested, this,
+          [chooseSave] { chooseSave(false); });
+  connect(controlsWindow_.get(), &ControlsWindow::saveAsRequested, this,
+          [chooseSave] { chooseSave(true); });
+  connect(plotWidget_, &PlotWidget::cursorLocationChanged, this,
+          [this](const QDateTime& time, double value, int curve) {
+            if (curve >= 0)
+              statusBar()->showMessage(
+                  tr("%1   Curve %2: %3")
+                      .arg(time.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz")))
+                      .arg(curve + 1)
+                      .arg(value, 0, 'g', 8));
+          });
+  statusBar()->showMessage(model_.filename.empty()
+                               ? tr("Ready")
+                               : tr("Loaded %1").arg(QString::fromStdString(model_.filename)));
+  connect(historyProvider_.get(), &HistoryProvider::resultReady, this,
+          [this](HistoryRequestId id, const QString&, std::vector<Sample> samples) {
+            if (!historyRequests_.contains(id)) return;
+            plotWidget_->joinHistoricalSamples(historyRequests_.take(id), samples);
+            statusBar()->showMessage(tr("Historical samples loaded"), 5000);
+          });
+  connect(historyProvider_.get(), &HistoryProvider::requestFailed, this,
+          [this](HistoryRequestId id, const QString& message) {
+            historyRequests_.remove(id);
+            QMessageBox::information(this, tr("History Unavailable"), message);
+          });
+  connect(aboutAction, &QAction::triggered, this, [this] {
+    QMessageBox::about(this, tr("About Qt StripTool"), versionText());
+  });
+  connect(helpAction, &QAction::triggered, this, [this] {
+    const QString configured = qEnvironmentVariable("STRIP_HELP_PATH");
+    if (!configured.isEmpty() && QDesktopServices::openUrl(QUrl::fromLocalFile(configured)))
+      return;
+    QMessageBox::information(this, tr("Qt StripTool Help"),
+        tr("Use the Controls window to connect curves and configure timing and appearance. "
+           "Use the graph View menu to pan, zoom, pause, and reset the display."));
+  });
+}
+
+MainWindow::~MainWindow() = default;
+
+void MainWindow::showControls() {
+  controlsWindow_->reloadFromModel();
+  controlsWindow_->show();
+  controlsWindow_->raise();
+  controlsWindow_->activateWindow();
+}
+
+void MainWindow::applyModel() {
+  plotWidget_->setModel(model_);
+  controlsWindow_->reloadFromModel();
+  setWindowTitle(model_.filename.empty()
+                     ? applicationName()
+                     : QString::fromStdString(model_.title) + QStringLiteral(" — ") +
+                           applicationName());
+  restartAcquisition();
+}
+
+bool MainWindow::openConfiguration(const QString& path, QString* error) {
+  const auto result = FileWorkflow::open(path.toStdString(), model_);
+  if (!result.success) {
+    if (error)
+      *error = result.diagnostics.empty()
+                   ? tr("Unable to open %1").arg(path)
+                   : QString::fromStdString(result.diagnostics.front().message);
+    return false;
+  }
+  applyModel();
+  updateRecentFiles(path);
+  statusBar()->showMessage(tr("Loaded %1").arg(path), 5000);
+  return true;
+}
+
+bool MainWindow::saveConfiguration(const QString& path, QString* error) {
+  std::string detail;
+  if (!FileWorkflow::save(path.toStdString(), model_, &detail)) {
+    if (error) *error = QString::fromStdString(detail);
+    return false;
+  }
+  updateRecentFiles(path);
+  setWindowTitle(QString::fromStdString(model_.title) + QStringLiteral(" — ") +
+                 applicationName());
+  statusBar()->showMessage(tr("Saved %1").arg(path), 5000);
+  return true;
+}
+
+bool MainWindow::exportData(const QString& path, bool csv, QString* error) const {
+  CurveSamples samples;
+  for (std::size_t i = 0; i < samples.size(); ++i)
+    samples[i] = plotWidget_->curveSamples(i);
+  std::string detail;
+  const bool ok = csv ? ExportService::writeCsvFile(path.toStdString(), model_, samples, &detail)
+                      : ExportService::writeTextFile(path.toStdString(), model_, samples, &detail);
+  if (!ok && error) *error = QString::fromStdString(detail);
+  return ok;
+}
+
+bool MainWindow::saveSnapshot(const QString& path, QString* error) const {
+  if (plotWidget_->grab().save(path)) return true;
+  if (error) *error = tr("Unable to save image %1").arg(path);
+  return false;
+}
+
+void MainWindow::updateRecentFiles(const QString& path) {
+  QSettings settings;
+  std::vector<std::string> recent;
+  for (const auto& item : settings.value(QStringLiteral("recentFiles")).toStringList())
+    recent.push_back(item.toStdString());
+  recent = FileWorkflow::addRecent(recent, path.toStdString());
+  QStringList stored;
+  for (const auto& item : recent) stored.push_back(QString::fromStdString(item));
+  if (!path.isEmpty()) settings.setValue(QStringLiteral("recentFiles"), stored);
+  recentMenu_->clear();
+  recentMenu_->setEnabled(!stored.isEmpty());
+  for (const auto& item : stored) {
+    auto* action = recentMenu_->addAction(item);
+    connect(action, &QAction::triggered, this, [this, item] {
+      QString error;
+      if (!openConfiguration(item, &error))
+        QMessageBox::critical(this, tr("Open Failed"), error);
+    });
+  }
+}
+
+void MainWindow::requestHistory() {
+  HistoryDialog dialog(this);
+  dialog.setRange(plotWidget_->visibleTimeRange());
+  if (dialog.exec() != QDialog::Accepted) return;
+  const TimeRange range = dialog.selectedRange();
+  if (!range.isValid()) {
+    QMessageBox::warning(this, tr("Invalid Range"), tr("The From time must precede the To time."));
+    return;
+  }
+  for (std::size_t i = 0; i < model_.curves.size(); ++i) {
+    if (!model_.curves[i].nameSet) continue;
+    const auto id = historyProvider_->request(QString::fromStdString(model_.curves[i].name), range);
+    historyRequests_.insert(id, i);
+  }
+}
+
+void MainWindow::startAcquisition() {
+  if (channelAccess_) return;
+  acquisitionRunning_ = true;
+  channelAccess_ = std::make_unique<ChannelAccessProvider>();
+  cpuUsage_ = std::make_unique<CpuUsageProvider>();
+  channelAcquisition_ = std::make_unique<AcquisitionManager>(channelAccess_.get());
+  cpuAcquisition_ = std::make_unique<AcquisitionManager>(cpuUsage_.get());
+  const auto sampleInterval = std::chrono::milliseconds(
+      std::max(10, int(model_.timing.sampleIntervalSeconds * 1000.0)));
+  const auto refreshInterval = std::chrono::milliseconds(
+      std::max(10, int(model_.timing.refreshIntervalSeconds * 1000.0)));
+  channelAcquisition_->setSampleInterval(sampleInterval);
+  cpuAcquisition_->setSampleInterval(sampleInterval);
+  channelAcquisition_->setRefreshInterval(refreshInterval);
+  cpuAcquisition_->setRefreshInterval(refreshInterval);
+
+  for (std::size_t i = 0; i < model_.curves.size(); ++i) {
+    if (!model_.curves[i].nameSet) continue;
+    const bool local = model_.curves[i].name == "CPU_Usage";
+    auto* acquisition = local ? cpuAcquisition_.get() : channelAcquisition_.get();
+    channelIds_[i] = acquisition->addChannel(
+        QString::fromStdString(model_.curves[i].name),
+        static_cast<std::size_t>(model_.timing.numberOfSamples));
+    localChannels_[i] = local;
+  }
+  const auto refresh = [this] {
+    for (std::size_t i = 0; i < channelIds_.size(); ++i) {
+      if (!channelIds_[i]) continue;
+      const auto* acquisition = localChannels_[i] ? cpuAcquisition_.get()
+                                                  : channelAcquisition_.get();
+      if (const auto* buffer = acquisition->buffer(channelIds_[i]))
+        plotWidget_->setCurveSamples(i, buffer->samples());
+    }
+  };
+  connect(channelAcquisition_.get(), &AcquisitionManager::displayRefreshRequested,
+          this, refresh);
+  connect(cpuAcquisition_.get(), &AcquisitionManager::displayRefreshRequested,
+          this, refresh);
+}
+
+void MainWindow::stopAcquisition() {
+  channelAcquisition_.reset();
+  cpuAcquisition_.reset();
+  channelAccess_.reset();
+  cpuUsage_.reset();
+  channelIds_.fill(0);
+  localChannels_.fill(false);
+  acquisitionRunning_ = false;
+}
+
+void MainWindow::restartAcquisition() {
+  if (!acquisitionRunning_) return;
+  stopAcquisition();
+  startAcquisition();
+}
+}

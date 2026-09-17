@@ -1,0 +1,13 @@
+StripConfig                   1.2
+Foreign.Namespace.Value       ignored
+Strip.Future.Option           ignored
+Strip.Time.FutureField        ignored
+Strip.Time.Timespan           120
+Strip.Time.NumSamples         7200
+Strip.Time.SampleInterval     0.500000
+Strip.Time.RefreshInterval    1.000000
+Strip.Curve.0.Name            test:known:curve
+Strip.Curve.0.FutureField     ignored
+Strip.Curve.0.Scale           0
+Strip.Curve.0.PlotStatus      1
+
