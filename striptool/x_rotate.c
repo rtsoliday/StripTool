@@ -186,8 +186,6 @@ static GC       font_gc = None;
                  */
                 if ( alignment == XgALIGN_CENTER )        
                         x -= text_len / 2; 
-                else if ( alignment == XgALIGN_LEFT )  
-                        x = x; 
                 else if ( alignment == XgALIGN_RIGHT )  
                         x -= text_len; 
      
@@ -415,9 +413,7 @@ static unsigned char reverse_bits[] = {
  ************************************************************************/
 
 int
-XgRotateXImage(image, degrees)
-XImage *image;
-int degrees;
+XgRotateXImage(XImage *image, int degrees)
 {
 register unsigned char  *bitmap;
 int                     width, height;

@@ -1412,18 +1412,15 @@ int		cColorManager_grab_writables	(cColorManager	the_scm,
   int		i;
   int		stat;
   int		n_grabbed;
-  int		n_calls;
 
   i = min (n_cells, scmi->xvi.colormap_size) - 1;
   n_grabbed = 0;
-  n_calls = 0;
 
   /* a different sort of binary search */
   while ((i > 0) && (n_grabbed < n_cells))
   {
     stat = XwAllocColorCells
       (scmi->display, scmi->cmap, False, 0, 0, &cells[n_grabbed], i);
-    n_calls++;
 
     if (stat)
     {

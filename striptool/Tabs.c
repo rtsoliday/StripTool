@@ -369,7 +369,7 @@ WidgetClass xgTabsWidgetClass = (WidgetClass) &tabsClassRec;
 
 
 static void
-ClassInitialize()
+ClassInitialize(void)
 {
     /*
      * Add a type converter for the TabShape type
@@ -388,11 +388,8 @@ ClassInitialize()
 
 
 static void 
-Initialize(request, tabw, args, num_args)
-XgTabsWidget request;
-XgTabsWidget tabw;
-ArgList      args;
-Cardinal     *num_args;
+Initialize(XgTabsWidget request, XgTabsWidget tabw, ArgList args,
+           Cardinal *num_args)
 {
 String *tabstrings;
 int i, h, w;
@@ -472,10 +469,7 @@ int i, h, w;
 
 
 static void
-Realize(tabw,mask,attributes)
-Widget tabw;
-XtValueMask * mask;
-XSetWindowAttributes *attributes;
+Realize(Widget tabw, XtValueMask *mask, XSetWindowAttributes *attributes)
 {
     xmPrimitiveClassRec.core_class.realize(tabw, mask, attributes);
     XClearWindow(XtDisplay(tabw), XtWindow(tabw));
@@ -484,9 +478,8 @@ XSetWindowAttributes *attributes;
 
 
 static XtGeometryResult
-QueryGeometry(tabw, proposed, desired)
-XgTabsWidget tabw;
-XtWidgetGeometry *proposed, *desired;
+QueryGeometry(XgTabsWidget tabw, XtWidgetGeometry *proposed,
+              XtWidgetGeometry *desired)
 {
 #define Set(bit) (proposed->request_mode & bit)
 int         width;
@@ -518,8 +511,7 @@ int        height;
 
 
 static void
-Destroy(tabw)
-XgTabsWidget tabw;
+Destroy(XgTabsWidget tabw)
 {
 int i;
 
@@ -559,11 +551,8 @@ int i;
 
 
 static void
-Activate(tabw, event, params, num_params)
-XgTabsWidget tabw;
-XEvent *event;
-String *params;
-Cardinal *num_params;
+Activate(XgTabsWidget tabw, XEvent *event, String *params,
+         Cardinal *num_params)
 {
 Dimension width, slant, height;
 int old_tab, i, current_tab = -1, righttabs = RIGHT_TABS(tabw);
@@ -771,9 +760,7 @@ XgTabsCallbackStruct cbs;
 
 
 static void
-SetTabs(tabw, current_tab)
-XgTabsWidget  tabw;
-int           current_tab;
+SetTabs(XgTabsWidget tabw, int current_tab)
 {
 int        i;
 int        old_curtab = tabw->tabs.curtab;
@@ -844,10 +831,7 @@ int        old_curtab = tabw->tabs.curtab;
 
 
 static void
-GetValuesHook(w, args, num_args)
-XgTabsWidget    w;
-ArgList         args;
-Cardinal        *num_args;
+GetValuesHook(XgTabsWidget w, ArgList args, Cardinal *num_args)
 {
 Cardinal     i;
 
@@ -865,10 +849,7 @@ Cardinal     i;
 
 
 static Boolean  
-SetValues(old, request, new)
-XgTabsWidget  old;
-XgTabsWidget  request;
-XgTabsWidget  new;
+SetValues(XgTabsWidget old, XgTabsWidget request, XgTabsWidget new)
 {
 Boolean redraw = False;
 
@@ -998,8 +979,7 @@ Boolean redraw = False;
 
 
 static void 
-Resize(tabw)
-XgTabsWidget tabw;
+Resize(XgTabsWidget tabw)
 {
     SetMainTabWidth(tabw);
 }
@@ -1008,10 +988,7 @@ XgTabsWidget tabw;
 
 
 static void 
-Redraw(tabw, event, region)
-XgTabsWidget tabw;
-XEvent * event;
-Region  region;
+Redraw(XgTabsWidget tabw, XEvent *event, Region region)
 {
 int i;
 
@@ -1032,8 +1009,7 @@ int i;
 
 
 static void 
-Highlight(tabw)
-XgTabsWidget tabw;
+Highlight(XgTabsWidget tabw)
 {
 int     focus_tab = tabw->tabs.focus_tab;
 
@@ -1090,8 +1066,7 @@ int     focus_tab = tabw->tabs.focus_tab;
 
 
 static void 
-UnHighlight(tabw)
-XgTabsWidget tabw;
+UnHighlight(XgTabsWidget tabw)
 {
 int     old_focus_tab;
 
@@ -1160,10 +1135,7 @@ int     old_focus_tab;
 
 
 static void
-GetPreferredSize(tabw, width, height)
-XgTabsWidget tabw;
-int *width;
-int *height;
+GetPreferredSize(XgTabsWidget tabw, int *width, int *height)
 {
     int pref_height;
     int pref_width = 0;
@@ -1205,8 +1177,7 @@ int *height;
 
 
 static void
-SetMainTabWidth(tabw)
-XgTabsWidget tabw;
+SetMainTabWidth(XgTabsWidget tabw)
 {
 int    main_tab_width = GetMainTabWidth(tabw, 0);
 int    other_tabs;
@@ -1239,9 +1210,7 @@ int    height = (IS_HORIZ_TAB(tabw) ? HEIGHT(tabw) : WIDTH(tabw));
 
 
 static int
-GetMainTabWidth(tabw, passed_height)
-XgTabsWidget tabw;
-int passed_height;
+GetMainTabWidth(XgTabsWidget tabw, int passed_height)
 {
 int    new_width = 0;
 int    height;
@@ -1286,10 +1255,7 @@ int    height;
 
 
 static void
-DrawLeftTab(tab, region, index)
-XgTabsWidget tab;
-Region  region;
-int  index;
+DrawLeftTab(XgTabsWidget tab, Region region, int index)
 {
     /*
      * Draw the left (or top) tab based on shape and location
@@ -1312,10 +1278,7 @@ int  index;
 
 
 static void
-DrawRightTab(tab, region, index)
-XgTabsWidget tab;
-Region  region;
-int  index;
+DrawRightTab(XgTabsWidget tab, Region region, int index)
 {
     /*
      * Draw the right (or bottom) tab based on shape and location
@@ -1338,9 +1301,7 @@ int  index;
 
 
 static void
-DrawCurrentTab(tab, region)
-XgTabsWidget tab;
-Region  region;
+DrawCurrentTab(XgTabsWidget tab, Region region)
 {
     /*
      * Draw the current tab based on shape and location
@@ -2881,8 +2842,7 @@ Window    win   = XtWindow((Widget)tabw);
 
 
 static void 
-CreateTopGc(tabw)
-XgTabsWidget tabw;
+CreateTopGc(XgTabsWidget tabw)
 {
 XtGCMask mask = GCForeground | GCLineWidth;
 XGCValues values;
@@ -2897,8 +2857,7 @@ XGCValues values;
 
 
 static void
-CreateBottomGc(tabw)
-XgTabsWidget tabw;
+CreateBottomGc(XgTabsWidget tabw)
 {
 XtGCMask mask = GCForeground | GCLineWidth;
 XGCValues values;
@@ -2913,8 +2872,7 @@ XGCValues values;
 
 
 static void
-CreateTextGc(tabw)
-XgTabsWidget tabw;
+CreateTextGc(XgTabsWidget tabw)
 {
 XtGCMask mask = GCForeground | GCBackground | GCFont | GCLineWidth | 
                         GCFunction | GCPlaneMask | GCGraphicsExposures;
@@ -2944,8 +2902,7 @@ XGCValues values;
 
 
 static void
-CreateFillGc(tabw)
-XgTabsWidget tabw;
+CreateFillGc(XgTabsWidget tabw)
 {
 XtGCMask mask = GCForeground;
 XGCValues values;
@@ -2963,10 +2920,7 @@ XGCValues values;
 
 
 static void 
-CopyBg(tabw,offset,value)
-XgTabsWidget tabw;
-int  offset;
-XrmValue * value;
+CopyBg(XgTabsWidget tabw, int offset, XrmValue *value)
 {
     /*
      * Get the background from the core part
@@ -2984,8 +2938,7 @@ XrmValue * value;
  */
 
 static Boolean
-CompareStrings(in, test)
-String in, test;
+CompareStrings(String in, String test)
 {
     /*
      * Strip leading whitespace off the in string.
@@ -3016,13 +2969,9 @@ String in, test;
 
 
 static Boolean
-cvtStringToTabShape(dpy, args, num_args, from, to, converter_data)
-Display         *dpy;
-XrmValuePtr        args;
-Cardinal        *num_args;
-XrmValuePtr        from;
-XrmValuePtr        to;
-XtPointer         *converter_data;
+cvtStringToTabShape(Display *dpy, XrmValuePtr args, Cardinal *num_args,
+                    XrmValuePtr from, XrmValuePtr to,
+                    XtPointer *converter_data)
 {
 static XgTabShapeType tab_shape;
 
@@ -3161,8 +3110,7 @@ static int        item_count = 0;
 
 
 static void
-freeStringArray(string)
-String *string;
+freeStringArray(String *string)
 {
 int i;
 
@@ -3179,11 +3127,7 @@ int i;
 
 
 Widget
-XgCreateTabsWidget(parent, name, al, ac)
-Widget parent;
-char *name;
-ArgList al;
-Cardinal ac;
+XgCreateTabsWidget(Widget parent, char *name, ArgList al, Cardinal ac)
 {
     return XtCreateWidget(name, xgTabsWidgetClass, parent, al, ac);
 }
@@ -3191,11 +3135,8 @@ Cardinal ac;
 
 
 static void 
-TraverseTabs(tabw, event, params, num_params)
-XgTabsWidget tabw;
-XEvent *event;
-String *params;
-Cardinal *num_params;
+TraverseTabs(XgTabsWidget tabw, XEvent *event, String *params,
+             Cardinal *num_params)
 {
     /*
      * Unhighlight the current tab
@@ -3233,11 +3174,8 @@ Cardinal *num_params;
 
 
 static void 
-ProcessTraversal(tabw, event, params, num_params)
-XgTabsWidget tabw;
-XEvent *event;
-String *params;
-Cardinal *num_params;
+ProcessTraversal(XgTabsWidget tabw, XEvent *event, String *params,
+                 Cardinal *num_params)
 {
     /*
      * See which direction to process traversal
@@ -3548,23 +3486,20 @@ int        x = tabw->primitive.shadow_thickness + tabw->tabs.textmargin +
  * ---PHDR--- */
 
 static XFontStruct *
-GetFontStruct(font_list)
-XmFontList        font_list;
+GetFontStruct(XmFontList font_list)
 {
 #if (XmVERSION == 1 && XmREVISION > 0) || XmVERSION > 1
 XmFontContext        context;
-XmStringCharSet      charset;
 static XFontStruct   *font;
+XmFontListEntry      entry;
+XmFontType           font_type;
+XtPointer            font_data;
 
     XmFontListInitFontContext(&context, font_list);
-    XmFontListGetNextFont(context, &charset, &font);
-
-    /*
-     * Free the XmStringCharSet which was allocated 
-     * by XmFontListGetNextFont()
-     */
-    if ( charset != NULL )
-        XtFree(charset);
+    entry = XmFontListNextEntry(context);
+    font_data = entry ? XmFontListEntryGetFont(entry, &font_type) : NULL;
+    font = font_data && font_type == XmFONT_IS_FONT
+      ? (XFontStruct *)font_data : NULL;
 
     XmFontListFreeFontContext(context);        
 
@@ -3577,8 +3512,7 @@ static XFontStruct   *font;
 
 
 static void
-FreePixmapArray(tabw)
-XgTabsWidget tabw;
+FreePixmapArray(XgTabsWidget tabw)
 {
 int     i;
 Display *dpy = XtDisplay((Widget)tabw);
@@ -3596,8 +3530,7 @@ Display *dpy = XtDisplay((Widget)tabw);
 
 
 static void
-CreatePixmapArray(tabw)
-XgTabsWidget tabw;
+CreatePixmapArray(XgTabsWidget tabw)
 {
 int        i;
 
@@ -3615,4 +3548,3 @@ int        i;
     for ( i = 0; i < tabw->tabs.numtabs; i++ )
         tabw->tabs.label_pixmaps[i] = None;
 }
-

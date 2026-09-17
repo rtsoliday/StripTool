@@ -16,6 +16,7 @@
 #include <Xm/MessageB.h>
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -403,12 +404,8 @@ void    MessageBox_popup        (Widget         parent,
   if (*message_box == (Widget)0)
     *message_box = XmCreateMessageDialog (parent, "Oops", NULL, 0);
   
-#if 0
-  xstr_msg = XmStringCreateLocalized (buf);
-#else
-  /* Use XmStringGetLtoR because it handles multiple lines */
-   xstr_msg = XmStringCreateLtoR(buf, XmFONTLIST_DEFAULT_TAG);
-#endif  
+  xstr_msg = XmStringGenerate(buf, XmFONTLIST_DEFAULT_TAG,
+    XmCHARSET_TEXT, NULL);
   xstr_btn = XmStringCreateLocalized (btn_txt);
   xstr_title = XmStringCreateLocalized (title);
 
@@ -425,10 +422,8 @@ void    MessageBox_popup        (Widget         parent,
      XmNokLabelString,          xstr_btn,
      NULL);
 
-  XtUnmanageChild
-    (XmMessageBoxGetChild (*message_box, XmDIALOG_CANCEL_BUTTON));
-  XtUnmanageChild
-    (XmMessageBoxGetChild (*message_box, XmDIALOG_HELP_BUTTON));
+  XtUnmanageChild (XtNameToWidget (*message_box, "Cancel"));
+  XtUnmanageChild (XtNameToWidget (*message_box, "Help"));
 
   XtAddCallback
     (*message_box, XmNokCallback, MessageBox_cb, (XtPointer)MSGBOX_OK);
@@ -448,7 +443,7 @@ void    MessageBox_popup        (Widget         parent,
  */
 static void     MessageBox_cb   (Widget w, XtPointer client, XtPointer BOGUS(1))
 {
-  MsgBoxEvent           event = (MsgBoxEvent)client;
+  MsgBoxEvent           event = (MsgBoxEvent)(intptr_t)client;
   Window                root, child;
   int                   root_x, root_y;
   int                   win_x, win_y;

@@ -339,12 +339,8 @@ XgComboBoxClassRec XgcomboBoxClassRec = {
 WidgetClass xgComboBoxWidgetClass = (WidgetClass) &XgcomboBoxClassRec;
 
 static Boolean
-CvtStringToStringTable(display, args, num_args, from, to)
-Display         *display;
-XrmValuePtr     args;
-Cardinal        *num_args;
-XrmValuePtr     from;
-XrmValuePtr     to;
+CvtStringToStringTable(Display *display, XrmValuePtr args,
+                       Cardinal *num_args, XrmValuePtr from, XrmValuePtr to)
 {
 int                     i;
 char                    *tmp_string, *string;
@@ -394,8 +390,9 @@ static int              item_count = 0;
                         {
                                 string[i] = '\0';
 
-                                items[item_count] = XmStringCreateLtoR(
-                                        tmp_string, XmSTRING_DEFAULT_CHARSET);
+                                items[item_count] = XmStringGenerate(
+                                        tmp_string, XmSTRING_DEFAULT_CHARSET,
+                                        XmCHARSET_TEXT, NULL);
                                 tmp_string = string + i + 1;
 
                                 item_count++;
@@ -671,7 +668,8 @@ XmString                        xstr;
         cbs->list_pos = -1;
 
         if ( cbs->value != NULL )
-            xstr = XmStringCreateLtoR(cbs->value, XmSTRING_DEFAULT_CHARSET);
+            xstr = XmStringGenerate(cbs->value, XmSTRING_DEFAULT_CHARSET,
+                                    XmCHARSET_TEXT, NULL);
         else
             xstr = NULL;
 
@@ -2084,9 +2082,7 @@ static void hideList(XgComboBoxWidget w)
 
 
 Widget 
-XgComboBoxGetChild(w, child)
-Widget w; 
-int child;
+XgComboBoxGetChild(Widget w, int child)
 {
         /*
          * Make sure this is a ComboBox widget
@@ -2133,8 +2129,7 @@ int child;
  * ---PHDR--- */
 
 char *
-XgComboBoxGetString(w)
-Widget w; 
+XgComboBoxGetString(Widget w)
 {
         /*
          * Make sure this is a ComboBox widget
@@ -2244,11 +2239,12 @@ Widget                  list;
                 return 0;
 
         list = comboBox->combobox.list;
-        if ( XmListGetSelectedPos(list, &selection_list, &selection_count) ) 
+        XtVaGetValues(list,
+                XmNselectedPositions, &selection_list,
+                XmNselectedPositionCount, &selection_count, NULL);
+        if ( selection_list != NULL && selection_count > 0 )
         {
-                if ( selection_count > 0 )
-                        selected_pos = selection_list[0]; 
-                XtFree((char *)selection_list);
+                selected_pos = selection_list[0];
         
                 if ( pos_value != NULL && selected_pos > 0 )
                 {
@@ -2472,8 +2468,8 @@ int i;
          */
         xmList = (XmString *)XtMalloc(sizeof(XmString) * list_count);
         for ( i = 0; i < list_count; i++ )
-                xmList[i] = XmStringCreateLtoR(list[i],
-                        XmSTRING_DEFAULT_CHARSET);
+                xmList[i] = XmStringGenerate(list[i],
+                        XmSTRING_DEFAULT_CHARSET, XmCHARSET_TEXT, NULL);
 
         XtVaSetValues(w, XmNitems, xmList, XmNitemCount, list_count, NULL);
 
@@ -2547,7 +2543,8 @@ XmString         xmstr;
          */
         if ( str == NULL )
                 str = "";
-        xmstr = XmStringCreateLtoR(str, XmSTRING_DEFAULT_CHARSET);
+        xmstr = XmStringGenerate(str, XmSTRING_DEFAULT_CHARSET,
+                                 XmCHARSET_TEXT, NULL);
 
         /*
          * Add it to the list widget
@@ -2587,10 +2584,7 @@ XmString         xmstr;
  * ---PHDR--- */
 
 void
-XgComboBoxChangeItem(w, str, pos)
-Widget  w; 
-String  str;
-int     pos;
+XgComboBoxChangeItem(Widget w, String str, int pos)
 {
 XgComboBoxWidget comboBox = (XgComboBoxWidget)w;
 XmString         xmstr[1];
@@ -2615,7 +2609,8 @@ int              item_count;
          */
         if ( str == NULL )
                 str = "";
-        xmstr[0] = XmStringCreateLtoR(str, XmSTRING_DEFAULT_CHARSET);
+        xmstr[0] = XmStringGenerate(str, XmSTRING_DEFAULT_CHARSET,
+                                    XmCHARSET_TEXT, NULL);
 
         /*
          *  Replace the item in the list widget
@@ -2646,9 +2641,7 @@ int              item_count;
  * ---PHDR--- */
 
 void
-XgComboBoxDeletePos(w, pos)
-Widget  w; 
-int     pos;
+XgComboBoxDeletePos(Widget w, int pos)
 {
 XgComboBoxWidget comboBox = (XgComboBoxWidget)w;
 
@@ -2720,10 +2713,12 @@ char             opt;
                 XmNtopItemPosition, &topPos,
                 XmNvisibleItemCount, &visibleItems, NULL);
 
-        if ( XmListGetSelectedPos(list, &selectionList, &selectionCount) ) 
+        XtVaGetValues(list,
+                XmNselectedPositions, &selectionList,
+                XmNselectedPositionCount, &selectionCount, NULL);
+        if ( selectionList != NULL && selectionCount > 0 )
         {
             selectionIndex = *selectionList;
-            XtFree((char *)selectionList);
             switch ( opt ) 
             {
                 case 'u': selectionIndex--;               break;
@@ -2779,10 +2774,12 @@ char             opt;
         if ( listCount == 0 ) 
                 break;
 
-        if ( XmListGetSelectedPos(list, &selectionList, &selectionCount) ) 
+        XtVaGetValues(list,
+                XmNselectedPositions, &selectionList,
+                XmNselectedPositionCount, &selectionCount, NULL);
+        if ( selectionList != NULL && selectionCount > 0 )
         {
             selectionIndex = *selectionList;
-            XtFree((char *)selectionList);
         } 
         else 
             selectionIndex = 1;
@@ -2818,22 +2815,6 @@ char             opt;
 
 static char *XgConvertXmStringToString (XmString xmstr)
 {
-  XmStringContext         context;
-  XmStringCharSet         charSet;
-  XmStringDirection       direction;
-  Boolean                 separator;
-  char                    *string, *text;
-  
-  XmStringInitContext (&context, xmstr);
-  XmStringGetNextSegment (context, &string, &charSet, &direction, &separator);
-  
-  if (string)
-  {
-    text = XtMalloc (strlen(string) + 1);
-    strcpy (text, string);
-  }
-  else text = NULL;
-
-  XmStringFreeContext (context);
-  return ((char *)text);
+  return (char *)XmStringUnparse(xmstr, NULL, XmCHARSET_TEXT,
+    XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
 }

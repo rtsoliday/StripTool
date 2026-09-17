@@ -261,12 +261,14 @@ void Annotation_messagePopup(Widget parent,char *msg)
 
     if (!popup) {
         popup = XmCreateMessageDialog (parent, "message", NULL, 0);
-        XtUnmanageChild(XmMessageBoxGetChild(popup,XmDIALOG_CANCEL_BUTTON));
-        XtUnmanageChild(XmMessageBoxGetChild(popup,XmDIALOG_HELP_BUTTON));
+        XtUnmanageChild(XtNameToWidget(popup, "Cancel"));
+        XtUnmanageChild(XtNameToWidget(popup, "Help"));
     }
 
-    text = XmStringCreateLtoR (msg, XmFONTLIST_DEFAULT_TAG);
-    title = XmStringCreateLtoR ("StripTool Message Dialog", XmFONTLIST_DEFAULT_TAG);
+    text = XmStringGenerate (msg, XmFONTLIST_DEFAULT_TAG,
+      XmCHARSET_TEXT, NULL);
+    title = XmStringGenerate ("StripTool Message Dialog",
+      XmFONTLIST_DEFAULT_TAG, XmCHARSET_TEXT, NULL);
     XtVaSetValues (popup, XmNmessageString,text, NULL);
     XtVaSetValues(popup,
       XmNdialogTitle, title,

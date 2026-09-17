@@ -858,8 +858,9 @@ StripDataSource_init_range      (StripDataSource        the_sds,
 	  )
       {
         /* cancel preceding request if necessary */
-        if (cd->history.fetch_stat == FETCH_PENDING)
+        if (cd->history.fetch_stat == FETCH_PENDING) {
           StripHistory_cancel (sds->history, &cd->history);
+        }
 
         /* send off new request */
 	  if(!cursor) cursor=XCreateFontCursor(XtDisplay(history_topShell),XC_watch);

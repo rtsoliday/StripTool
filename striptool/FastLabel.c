@@ -810,21 +810,19 @@ Widget XgCreateFastLabel(Widget parent, char *name, ArgList al, Cardinal ac)
 static XFontStruct *GetFontStruct(XmFontList font_list)
 {
 #if (XmVERSION == 1 && XmREVISION > 0) || XmVERSION > 1
-  XmFontContext		context;
-  XmStringCharSet		charset;
-  static XFontStruct	*font;
+XmFontContext		context;
+static XFontStruct	*font;
+XmFontListEntry         entry;
+XmFontType              font_type;
+XtPointer               font_data;
 
   XmFontListInitFontContext(&context, font_list);
-  XmFontListGetNextFont(context, &charset, &font);
+  entry = XmFontListNextEntry(context);
+  font_data = entry ? XmFontListEntryGetFont(entry, &font_type) : NULL;
+  font = font_data && font_type == XmFONT_IS_FONT
+    ? (XFontStruct *)font_data : NULL;
 
-  /*
-   * Free the XmStringCharSet which was allocated 
-   * by XmFontListGetNextFont()
-   */
-  if ( charset != NULL )
-    XtFree(charset);
-
-  XmFontListFreeFontContext(context);		
+  XmFontListFreeFontContext(context);
 
   return font;
 #else

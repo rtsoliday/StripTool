@@ -457,7 +457,7 @@ StripDialog     StripDialog_init        (Widget parent, StripConfig *cfg)
 #endif
     
     /* hook window manager delete message in order to perform delete instead */
-    WM_DELETE_WINDOW = XmInternAtom (sd->display, "WM_DELETE_WINDOW", False);
+    WM_DELETE_WINDOW = XInternAtom (sd->display, "WM_DELETE_WINDOW", False);
     XmAddWMProtocolCallback
       (sd->shell, WM_DELETE_WINDOW, wmdelete_cb, (XtPointer)sd);
     
@@ -3044,7 +3044,7 @@ static void     filemenu_cb     (Widget w, XtPointer data, XtPointer BOGUS(1))
   }
   else
   {
-    sd->fs.state = (FsDlgState)data;
+    sd->fs.state = (FsDlgState)(intptr_t)data;
     
     for (i = 0; i < FSDLG_TGL_COUNT; i++)
       XmToggleButtonSetState (sd->fs.tgl[i], True, False);
@@ -3152,7 +3152,7 @@ static void     wmdelete_cb     (Widget BOGUS(w), XtPointer data,
 static void     ctrl_btn_cb     (Widget w, XtPointer data, XtPointer BOGUS(1))
 {
   StripDialogInfo       *sd;
-  StripDialogCallback   which = (StripDialogCallback)data;
+  StripDialogCallback   which = (StripDialogCallback)(intptr_t)data;
 
   XtVaGetValues (w, XmNuserData, &sd, NULL);
   if (sd->callback[which].func)
@@ -3198,7 +3198,9 @@ static void     fsdlg_cb        (Widget w, XtPointer data, XtPointer call)
 
   if (mode == FSDLG_OK)
   {
-    if (XmStringGetLtoR (cbs->value, XmFONTLIST_DEFAULT_TAG, &fname))
+    fname = (char *)XmStringUnparse (cbs->value, NULL, XmCHARSET_TEXT,
+      XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
+    if (fname)
     {
       if (fname)
 	{

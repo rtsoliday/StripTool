@@ -146,8 +146,10 @@ void ChannelAccessProvider::valueCallback(event_handler_args args) {
   timespec timestamp{};
   epicsTimeToTimespec(&timestamp, &value->stamp);
   Sample sample;
-  sample.timestamp = std::chrono::system_clock::from_time_t(timestamp.tv_sec) +
-                     std::chrono::nanoseconds(timestamp.tv_nsec);
+  sample.timestamp = std::chrono::time_point_cast<
+      std::chrono::system_clock::duration>(
+      std::chrono::system_clock::from_time_t(timestamp.tv_sec) +
+      std::chrono::nanoseconds(timestamp.tv_nsec));
   sample.value = value->value;
   sample.status = value->status;
   sample.severity = value->severity;

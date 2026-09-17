@@ -56,6 +56,7 @@
 #include "refresh.bm"
 
 #include <errno.h>
+#include <stdint.h>
 
 #ifdef STRIP_HISTORY   
 #include "from_to.bm"      /* Albert */
@@ -98,7 +99,6 @@
 #include "ComboBox.h"
 
 #include <Xm/Xm.h>
-#include <Xm/AtomMgr.h>
 #include <Xm/DrawingA.h>
 #include <Xm/DialogS.h>
 #include <Xm/Form.h>
@@ -695,7 +695,7 @@ Strip   Strip_init      (int    *argc,
     
     
     /* hook window manager delete message so we can shut down gracefully */
-    WM_DELETE_WINDOW = XmInternAtom (si->display, "WM_DELETE_WINDOW", False);
+    WM_DELETE_WINDOW = XInternAtom (si->display, "WM_DELETE_WINDOW", False);
     XmAddWMProtocolCallback (si->shell, WM_DELETE_WINDOW, callback, si);
 #if 0
     width = (Dimension)
@@ -1074,7 +1074,7 @@ Strip   Strip_init      (int    *argc,
      * register client data fo the callback, we need to store the
      * StripInfo pointer as the widget's user data */
     i = 0; n = 0;
-    import_list[i++] = XmInternAtom (si->display, "COMPOUND_TEXT", False);
+    import_list[i++] = XInternAtom (si->display, "COMPOUND_TEXT", False);
     XtSetArg (args[n], XmNimportTargets, import_list); n++;
     XtSetArg (args[n], XmNnumImportTargets, i); n++;
     XtSetArg (args[n], XmNdropSiteOperations, XmDROP_COPY); n++;
@@ -1923,7 +1923,7 @@ static void     Strip_graphdrop_handle  (Widget         w,
   dc = drop_data->dragContext;
 
   /* retrieve the data targets, and search for COMPOUND_TEXT */
-  COMPOUND_TEXT = XmInternAtom (dpy, "COMPOUND_TEXT", False);
+  COMPOUND_TEXT = XInternAtom (dpy, "COMPOUND_TEXT", False);
   
   n = 0;
   XtSetArg (args[n], XmNexportTargets, &export_targets); n++;
@@ -1974,17 +1974,20 @@ static void     Strip_graphdrop_xfer    (Widget         BOGUS(w),
   XmString      xstr;
   char          *name;
 
-  COMPOUND_TEXT = XmInternAtom (si->display, "COMPOUND_TEXT", False);
+  COMPOUND_TEXT = XInternAtom (si->display, "COMPOUND_TEXT", False);
   if (*type == COMPOUND_TEXT)
   {
     xstr = XmCvtCTToXmString ((char *)value);
-    XmStringGetLtoR (xstr, XmFONTLIST_DEFAULT_TAG, &name);
+    name = (char *)XmStringUnparse (xstr, NULL, XmCHARSET_TEXT,
+      XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
 
-    if ((curve = Strip_getcurve ((Strip)si)))
+    if (name && (curve = Strip_getcurve ((Strip)si)))
     {
       StripCurve_setattr (curve, STRIPCURVE_NAME, name, 0);
       Strip_connectcurve ((Strip)si, curve);
     }
+    XtFree (name);
+    XmStringFree (xstr);
   }
 }
 
@@ -3283,7 +3286,7 @@ static void     dlgrequest_window_popup (void *client, void *call)
 {
   
   StripInfo             *si = (StripInfo *)client;
-  StripWindowType       which = (StripWindowType)call;
+  StripWindowType       which = (StripWindowType)(intptr_t)call;
 
   switch (which)
   {
@@ -3469,7 +3472,7 @@ static void     PopupMenu_popdown (Widget menu)
  */
 static void     PopupMenu_cb    (Widget w, XtPointer client, XtPointer BOGUS(1))
 {
-  PopupMenuItem item = (PopupMenuItem)client;
+  PopupMenuItem item = (PopupMenuItem)(intptr_t)client;
   StripInfo     *si;
 #ifndef WIN32
   char          cmd_buf[512];
@@ -3827,14 +3830,13 @@ static void     fsdlg_cb        (Widget w, XtPointer data, XtPointer call)
 
   if (si)
   {
-    if (XmStringGetLtoR (cbs->value, XmFONTLIST_DEFAULT_TAG, &fname))
+    fname = (char *)XmStringUnparse (cbs->value, NULL, XmCHARSET_TEXT,
+      XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
+    if (fname)
     {
-      if (fname != NULL)
-      {
-        XtVaGetValues (w, XmNuserData, &func, NULL);
-        func ((Strip)si, fname);
-	  XtFree(fname);
-      }
+      XtVaGetValues (w, XmNuserData, &func, NULL);
+      func ((Strip)si, fname);
+      XtFree(fname);
     }
   }
 }

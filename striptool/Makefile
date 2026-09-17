@@ -32,7 +32,7 @@ endif
 
 CFLAGS ?= -O2 -g -Wall -std=gnu99
 CPPFLAGS += -DUNIX -DUSE_MOTIF -I. -I$(EPICS_BASE)/include \
-            -I$(EPICS_BASE)/include/compiler/gcc \
+            -I$(EPICS_BASE)/include/compiler/$(if $(filter Darwin,$(OS)),clang,gcc) \
             -I$(EPICS_BASE)/include/os/$(OS) \
             $(addprefix -I,$(MOTIF_INC) $(X11_INC))
 
@@ -97,10 +97,14 @@ endif
 
 EPICS_LIB_DIR := $(EPICS_BASE)/lib/$(EPICS_HOST_ARCH)
 EPICS_LIBS := $(EPICS_LIB_DIR)/libca.a $(EPICS_LIB_DIR)/libCom.a
-X_LIBS := $(XM_LIB) $(if $(filter YES,$(USE_XMU)),$(XMU_LIB)) \
+X_LIBS := $(XM_LIB) $(MOTIF_STATIC_DEP_LIBS) $(MOTIF_STATIC_EXTRA_LIBS) \
+          $(if $(filter YES,$(USE_XMU)),$(XMU_LIB)) \
           $(if $(filter YES,$(USE_XPM)),$(XPM_LIB)) $(XT_LIB) $(X11_LIB) \
           $(XEXT_LIB) $(XP_LIB)
 SYSTEM_LIBS := -lpthread -ldl -lrt -lm
+ifeq ($(OS),Darwin)
+SYSTEM_LIBS := -lpthread -lm
+endif
 
 OBJECTS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(filter %.c,$(SOURCES))) \
            $(patsubst %.cc,$(OBJ_DIR)/%.o,$(filter %.cc,$(SOURCES)))
@@ -113,10 +117,10 @@ $(PROGRAM): $(OBJECTS)
 	$(CXX) -o $@ $^ $(LDFLAGS) -Wl,-rpath,$(EPICS_LIB_DIR) \
 	  $(EPICS_LIBS) $(OPTIONAL_LIBS) $(X_LIBS) $(SYSTEM_LIBS)
 
-$(OBJ_DIR)/%.o: %.c ../Makefile.rules Makefile | prepare-output
+$(OBJ_DIR)/%.o: %.c $(BUILD_FILES) | prepare-output
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(OBJ_DIR)/%.o: %.cc ../Makefile.rules Makefile | prepare-output
+$(OBJ_DIR)/%.o: %.cc $(BUILD_FILES) | prepare-output
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 include ../Makefile.build

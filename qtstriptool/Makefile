@@ -80,28 +80,23 @@ define link_exe
 endef
 endif
 
+include ../Makefile.build
+
 .PHONY: all test test-core test-config test-ui test-performance test-report \
         test-ioc test-visual test-qt-versions clean distclean install-program \
         prepare-output
 all: install-program
 
-prepare-output:
-	mkdir -p $(OBJ_DIR) $(BIN_DIR)
-
-install-program: $(PROGRAM) | prepare-output
-	cp -f $(PROGRAM) $(BIN_DIR)/
-	$(if $(EPICS_BIN_DIR),mkdir -p $(EPICS_BIN_DIR); cp -f $(PROGRAM) $(EPICS_BIN_DIR)/;)
-
 $(PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(OBJ_DIR)/main.$(OBJEXT) $(RESOURCE_OBJECT)
 	$(call link_exe,)
 
-$(OBJ_DIR)/%.$(OBJEXT): %.cc $(HEADERS) Makefile ../Makefile.rules | prepare-output
+$(OBJ_DIR)/%.$(OBJEXT): %.cc $(HEADERS) $(BUILD_FILES) | prepare-output
 	$(call compile_cxx,)
 
 $(RESOURCE_SOURCE): resources/qtstriptool.qrc resources/qtstriptool.svg | prepare-output
 	$(RCC) $< -o $@
 
-$(RESOURCE_OBJECT): $(RESOURCE_SOURCE) Makefile ../Makefile.rules
+$(RESOURCE_OBJECT): $(RESOURCE_SOURCE) $(BUILD_FILES)
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(CXXFLAGS) $(if $(filter Windows,$(OS)),/c $< /Fo$@,-MMD -MP -c $< -o $@)
 
 $(OBJ_DIR)/moc_channel_provider.cc: services/channel_provider.h | prepare-output
