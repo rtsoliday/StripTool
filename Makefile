@@ -14,8 +14,8 @@ PREFIX ?= /usr/local
 DESTDIR ?=
 PACKAGE_VERSION ?= 0.1.0-dev
 PACKAGE_ROOT := O.package/qtstriptool-$(PACKAGE_VERSION)-$(OS)-$(ARCH)
-QT_SUBMAKE = $(MAKE) -C qtstriptool QT_VERSION="$(QT_VERSION)" \
-             HAVE_QT="$(HAVE_QT)" EPICS_BASE="$(EPICS_BASE)"
+export QT_VERSION HAVE_QT EPICS_BASE
+QT_SUBMAKE = $(MAKE) -C qtstriptool
 
 all: check-dependencies $(if $(HAVE_LEGACY),striptool) qtstriptool
 

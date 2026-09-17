@@ -42,7 +42,8 @@ CXXFLAGS ?= -O2 -g -Wall -Wextra -std=c++17 -fPIC
 
 ifeq ($(OS),Windows)
 CXX = cl
-CXXFLAGS = /nologo /O2 /W3 /MD /EHsc /permissive- /Zc:__cplusplus /utf-8 /std:c++17
+CXXFLAGS = /nologo /O2 /W3 /external:anglebrackets /external:W0 /MD /EHsc \
+           /permissive- /Zc:lambda /Zc:__cplusplus /utf-8 /std:c++17
 CPPFLAGS = /I. /I$(OBJ_DIR) /I"$(EPICS_BASE)/include" \
            /I"$(EPICS_BASE)/include/compiler/msvc" \
            /I"$(EPICS_BASE)/include/os/WIN32" \
