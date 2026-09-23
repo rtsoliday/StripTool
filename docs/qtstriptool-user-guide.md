@@ -30,7 +30,7 @@ Useful environment variables are:
 |---|---|
 | `EPICS_CA_ADDR_LIST`, `EPICS_CA_AUTO_ADDR_LIST` and other EPICS CA variables | Used by EPICS Channel Access |
 | `STRIP_FILE_SEARCH_PATH` | Path-list used to find a bare startup `.stp` name |
-| `STRIP_HELP_PATH` | Local file opened by **Help > Help** when it exists |
+| `STRIP_HELP_PATH` | Local file or URL opened by **Help > Help** |
 | `QT_QPA_PLATFORM`, `QT_STYLE_OVERRIDE` and standard Qt variables | Interpreted by Qt |
 
 Legacy X resource and printer environment variables are not consumed; see the
@@ -61,6 +61,8 @@ The View menu can pause drawing, enable or disable auto-scroll, pan left or
 right, zoom in or out, auto-scale configured curves, reset the visible range,
 and force a replot. Moving the pointer over the plot updates the location
 readout.
+The legend above the plot shows each visible curve's name and latest value.
+Click a legend entry to read that curve's value at the pointer location.
 
 Annotations can be created and manipulated on the plot using its interaction
 controls. They are part of the runtime graph state; verify the desired
@@ -78,7 +80,9 @@ provider must be supplied before production history is available.
   `StripConfig 1.2` files. Open Recent is stored with Qt application settings.
 - **Restore Defaults** in Controls replaces the current model with compiled
   defaults.
-- **Export Text** and **Export CSV** write currently buffered curve samples.
+- **Export Text** and **Export CSV** write samples in the visible time range.
+  Qt uses one row per curve sample; legacy StripTool's dump files use one row
+  per timestamp with separate curve columns.
 - **Save Snapshot** writes the graph as PNG or JPEG according to the chosen
   filename/filter.
 - **Print** and **Print Preview** render the graph through Qt PrintSupport.
@@ -122,8 +126,8 @@ changing the executable name.
 - **Startup file is not found:** use an absolute path or inspect
   `STRIP_FILE_SEARCH_PATH`; directory-containing paths are not searched.
 - **History reports no provider:** this is expected in the distributed alpha.
-- **Help shows built-in guidance:** set `STRIP_HELP_PATH` to an existing local
-  help file if site documentation is required.
+- **Help shows built-in guidance:** set `STRIP_HELP_PATH` to a reachable URL or
+  an existing local help file if site documentation is required.
 - **Visual or printer output differs from Motif:** Qt uses the active platform
   style, fonts, DPI, and print backend. Review the appearance guide before
   treating pixel differences as defects.

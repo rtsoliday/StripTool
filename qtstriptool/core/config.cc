@@ -263,7 +263,7 @@ void writeField(std::ostream& output, const std::string& key,
   output << std::left << std::setw(30) << key << value << '\n';
 }
 
-std::string number(double value, int precision = 15) {
+std::string number(double value, int precision = std::numeric_limits<double>::max_digits10) {
   std::ostringstream stream;
   stream << std::setprecision(precision) << value;
   return stream.str();

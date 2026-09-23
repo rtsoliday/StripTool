@@ -46,6 +46,10 @@ void PlotWidget::setModel(const StripToolModel& model) {
       autoScaleOverrides_[i] = false;
   }
   model_ = model;
+  if (selectedCurve_ >= 0 &&
+      (!model_.curves[static_cast<std::size_t>(selectedCurve_)].nameSet ||
+       !model_.curves[static_cast<std::size_t>(selectedCurve_)].plotted))
+    selectedCurve_ = -1;
   updateAutoRange();
   update();
 }
@@ -210,7 +214,8 @@ void PlotWidget::autoScale(std::optional<std::size_t> curve) {
                                         visibleTimeRange_.end,
                                         std::max(2, plotRect().width() > 0
                                                         ? int(plotRect().width()) * 2
-                                                        : 2));
+                                                        : 2),
+                                        model_.curves[index].scale);
     automaticRanges_[index] = sampleValueRange(selected, model_.curves[index].scale);
     autoScaleOverrides_[index] = true;
   };
@@ -261,8 +266,27 @@ QRectF PlotWidget::plotRect() const {
     if (curve.nameSet && curve.plotted) ++active;
   const int leftAxes = (active + 1) / 2;
   const int rightAxes = active / 2;
-  return rect().adjusted(18 + 56 * std::max(1, leftAxes), 22,
+  const int legendRows = active ? (active + legendColumns() - 1) / legendColumns() : 0;
+  return rect().adjusted(18 + 56 * std::max(1, leftAxes), 22 + 22 * legendRows,
                          -(18 + 56 * std::max(1, rightAxes)), -44);
+}
+
+std::vector<std::size_t> PlotWidget::plottedCurves() const {
+  std::vector<std::size_t> result;
+  for (std::size_t i = 0; i < kMaximumCurves; ++i)
+    if (model_.curves[i].nameSet && model_.curves[i].plotted) result.push_back(i);
+  return result;
+}
+
+int PlotWidget::legendColumns() const {
+  return std::clamp(width() / 170, 1, 5);
+}
+
+QRectF PlotWidget::legendRect(std::size_t position) const {
+  const int columns = legendColumns();
+  const qreal columnWidth = qreal(width() - 24) / columns;
+  return QRectF(12 + (position % columns) * columnWidth,
+                8 + (position / columns) * 22, columnWidth - 6, 20);
 }
 
 void PlotWidget::updateAutoRange() {
@@ -270,12 +294,14 @@ void PlotWidget::updateAutoRange() {
     if (autoScaleOverrides_[i]) {
       const auto visible = selectSamples(samples_[i], visibleTimeRange_.start,
                                          visibleTimeRange_.end,
-                                         std::max(2, int(plotRect().width()) * 2));
+                                         std::max(2, int(plotRect().width()) * 2),
+                                         model_.curves[i].scale);
       automaticRanges_[i] = sampleValueRange(visible, model_.curves[i].scale);
     } else if (!model_.curves[i].minimumSet || !model_.curves[i].maximumSet) {
       const auto visible = selectSamples(samples_[i], visibleTimeRange_.start,
                                          visibleTimeRange_.end,
-                                         std::max(2, int(plotRect().width()) * 2));
+                                         std::max(2, int(plotRect().width()) * 2),
+                                         model_.curves[i].scale);
       auto range = sampleValueRange(visible, model_.curves[i].scale);
       if (range) {
         const auto& config = model_.curves[i];
@@ -315,6 +341,29 @@ void PlotWidget::paintEvent(QPaintEvent*) {
   painter.fillRect(rect(), color(model_.colors.background));
   const QRectF area = plotRect();
   const QColor foreground = color(model_.colors.foreground);
+  const auto visibleCurves = plottedCurves();
+  for (std::size_t position = 0; position < visibleCurves.size(); ++position) {
+    const std::size_t index = visibleCurves[position];
+    const QRectF legend = legendRect(position);
+    if (selectedCurve_ == static_cast<int>(index)) {
+      painter.setPen(QPen(foreground, 1));
+      painter.drawRoundedRect(legend, 3, 3);
+    }
+    painter.setPen(QPen(color(model_.colors.curves[index]), 3));
+    painter.drawLine(QPointF(legend.left() + 5, legend.center().y()),
+                     QPointF(legend.left() + 19, legend.center().y()));
+    QString label = QString::fromStdString(model_.curves[index].name);
+    if (!samples_[index].empty() && samples_[index].back().plotable &&
+        std::isfinite(samples_[index].back().value))
+      label += QStringLiteral("  %1").arg(
+          samples_[index].back().value, 0, 'g',
+          std::clamp(model_.curves[index].precision, 1, 15));
+    painter.setPen(foreground);
+    const QRectF textArea = legend.adjusted(24, 0, -3, 0);
+    painter.drawText(textArea, Qt::AlignVCenter | Qt::AlignLeft,
+                     painter.fontMetrics().elidedText(label, Qt::ElideRight,
+                                                       static_cast<int>(textArea.width())));
+  }
   painter.setPen(foreground);
   painter.drawRect(area);
 
@@ -384,7 +433,7 @@ void PlotWidget::paintEvent(QPaintEvent*) {
 
     const auto selected = selectSamples(samples_[curveIndex], visibleTimeRange_.start,
                                         visibleTimeRange_.end,
-                                        std::max(2, int(area.width()) * 2));
+                                        std::max(2, int(area.width()) * 2), config.scale);
     QPainterPath path;
     bool started = false;
     for (const auto& sample : selected) {
@@ -450,9 +499,11 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
     const qint64 end = milliseconds(visibleTimeRange_.end);
     const qint64 time = begin + qint64((end - begin) *
         (event->pos().x() - area.left()) / area.width());
-    int curveIndex = -1;
-    for (std::size_t i = 0; i < kMaximumCurves; ++i)
-      if (model_.curves[i].nameSet && model_.curves[i].plotted) { curveIndex = int(i); break; }
+    int curveIndex = selectedCurve_;
+    if (curveIndex < 0) {
+      const auto curves = plottedCurves();
+      if (!curves.empty()) curveIndex = static_cast<int>(curves.front());
+    }
     double value = std::numeric_limits<double>::quiet_NaN();
     if (curveIndex >= 0) {
       const auto range = valueRange(static_cast<std::size_t>(curveIndex));
@@ -468,7 +519,16 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void PlotWidget::mousePressEvent(QMouseEvent* event) {
-  if (event->button() != Qt::LeftButton || !plotRect().contains(event->pos())) return;
+  if (event->button() != Qt::LeftButton) return;
+  const auto curves = plottedCurves();
+  for (std::size_t position = 0; position < curves.size(); ++position) {
+    if (legendRect(position).contains(event->pos())) {
+      selectedCurve_ = static_cast<int>(curves[position]);
+      update();
+      return;
+    }
+  }
+  if (!plotRect().contains(event->pos())) return;
   const qint64 begin = milliseconds(visibleTimeRange_.start);
   const qint64 end = milliseconds(visibleTimeRange_.end);
   const qint64 time = begin + qint64((end - begin) *
@@ -519,7 +579,12 @@ void PlotWidget::mouseDoubleClickEvent(QMouseEvent* event) {
 }
 
 void PlotWidget::wheelEvent(QWheelEvent* event) {
-  zoom(event->angleDelta().y() > 0 ? 0.8 : 1.25);
+  const int verticalDelta = event->angleDelta().y();
+  if (verticalDelta == 0) {
+    event->ignore();
+    return;
+  }
+  zoom(verticalDelta > 0 ? 0.8 : 1.25);
   event->accept();
 }
 

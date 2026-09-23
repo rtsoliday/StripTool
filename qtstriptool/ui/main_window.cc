@@ -14,6 +14,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QMenu>
 #include <QMenuBar>
@@ -247,9 +248,9 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
           [this](const QDateTime& time, double value, int curve) {
             if (curve >= 0)
               statusBar()->showMessage(
-                  tr("%1   Curve %2: %3")
+                  tr("%1   %2: %3")
                       .arg(time.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz")))
-                      .arg(curve + 1)
+                      .arg(QString::fromStdString(model_.curves[static_cast<std::size_t>(curve)].name))
                       .arg(value, 0, 'g', 8));
           });
   connect(plotWidget_, &PlotWidget::annotationsChanged, this, [this] {
@@ -274,8 +275,13 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   });
   connect(helpAction, &QAction::triggered, this, [this] {
     const QString configured = qEnvironmentVariable("STRIP_HELP_PATH");
-    if (!configured.isEmpty() && QDesktopServices::openUrl(QUrl::fromLocalFile(configured)))
-      return;
+    if (!configured.isEmpty()) {
+      const QUrl supplied(configured);
+      const QUrl helpUrl = supplied.isValid() && supplied.scheme().size() > 1
+                               ? supplied
+                               : QUrl::fromLocalFile(QFileInfo(configured).absoluteFilePath());
+      if (QDesktopServices::openUrl(helpUrl)) return;
+    }
     QMessageBox::information(this, tr("Qt StripTool Help"),
         tr("Use the Controls window to connect curves and configure timing and appearance. "
            "Use the graph View menu to pan, zoom, pause, and reset the display."));
@@ -285,7 +291,6 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
 MainWindow::~MainWindow() = default;
 
 void MainWindow::showControls() {
-  controlsWindow_->reloadFromModel();
   controlsWindow_->show();
   controlsWindow_->raise();
   controlsWindow_->activateWindow();
@@ -331,6 +336,7 @@ bool MainWindow::saveConfiguration(const QString& path, QString* error) {
   updateRecentFiles(path);
   setWindowTitle(QString::fromStdString(model_.title) + QStringLiteral(" — ") +
                  applicationName());
+  controlsWindow_->updateTitle();
   statusBar()->showMessage(tr("Saved %1").arg(path), 5000);
   return true;
 }
@@ -453,7 +459,7 @@ void MainWindow::startAcquisition() {
       }
       if (changed) {
         plotWidget_->setModel(model_);
-        controlsWindow_->reloadFromModel();
+        controlsWindow_->refreshCurveMetadata(i);
       }
       break;
     }

@@ -10,7 +10,8 @@ std::vector<Sample> selectSamples(
     const std::vector<Sample>& samples,
     std::chrono::system_clock::time_point start,
     std::chrono::system_clock::time_point end,
-    std::size_t maximumPoints) {
+    std::size_t maximumPoints,
+    ScaleMode scale) {
   if (start > end || maximumPoints == 0) return {};
   const auto first = std::lower_bound(
       samples.begin(), samples.end(), start,
@@ -18,7 +19,12 @@ std::vector<Sample> selectSamples(
   const auto last = std::upper_bound(
       first, samples.end(), end,
       [](const auto& time, const Sample& sample) { return time < sample.timestamp; });
-  return decimateSamples(std::vector<Sample>(first, last), maximumPoints);
+  std::vector<Sample> visible(first, last);
+  for (auto& sample : visible)
+    if (!std::isfinite(sample.value) ||
+        (scale == ScaleMode::Log10 && !(sample.value > 0.0)))
+      sample.plotable = false;
+  return decimateSamples(visible, maximumPoints);
 }
 
 double plotValue(double value, ScaleMode scale) {

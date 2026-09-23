@@ -16,7 +16,7 @@ what the build files intend to support.
 | CA reconnect/metadata | `StripCA.c` | `ChannelAccessProvider` | Fake automated; IOC opt-in | `make test-qtstriptool-core`; `make test-qtstriptool-ioc TEST_PV=...` |
 | Plot transforms | `StripGraph.c`/`jlAxis.c` | Toolkit-neutral selection plus `QPainter` | Automated | core, UI, and visual targets |
 | Controls | `StripDialog.c` | Shared-model Qt controls | Automated | `make test-qtstriptool-ui` |
-| File/output | Motif dialogs and dump routines | Workflow/export services and Qt dialogs | Automated | config, core, and UI targets |
+| File/output | Motif dialogs and wide dump rows | Workflow/export services and long dump rows | Automated basics; format parity open | config, core, and UI targets; see known differences |
 | History lifecycle | `StripHistory.h` | Cancellable provider interface | Automated | no-history and deterministic providers |
 | APS archive backend | Site-selected legacy backend | Not selected | Site decision | Backend and endpoint must be supplied |
 | Printing | X11/shell print path | Qt PrintSupport | Build/UI action automated; output manual | Print to PDF and inspect |

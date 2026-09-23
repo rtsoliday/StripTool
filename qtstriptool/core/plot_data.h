@@ -18,7 +18,8 @@ std::vector<Sample> selectSamples(
     const std::vector<Sample>& samples,
     std::chrono::system_clock::time_point start,
     std::chrono::system_clock::time_point end,
-    std::size_t maximumPoints);
+    std::size_t maximumPoints,
+    ScaleMode scale = ScaleMode::Linear);
 
 std::optional<ValueRange> sampleValueRange(const std::vector<Sample>& samples,
                                            ScaleMode scale);

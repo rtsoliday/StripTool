@@ -32,6 +32,9 @@ DPI/scaling, window size, and fixture used.
   use Qt/platform conventions.
 - The graph is painted with `QPainter`; line rasterization, font metrics, time
   labels, and image/print scaling can differ from X11.
+- The curve legend sits above the Qt plot rather than beside it. It shows each
+  plotted curve's name and latest value; clicking an entry selects that curve
+  for cursor value readout.
 - Window icons and desktop identity use the Qt StripTool artwork and name so
   both variants can be installed simultaneously.
 - High-DPI scaling is delegated to Qt instead of relying on legacy X display
@@ -74,7 +77,9 @@ the deterministic fixture merely to make a comparison pass.
 ## Local visual review, 2026-09-23
 
 The macOS arm64 Qt 6 fixture renders readable Y-axis ticks and units, time
-labels, a date, a graph toolbar, and the ten-row controls. The graph was
+labels, a date, curve legend, a graph toolbar, and the ten-row controls. The
+ten-curve fixture keeps all legend entries and Y axes visible at 1200 x 650.
+The graph was
 compared with the available Linux Motif `SHOT-005-graph.png`: both show colored
 scales, a dashed grid, a white plotting area, and time context. The traces and
 platforms differ, so this is a layout check rather than the required

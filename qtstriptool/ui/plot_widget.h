@@ -63,6 +63,9 @@ protected:
 
 private:
   QRectF plotRect() const;
+  std::vector<std::size_t> plottedCurves() const;
+  int legendColumns() const;
+  QRectF legendRect(std::size_t position) const;
   void updateAutoRange();
   QColor color(const Rgba16& value) const;
   std::optional<QPointF> mapSample(const Sample& sample,
@@ -84,6 +87,7 @@ private:
   TimeRange dragRange_;
   QPoint cursorPosition_{-1, -1};
   int selectedAnnotation_ = -1;
+  int selectedCurve_ = -1;
 };
 
 }  // namespace striptool

@@ -21,6 +21,8 @@ public:
   explicit ControlsWindow(StripToolModel* model, QWidget* parent = nullptr);
 
   void reloadFromModel();
+  void updateTitle();
+  void refreshCurveMetadata(std::size_t curve);
   void setChannelMetadata(std::size_t curve, const ChannelMetadata& metadata);
 
 signals:

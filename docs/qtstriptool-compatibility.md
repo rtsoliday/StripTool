@@ -46,6 +46,11 @@ bugs, or exact pixels.
   provider; it has no CDEV provider.
 - **SDDS:** plain text and CSV are supported; optional legacy SDDS export is
   not enabled.
+- **Text/CSV layout:** Qt currently writes one row per curve sample with an ISO
+  timestamp, curve name, value, status, and severity. Legacy StripTool writes
+  one row per timestamp with a column for each curve. Consumers of legacy dump
+  files need a format conversion until this output gate is resolved. Qt has
+  separate Text and CSV actions and does not use `STRIP_DUMP_TYPE_DEFAULT`.
 - **Configuration groups:** Qt open/save operates on the complete model. The
   legacy dialog's partial Timing/Colors/Graph/Curve group load and save is not
   present.

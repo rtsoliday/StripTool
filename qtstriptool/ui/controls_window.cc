@@ -18,6 +18,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -322,14 +323,32 @@ void ControlsWindow::applyCurve(std::size_t index) {
                          tr("Enter finite numeric minimum and maximum values."));
     return;
   }
+  if (minimum >= maximum) {
+    QMessageBox::warning(this, tr("Invalid Curve Limit"),
+                         tr("The minimum must be less than the maximum."));
+    return;
+  }
+  const auto scale = static_cast<ScaleMode>(row.scale->currentIndex());
+  if (scale == ScaleMode::Log10 &&
+      (((row.minimumEdited || curve.minimumSet) && minimum <= 0.0) ||
+       ((row.maximumEdited || curve.maximumSet) && maximum <= 0.0))) {
+    QMessageBox::warning(this, tr("Invalid Logarithmic Limit"),
+                         tr("Manual logarithmic limits must be positive."));
+    return;
+  }
   const std::string oldName = curve.name;
   const bool wasActive = curve.nameSet;
   const QString name = row.name->text().trimmed();
+  if (name.contains(QRegularExpression(QStringLiteral("\\s")))) {
+    QMessageBox::warning(this, tr("Invalid Curve Name"),
+                         tr("A process variable name cannot contain whitespace."));
+    return;
+  }
   curve.name = name.toStdString();
   curve.nameSet = !name.isEmpty();
   curve.plotted = row.plotted->isChecked();
-  curve.scale = static_cast<ScaleMode>(row.scale->currentIndex());
-  curve.precision = row.precision->value();
+  curve.scale = scale;
+  if (row.precisionEdited) curve.precision = row.precision->value();
   if (row.precisionEdited) curve.precisionSet = true;
   curve.minimum = minimum;
   if (row.minimumEdited) curve.minimumSet = true;
@@ -368,6 +387,7 @@ void ControlsWindow::updateColorButton(QPushButton* button, const Rgba16& color)
 }
 
 void ControlsWindow::reloadFromModel() {
+  updateTitle();
   loading_ = true;
   for (std::size_t i = 0; i < curveRows_.size(); ++i) {
     const auto& curve = model_->curves[i];
@@ -398,6 +418,29 @@ void ControlsWindow::reloadFromModel() {
   updateColorButton(background_, model_->colors.background);
   updateColorButton(gridColor_, model_->colors.grid);
   loading_ = false;
+}
+
+void ControlsWindow::updateTitle() {
+  setWindowTitle(model_->filename.empty()
+                     ? tr("Qt StripTool Controls")
+                     : QString::fromStdString(model_->title) +
+                           tr(" Controls — Qt StripTool"));
+}
+
+void ControlsWindow::refreshCurveMetadata(std::size_t index) {
+  if (index >= curveRows_.size()) return;
+  const auto& curve = model_->curves[index];
+  auto& row = curveRows_[index];
+  const bool wasLoading = loading_;
+  loading_ = true;
+  row.name->setToolTip(QString::fromStdString(curve.comment));
+  if (!row.precisionEdited && !row.precision->hasFocus())
+    row.precision->setValue(curve.precision);
+  if (!row.minimumEdited && !row.minimum->hasFocus())
+    row.minimum->setText(limitText(curve.minimum));
+  if (!row.maximumEdited && !row.maximum->hasFocus())
+    row.maximum->setText(limitText(curve.maximum));
+  loading_ = wasLoading;
 }
 
 void ControlsWindow::setChannelMetadata(std::size_t curve, const ChannelMetadata& metadata) {

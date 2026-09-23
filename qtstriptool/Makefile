@@ -141,7 +141,7 @@ $(IOC_TEST_PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(RESOURCE_OBJECT) $(OBJ_DIR)
 
 CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              sampleBufferWrapsAndHonorsMemoryLimit \
-             decimationPreservesChronologyAndExtrema \
+             decimationPreservesChronologyAndExtrema logDecimationKeepsNonPositiveGap \
              acquisitionTracksReconnectMetadataAndTimestamps \
              acquisitionShutdownDisconnectsActiveChannels \
              samplingAndRefreshCadencesRemainIndependent staleDataIsExplicit \
@@ -156,6 +156,7 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                preservesUnknownFieldsAcrossRoundTrip \
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \
                appliesLayersInOrder writerRejectsInvalidModels \
+               configurationRoundTripsFullDoublePrecision \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            mainAndControlWindowsShareOneModel historyDialogRoundTripsRange \
@@ -168,7 +169,9 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            mainWindowExportsOnlyVisibleSamples \
            plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits \
            autoScaleTracksOnlyVisibleSamples automaticRangeUsesVisibleSamplesAndManualBound \
-           curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop
+           curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop \
+           metadataRefreshPreservesPendingCurveEdits reopeningControlsPreservesPendingEdits \
+           legendSelectionChangesCursorCurve
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 

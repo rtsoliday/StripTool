@@ -33,6 +33,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 namespace {
@@ -143,12 +144,12 @@ private slots:
     QCOMPARE(acquisition.count(), 1);
 
     controls.findChild<QLineEdit*>(QStringLiteral("curveMinimum0"))
-        ->setText(QStringLiteral("-12.5"));
+        ->setText(QStringLiteral("1.25"));
     controls.findChild<QLineEdit*>(QStringLiteral("curveMaximum0"))
         ->setText(QStringLiteral("24.5"));
     controls.findChild<QComboBox*>(QStringLiteral("curveScale0"))->setCurrentIndex(1);
     controls.findChild<QPushButton*>(QStringLiteral("curveModify0"))->click();
-    QCOMPARE(model.curves[0].minimum, -12.5);
+    QCOMPARE(model.curves[0].minimum, 1.25);
     QCOMPARE(model.curves[0].maximum, 24.5);
     QCOMPARE(model.curves[0].scale, striptool::ScaleMode::Log10);
     QCOMPARE(acquisition.count(), 1);
@@ -184,6 +185,43 @@ private slots:
     controls.findChild<QPushButton*>(QStringLiteral("curveModify0"))->click();
     QCOMPARE(model.curves[0].minimum, 2e-50);
     QCOMPARE(model.curves[0].maximum, 1e50);
+  }
+  void metadataRefreshPreservesPendingCurveEdits() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "original:pv";
+    model.curves[0].nameSet = true;
+    striptool::ControlsWindow controls(&model);
+    auto* name = controls.findChild<QLineEdit*>(QStringLiteral("curveName0"));
+    auto* precision = controls.findChild<QSpinBox*>(QStringLiteral("curvePrecision0"));
+    auto* minimum = controls.findChild<QLineEdit*>(QStringLiteral("curveMinimum0"));
+    auto* maximum = controls.findChild<QLineEdit*>(QStringLiteral("curveMaximum0"));
+    name->setText(QStringLiteral("pending:pv"));
+    precision->setValue(6);
+    minimum->setText(QStringLiteral("3.5"));
+    model.curves[0].precision = 9;
+    model.curves[0].minimum = 2.0;
+    model.curves[0].maximum = 20.0;
+    controls.refreshCurveMetadata(0);
+    QCOMPARE(name->text(), QStringLiteral("pending:pv"));
+    QCOMPARE(precision->value(), 6);
+    QCOMPARE(minimum->text(), QStringLiteral("3.5"));
+    QCOMPARE(maximum->text().toDouble(), 20.0);
+    controls.findChild<QPushButton*>(QStringLiteral("curveModify0"))->click();
+    QCOMPARE(model.curves[0].name, std::string("pending:pv"));
+    QCOMPARE(model.curves[0].precision, 6);
+    QCOMPARE(model.curves[0].minimum, 3.5);
+    QCOMPARE(model.curves[0].maximum, 20.0);
+  }
+  void reopeningControlsPreservesPendingEdits() {
+    striptool::MainWindow window;
+    auto* controls = window.controlsWindow();
+    auto* name = controls->findChild<QLineEdit*>(QStringLiteral("curveName0"));
+    name->setText(QStringLiteral("draft:pv"));
+    window.showControls();
+    controls->hide();
+    window.showControls();
+    QCOMPARE(name->text(), QStringLiteral("draft:pv"));
+    QVERIFY(!window.model().curves[0].nameSet);
   }
   void mainAndControlWindowsShareOneModel() {
     striptool::MainWindow window;
@@ -535,6 +573,22 @@ private slots:
     QVERIFY(!error.empty());
     QVERIFY(output.str().empty());
   }
+  void configurationRoundTripsFullDoublePrecision() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "precision:pv";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = std::nextafter(1.0, 2.0);
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximum = std::nextafter(2.0, 3.0);
+    model.curves[0].maximumSet = true;
+    std::ostringstream output;
+    QVERIFY(striptool::writeConfiguration(output, model));
+    std::istringstream input(output.str());
+    auto loaded = striptool::makeDefaultModel();
+    QVERIFY(striptool::readConfiguration(input, loaded).success);
+    QCOMPARE(loaded.curves[0].minimum, model.curves[0].minimum);
+    QCOMPARE(loaded.curves[0].maximum, model.curves[0].maximum);
+  }
   void followsLegacySearchOrder() {
     const auto root = std::filesystem::temp_directory_path() / "qtstriptool-search-test";
     const auto current = root / "current";
@@ -599,6 +653,19 @@ private slots:
     const auto range = striptool::sampleValueRange(samples, striptool::ScaleMode::Linear);
     QVERIFY(range.has_value());
     QVERIFY(range->maximum < 1e9);
+  }
+  void logDecimationKeepsNonPositiveGap() {
+    const auto base = std::chrono::system_clock::time_point{};
+    std::vector<striptool::Sample> samples;
+    for (int i = 0; i < 20; ++i)
+      samples.push_back({base + std::chrono::seconds(i), i == 10 ? 0.0 : 2.0, 0, 0});
+    const auto selected = striptool::selectSamples(
+        samples, samples.front().timestamp, samples.back().timestamp, 5,
+        striptool::ScaleMode::Log10);
+    QVERIFY(std::any_of(selected.begin(), selected.end(), [](const auto& sample) {
+      return !sample.plotable && sample.value == 0.0;
+    }));
+    QVERIFY(selected.size() <= std::size_t{5});
   }
   void acquisitionTracksReconnectMetadataAndTimestamps() {
     FakeChannelProvider provider;
@@ -781,6 +848,22 @@ private slots:
     QVERIFY(plot.removeAnnotation(0));
     QCOMPARE(plot.selectedAnnotation(), -1);
   }
+  void legendSelectionChangesCursorCurve() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "first:pv";
+    model.curves[0].nameSet = true;
+    model.curves[1].name = "second:pv";
+    model.curves[1].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.show();
+    QSignalSpy cursor(&plot, &striptool::PlotWidget::cursorLocationChanged);
+    QTest::mouseClick(&plot, Qt::LeftButton, Qt::NoModifier, QPoint(220, 18));
+    QTest::mouseMove(&plot, QPoint(400, 200));
+    QVERIFY(!cursor.isEmpty());
+    QCOMPARE(cursor.last().at(2).toInt(), 1);
+  }
   void plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "history:test";
@@ -878,7 +961,37 @@ private slots:
         if (image.pixelColor(x, y) != background) ++nonBackground;
     QVERIFY(nonBackground > 100);
     const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
-    if (!output.isEmpty()) QVERIFY(image.save(output));
+    if (!output.isEmpty()) {
+      QVERIFY(image.save(output));
+      auto manyCurves = striptool::makeDefaultModel();
+      manyCurves.timing.timespanSeconds = 300;
+      for (std::size_t curve = 0; curve < striptool::kMaximumCurves; ++curve) {
+        auto& config = manyCurves.curves[curve];
+        config.name = "test:curve:" + std::to_string(curve + 1);
+        config.nameSet = true;
+        config.units = "percent";
+        config.minimum = 0.0;
+        config.maximum = 100.0;
+        config.minimumSet = true;
+        config.maximumSet = true;
+      }
+      striptool::PlotWidget tenCurvePlot;
+      tenCurvePlot.resize(1200, 650);
+      tenCurvePlot.setModel(manyCurves);
+      for (std::size_t curve = 0; curve < striptool::kMaximumCurves; ++curve) {
+        std::vector<striptool::Sample> curveSamples;
+        for (int i = 0; i <= 300; i += 10)
+          curveSamples.push_back({end - std::chrono::seconds(300 - i),
+                                  50.0 + 35.0 * std::sin(i / 20.0 + curve), 0, 0});
+        tenCurvePlot.setCurveSamples(curve, std::move(curveSamples));
+      }
+      tenCurvePlot.setVisibleTimeRange({end - std::chrono::seconds(300), end});
+      QImage tenCurveImage(tenCurvePlot.size(), QImage::Format_ARGB32_Premultiplied);
+      tenCurveImage.fill(Qt::transparent);
+      tenCurvePlot.render(&tenCurveImage);
+      const auto directory = std::filesystem::path(output.toStdString()).parent_path();
+      QVERIFY(tenCurveImage.save(QString::fromStdString((directory / "ten-curves.png").string())));
+    }
   }
   void mainAndControlsRenderOffscreen() {
     auto model = striptool::makeDefaultModel();
