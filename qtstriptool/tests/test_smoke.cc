@@ -1342,6 +1342,64 @@ private slots:
     QVERIFY(plot.autoScroll());
     QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, panPoint);
   }
+  void livePanDragUsesStableRangeAndStationaryReleaseCatchesUp() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "pan:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.show();
+    const auto now = std::chrono::system_clock::now();
+    plot.setCurveSamples(0, {{now, 1.0, 0, 0}});
+    const QPoint start(400, 300);
+    const auto original = plot.visibleTimeRange();
+    QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, start);
+    const auto future = original.end + std::chrono::seconds(20);
+    plot.setCurveSamples(0, {{now, 1.0, 0, 0}, {future, 2.0, 0, 0}});
+    plot.advanceToNow();
+    QCOMPARE(plot.visibleTimeRange().end, original.end);
+    moveWhileDragging(&plot, start + QPoint(40, 0), Qt::LeftButton);
+    QVERIFY(plot.visibleTimeRange().start < original.start);
+    QVERIFY(!plot.autoScroll());
+    QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier,
+                        start + QPoint(40, 0));
+    QVERIFY(plot.visibleTimeRange().end < future);
+
+    plot.resetView();
+    const auto beforeClick = plot.visibleTimeRange();
+    QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, start);
+    const auto later = future + std::chrono::seconds(20);
+    plot.appendSample(0, {later, 3.0, 0, 0});
+    QCOMPARE(plot.visibleTimeRange().end, beforeClick.end);
+    QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, start);
+    QCOMPARE(plot.visibleTimeRange().end, later);
+    QVERIFY(plot.autoScroll());
+  }
+  void lostMouseReleaseCannotContinueDragging() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "drag:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.show();
+    const QPoint start(400, 230);
+    QVERIFY(plot.addAnnotationAt(start, QStringLiteral("note")) >= 0);
+    const auto annotationTime = plot.model().annotations[0].time;
+    QTest::mousePress(&plot, Qt::MiddleButton, Qt::NoModifier, start + QPoint(4, 4));
+    moveWhileDragging(&plot, start + QPoint(44, 4), Qt::NoButton);
+    QCOMPARE(plot.model().annotations[0].time, annotationTime);
+    moveWhileDragging(&plot, start + QPoint(64, 4), Qt::NoButton);
+    QCOMPARE(plot.model().annotations[0].time, annotationTime);
+
+    const auto range = plot.visibleTimeRange();
+    QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, QPoint(500, 350));
+    moveWhileDragging(&plot, QPoint(540, 350), Qt::NoButton);
+    QVERIFY(std::abs(std::chrono::duration<double>(
+        plot.visibleTimeRange().start - range.start).count()) < 1.0);
+    QVERIFY(plot.autoScroll());
+  }
   void lightAnnotationTextRemainsReadable() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "light:test";

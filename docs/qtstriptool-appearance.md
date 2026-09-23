@@ -32,9 +32,8 @@ DPI/scaling, window size, and fixture used.
   use Qt/platform conventions.
 - The graph is painted with `QPainter`; line rasterization, font metrics, time
   labels, and image/print scaling can differ from X11.
-- The curve legend sits above the Qt plot rather than beside it. It shows each
-  plotted curve's name and latest value; clicking an entry selects that curve
-  for cursor value readout.
+- The Qt curve legend sits beside the plot and adds each plotted curve's latest
+  value; clicking an entry selects that curve for cursor value readout.
 - Annotations use small text boxes with a dashed selection outline. Their
   position follows the associated curve's time and value axes.
 - Window icons and desktop identity use the Qt StripTool artwork and name so
@@ -93,3 +92,6 @@ readable when its curve color is light; the border retains the curve color.
 The visual fixture now checks that the trace remains visible before and after
 adding an annotation. Qt 5 and Qt 6 Cocoa event tests also passed for plot
 right-click menus, middle-button annotation dragging, and toolbar fine steps.
+The ten-curve Qt 5 render showed clipped latest values in the narrow legend;
+the legend now moves those values to the next line when needed. Both Qt 5 and
+Qt 6 fixture renders were inspected after that change.

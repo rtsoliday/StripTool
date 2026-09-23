@@ -15,7 +15,7 @@ what the build files intend to support.
 | Sampling/refresh | Independent Motif timers | Independent acquisition timers | Automated | `make test-qtstriptool-core` |
 | CA reconnect/metadata | `StripCA.c` | `ChannelAccessProvider` | Fake automated; IOC opt-in | `make test-qtstriptool-core`; `make test-qtstriptool-ioc TEST_PV=...` |
 | Plot transforms | `StripGraph.c`/`jlAxis.c` | Toolkit-neutral selection plus `QPainter` | Automated | core, UI, and visual targets |
-| Graph interaction | `Strip.c`/`Annotation.c` | Time and value pan/zoom, fine right-button toolbar steps, graph menu, annotation selection and middle-button drag | Automated offscreen and Cocoa event tests; physical mouse manual | `make test-qtstriptool-ui`; Qt 5/6 Cocoa interaction cases on 2026-09-23, including cancelled button drag and edge annotation drag |
+| Graph interaction | `Strip.c`/`Annotation.c` | Time and value pan/zoom, fine right-button toolbar steps, graph menu, annotation selection and middle-button drag | Automated offscreen and Cocoa event tests; physical mouse manual | `make test-qtstriptool-ui`; Qt 5/6 Cocoa interaction cases on 2026-09-23, including live left-button drag, lost release, cancelled button drag, and edge annotation drag |
 | Controls | `StripDialog.c` | Shared-model Qt controls | Automated | `make test-qtstriptool-ui` |
 | File/output | Motif dialogs and wide dump rows | Workflow/export services and long dump rows | Automated basics; format parity open | config, core, and UI targets; see known differences |
 | History lifecycle | `StripHistory.h` | Cancellable provider interface | Automated | no-history and deterministic providers |

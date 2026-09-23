@@ -80,6 +80,7 @@ private:
   std::chrono::system_clock::time_point timeAt(const QPoint& position) const;
   std::optional<double> valueAt(const QPoint& position) const;
   void updateAutoRange();
+  void finishDrag();
   QColor color(const Rgba16& value) const;
   std::optional<QPointF> mapSample(const Sample& sample,
                                   const ValueRange& range,

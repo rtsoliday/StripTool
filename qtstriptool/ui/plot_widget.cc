@@ -103,7 +103,7 @@ void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples)
   });
   liveSamples_[curve] = std::move(samples);
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
-  if (autoScroll_ && !paused_ && dragMode_ != DragMode::Annotation) {
+  if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
     if (!hadSamples) resetView();
     else if (!samples_[curve].empty()) {
       visibleTimeRange_.end = std::max(visibleTimeRange_.end,
@@ -112,7 +112,7 @@ void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples)
           std::chrono::seconds(model_.timing.timespanSeconds);
     }
   }
-  if (dragMode_ != DragMode::Annotation) updateAutoRange();
+  if (dragMode_ == DragMode::None) updateAutoRange();
   update();
 }
 
@@ -132,8 +132,8 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
   if (data.size() > maximum)
     data.erase(data.begin(), data.end() - static_cast<std::ptrdiff_t>(maximum));
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], data);
-  if (dragMode_ != DragMode::Annotation) updateAutoRange();
-  if (autoScroll_ && !paused_ && dragMode_ != DragMode::Annotation) {
+  if (dragMode_ == DragMode::None) updateAutoRange();
+  if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
     visibleTimeRange_.end = std::max(visibleTimeRange_.end, sample.timestamp);
     visibleTimeRange_.start = visibleTimeRange_.end -
         std::chrono::seconds(model_.timing.timespanSeconds);
@@ -171,7 +171,7 @@ void PlotWidget::joinHistoricalSamples(std::size_t curve,
   });
   historicalSamples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], ordered);
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
-  updateAutoRange();
+  if (dragMode_ == DragMode::None) updateAutoRange();
   update();
 }
 
@@ -284,7 +284,7 @@ void PlotWidget::resetView() {
 }
 
 void PlotWidget::advanceToNow() {
-  if (!autoScroll_ || paused_ || dragMode_ == DragMode::Annotation) return;
+  if (!autoScroll_ || paused_ || dragMode_ != DragMode::None) return;
   visibleTimeRange_.end = std::max(visibleTimeRange_.end,
                                    std::chrono::system_clock::now());
   for (const auto& curve : samples_)
@@ -529,13 +529,19 @@ void PlotWidget::paintEvent(QPaintEvent*) {
                      QPointF(legend.left() + 18, legend.top() + 10));
     const auto& config = model_.curves[index];
     QString label = QString::fromStdString(config.name);
+    QString latestValue;
     if (!samples_[index].empty() && samples_[index].back().plotable &&
         std::isfinite(samples_[index].back().value))
-      label += QStringLiteral("  %1").arg(samples_[index].back().value, 0, 'g',
-                                            std::clamp(config.precision, 1, 15));
+      latestValue = QString::number(samples_[index].back().value, 'g',
+                                    std::clamp(config.precision, 1, 15));
     painter.setPen(foreground);
     const QRectF textArea(legend.left() + 23, legend.top(),
                           legend.width() - 26, 21);
+    const bool splitLatest = legend.height() >= 38 && !latestValue.isEmpty() &&
+        painter.fontMetrics().horizontalAdvance(label + QStringLiteral("  ") +
+                                                 latestValue) > textArea.width();
+    if (!splitLatest && !latestValue.isEmpty())
+      label += QStringLiteral("  ") + latestValue;
     painter.drawText(textArea, Qt::AlignVCenter | Qt::AlignLeft,
                      painter.fontMetrics().elidedText(label, Qt::ElideRight,
                                                        static_cast<int>(textArea.width())));
@@ -548,9 +554,11 @@ void PlotWidget::paintEvent(QPaintEvent*) {
       const QString limits = QStringLiteral("%1(%2, %3)")
           .arg(config.scale == ScaleMode::Log10 ? QStringLiteral("log10 ") : QString())
           .arg(lower, 0, 'g', 4).arg(upper, 0, 'g', 4);
+      const QString secondLine = splitLatest
+          ? latestValue + QStringLiteral("  ") + limits : limits;
       painter.drawText(QRectF(legend.left() + 5, legend.top() + 21,
                               legend.width() - 9, 18), Qt::AlignLeft | Qt::AlignTop,
-                       painter.fontMetrics().elidedText(limits, Qt::ElideRight,
+                       painter.fontMetrics().elidedText(secondLine, Qt::ElideRight,
                                                          static_cast<int>(legend.width() - 9)));
     }
     if (legend.height() >= 52) {
@@ -694,6 +702,9 @@ void PlotWidget::paintEvent(QPaintEvent*) {
 }
 
 void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
+  if ((dragMode_ == DragMode::Pan && !(event->buttons() & Qt::LeftButton)) ||
+      (dragMode_ == DragMode::Annotation && !(event->buttons() & Qt::MiddleButton)))
+    finishDrag();
   cursorPosition_ = event->pos();
   const QRectF area = plotRect();
   if (area.width() > 0) {
@@ -805,16 +816,18 @@ void PlotWidget::mousePressEvent(QMouseEvent* event) {
 
 void PlotWidget::mouseReleaseEvent(QMouseEvent* event) {
   if ((dragMode_ == DragMode::Annotation && event->button() == Qt::MiddleButton) ||
-      (dragMode_ == DragMode::Pan && event->button() == Qt::LeftButton)) {
-    const bool draggedAnnotation = dragMode_ == DragMode::Annotation;
-    const bool resumeAutoScroll = dragMode_ == DragMode::Annotation &&
-                                  autoScroll_ && !paused_;
-    dragMode_ = DragMode::None;
-    if (resumeAutoScroll) resetView();
-    else if (draggedAnnotation) {
-      updateAutoRange();
-      update();
-    }
+      (dragMode_ == DragMode::Pan && event->button() == Qt::LeftButton))
+    finishDrag();
+}
+
+void PlotWidget::finishDrag() {
+  if (dragMode_ == DragMode::None) return;
+  const bool resumeAutoScroll = autoScroll_ && !paused_;
+  dragMode_ = DragMode::None;
+  if (resumeAutoScroll) resetView();
+  else {
+    updateAutoRange();
+    update();
   }
 }
 

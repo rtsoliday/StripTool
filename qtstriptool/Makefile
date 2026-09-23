@@ -173,6 +173,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            automaticRangeUsesVisibleSamplesAndManualBound \
            curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop \
            liveRefreshDoesNotRewindTheTimeWindow stationaryPanKeepsAutoScroll \
+           livePanDragUsesStableRangeAndStationaryReleaseCatchesUp \
+           lostMouseReleaseCannotContinueDragging \
            lightAnnotationTextRemainsReadable \
            metadataRefreshPreservesPendingCurveEdits reopeningControlsPreservesPendingEdits \
            removingCurvePreservesOtherPendingEdits \
