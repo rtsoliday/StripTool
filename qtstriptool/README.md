@@ -22,7 +22,7 @@ make test-ioc TEST_PV=some:readable:numeric:pv
 ```
 
 `ui/plot_widget.*` implements the graph directly with `QPainter`. It supports
-multiple colored linear and logarithmic curves and axes, time labels, grid
+multiple colored linear and logarithmic curves, a selectable Y axis, time labels, grid
 modes, decimated live updates, auto-scroll and fixed ranges, pan and zoom,
 reset/replot/auto-scale operations, cursor readout, annotations, and joining
 historical samples with live data. Plot transforms and range selection remain

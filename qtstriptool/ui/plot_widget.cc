@@ -375,14 +375,8 @@ void PlotWidget::editSelectedAnnotation() {
 }
 
 QRectF PlotWidget::plotRect() const {
-  int active = 0;
-  for (const auto& curve : model_.curves)
-    if (curve.nameSet && curve.plotted) ++active;
-  const int leftAxes = (active + 1) / 2;
-  const int rightAxes = active / 2;
-  const int legendRows = active ? (active + legendColumns() - 1) / legendColumns() : 0;
-  return rect().adjusted(18 + 56 * std::max(1, leftAxes), 22 + 22 * legendRows,
-                         -(18 + 56 * std::max(1, rightAxes)), -44);
+  // The Motif graph has one selectable Y axis and a legend beside the plot.
+  return rect().adjusted(72, 20, -178, -46);
 }
 
 std::vector<std::size_t> PlotWidget::plottedCurves() const {
@@ -392,15 +386,12 @@ std::vector<std::size_t> PlotWidget::plottedCurves() const {
   return result;
 }
 
-int PlotWidget::legendColumns() const {
-  return std::clamp(width() / 170, 1, 5);
-}
-
 QRectF PlotWidget::legendRect(std::size_t position) const {
-  const int columns = legendColumns();
-  const qreal columnWidth = qreal(width() - 24) / columns;
-  return QRectF(12 + (position % columns) * columnWidth,
-                8 + (position / columns) * 22, columnWidth - 6, 20);
+  const qreal rowHeight = std::min<qreal>(56, qreal(height() - 12) /
+                                                std::max<std::size_t>(1, plottedCurves().size()));
+  const QRectF area = plotRect();
+  return QRectF(area.right() + 10, 8 + position * rowHeight,
+                width() - area.right() - 16, rowHeight - 2);
 }
 
 std::chrono::system_clock::time_point PlotWidget::timeAt(const QPoint& position) const {
@@ -531,22 +522,49 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     const QRectF legend = legendRect(position);
     if (selectedCurve_ == static_cast<int>(index)) {
       painter.setPen(QPen(foreground, 1));
-      painter.drawRoundedRect(legend, 3, 3);
+      painter.drawRect(legend);
     }
     painter.setPen(QPen(color(model_.colors.curves[index]), 3));
-    painter.drawLine(QPointF(legend.left() + 5, legend.center().y()),
-                     QPointF(legend.left() + 19, legend.center().y()));
-    QString label = QString::fromStdString(model_.curves[index].name);
+    painter.drawLine(QPointF(legend.left() + 4, legend.top() + 10),
+                     QPointF(legend.left() + 18, legend.top() + 10));
+    const auto& config = model_.curves[index];
+    QString label = QString::fromStdString(config.name);
     if (!samples_[index].empty() && samples_[index].back().plotable &&
         std::isfinite(samples_[index].back().value))
-      label += QStringLiteral("  %1").arg(
-          samples_[index].back().value, 0, 'g',
-          std::clamp(model_.curves[index].precision, 1, 15));
+      label += QStringLiteral("  %1").arg(samples_[index].back().value, 0, 'g',
+                                            std::clamp(config.precision, 1, 15));
     painter.setPen(foreground);
-    const QRectF textArea = legend.adjusted(24, 0, -3, 0);
+    const QRectF textArea(legend.left() + 23, legend.top(),
+                          legend.width() - 26, 21);
     painter.drawText(textArea, Qt::AlignVCenter | Qt::AlignLeft,
                      painter.fontMetrics().elidedText(label, Qt::ElideRight,
                                                        static_cast<int>(textArea.width())));
+    if (legend.height() >= 38) {
+      const ValueRange plottedRange = valueRange(index);
+      const double lower = config.scale == ScaleMode::Log10
+                               ? std::pow(10.0, plottedRange.minimum) : plottedRange.minimum;
+      const double upper = config.scale == ScaleMode::Log10
+                               ? std::pow(10.0, plottedRange.maximum) : plottedRange.maximum;
+      const QString limits = QStringLiteral("%1(%2, %3)")
+          .arg(config.scale == ScaleMode::Log10 ? QStringLiteral("log10 ") : QString())
+          .arg(lower, 0, 'g', 4).arg(upper, 0, 'g', 4);
+      painter.drawText(QRectF(legend.left() + 5, legend.top() + 21,
+                              legend.width() - 9, 18), Qt::AlignLeft | Qt::AlignTop,
+                       painter.fontMetrics().elidedText(limits, Qt::ElideRight,
+                                                         static_cast<int>(legend.width() - 9)));
+    }
+    if (legend.height() >= 52) {
+      QString detail = config.units == "Undefined" ? QString()
+                        : QString::fromStdString(config.units);
+      if (!config.comment.empty()) {
+        if (!detail.isEmpty()) detail += QStringLiteral(" · ");
+        detail += QString::fromStdString(config.comment);
+      }
+      painter.drawText(QRectF(legend.left() + 5, legend.top() + 38,
+                              legend.width() - 9, 16), Qt::AlignLeft | Qt::AlignTop,
+                       painter.fontMetrics().elidedText(detail, Qt::ElideRight,
+                                                         static_cast<int>(legend.width() - 9)));
+    }
   }
   painter.setPen(foreground);
   painter.drawRect(area);
@@ -583,37 +601,42 @@ void PlotWidget::paintEvent(QPaintEvent*) {
                    QDateTime::fromMSecsSinceEpoch(milliseconds(visibleTimeRange_.end))
                        .toString(QStringLiteral("MMM d, yyyy")));
 
-  int leftAxis = 0;
-  int rightAxis = 0;
-  for (std::size_t curveIndex = 0; curveIndex < kMaximumCurves; ++curveIndex) {
+  const int axisCurve = selectedCurve_ >= 0 ? selectedCurve_ :
+                        (visibleCurves.empty() ? -1 : static_cast<int>(visibleCurves.front()));
+  auto drawOrder = visibleCurves;
+  if (selectedCurve_ >= 0) {
+    const auto selected = std::find(drawOrder.begin(), drawOrder.end(),
+                                    static_cast<std::size_t>(selectedCurve_));
+    if (selected != drawOrder.end()) {
+      drawOrder.erase(selected);
+      drawOrder.push_back(static_cast<std::size_t>(selectedCurve_));
+    }
+  }
+  for (const std::size_t curveIndex : drawOrder) {
     const auto& config = model_.curves[curveIndex];
     if (!config.nameSet || !config.plotted) continue;
     const auto range = valueRange(curveIndex);
     const QColor curveColor = color(model_.colors.curves[curveIndex]);
-    const QColor axisColor = model_.graph.coloredYAxis ? curveColor : foreground;
-    painter.setPen(axisColor);
-    const bool useLeftAxis = (leftAxis + rightAxis) % 2 == 0;
-    const int axisNumber = useLeftAxis ? leftAxis++ : rightAxis++;
-    const qreal axisX = useLeftAxis ? area.left() - 46 - 56 * axisNumber
-                                    : area.right() + 6 + 56 * axisNumber;
-    for (int tick = 0; tick <= 5; ++tick) {
-      const double value = range.maximum -
-          (range.maximum - range.minimum) * tick / 5.0;
-      QString label = formattedValue(value, config.precision, config.scale);
-      if (painter.fontMetrics().horizontalAdvance(label) > 40)
-        label = QString::number(config.scale == ScaleMode::Log10
-                                    ? std::pow(10.0, value) : value, 'g', 4);
-      painter.drawText(QRectF(axisX, area.top() + area.height() * tick / 5.0 - 9,
-                              40, 18),
-                       useLeftAxis ? Qt::AlignRight : Qt::AlignLeft, label);
+    if (static_cast<int>(curveIndex) == axisCurve) {
+      painter.setPen(model_.graph.coloredYAxis ? curveColor : foreground);
+      const qreal axisX = area.left() - 46;
+      for (int tick = 0; tick <= 5; ++tick) {
+        const double value = range.maximum -
+            (range.maximum - range.minimum) * tick / 5.0;
+        QString label = formattedValue(value, config.precision, config.scale);
+        if (painter.fontMetrics().horizontalAdvance(label) > 40)
+          label = QString::number(config.scale == ScaleMode::Log10
+                                      ? std::pow(10.0, value) : value, 'g', 4);
+        painter.drawText(QRectF(axisX, area.top() + area.height() * tick / 5.0 - 9,
+                                40, 18), Qt::AlignRight, label);
+      }
+      painter.save();
+      painter.translate(axisX - 9, area.center().y());
+      painter.rotate(-90);
+      painter.drawText(QRectF(-area.height() / 2, -9, area.height(), 18),
+                       Qt::AlignCenter, QString::fromStdString(config.units));
+      painter.restore();
     }
-    painter.save();
-    const qreal unitX = useLeftAxis ? axisX - 9 : axisX + 49;
-    painter.translate(unitX, area.center().y());
-    painter.rotate(-90);
-    painter.drawText(QRectF(-area.height() / 2, -9, area.height(), 18),
-                     Qt::AlignCenter, QString::fromStdString(config.units));
-    painter.restore();
 
     auto selected = selectSamples(samples_[curveIndex], visibleTimeRange_.start,
                                   visibleTimeRange_.end,
@@ -682,10 +705,11 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
                                           event->pos().y() - dragStart_.y(),
                                       area.top(), area.bottom() - dragAnnotationRect_.height());
       auto& annotation = model_.annotations[static_cast<std::size_t>(selectedAnnotation_)];
-      if (targetX != dragAnnotationRect_.left())
-        annotation.time = timeAt(QPoint(qRound(targetX), qRound(targetY)));
-      else
-        annotation.time = dragAnnotation_.time;
+      const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
+      const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
+          std::chrono::duration<double>(std::chrono::duration<double>(duration).count() *
+                                        (targetX - dragAnnotationRect_.left()) / area.width()));
+      annotation.time = dragAnnotation_.time + shift;
       if (dragAnnotation_.value) {
         const auto curves = plottedCurves();
         if (!curves.empty()) {
@@ -744,7 +768,8 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
 
 void PlotWidget::mousePressEvent(QMouseEvent* event) {
   if (event->button() == Qt::RightButton) {
-    emit plotContextMenuRequested(mapToGlobal(event->pos()), event->pos());
+    // The native context-menu event follows this press (or release, depending
+    // on the platform). Opening here as well can reopen the menu after dismissal.
     event->accept();
     return;
   }

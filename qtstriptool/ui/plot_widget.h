@@ -74,7 +74,6 @@ protected:
 private:
   QRectF plotRect() const;
   std::vector<std::size_t> plottedCurves() const;
-  int legendColumns() const;
   QRectF legendRect(std::size_t position) const;
   QRectF annotationRect(std::size_t index) const;
   int annotationAt(const QPoint& position) const;

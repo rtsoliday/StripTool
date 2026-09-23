@@ -47,16 +47,26 @@ public:
 protected:
   void mousePressEvent(QMouseEvent* event) override {
     if (event->button() == Qt::RightButton) {
-      fineStep_();
+      rightPressed_ = true;
       event->accept();
       return;
     }
     QToolButton::mousePressEvent(event);
   }
+  void mouseReleaseEvent(QMouseEvent* event) override {
+    if (event->button() == Qt::RightButton) {
+      if (rightPressed_ && rect().contains(event->pos())) fineStep_();
+      rightPressed_ = false;
+      event->accept();
+      return;
+    }
+    QToolButton::mouseReleaseEvent(event);
+  }
   void contextMenuEvent(QContextMenuEvent* event) override { event->accept(); }
 
 private:
   std::function<void()> fineStep_;
+  bool rightPressed_ = false;
 };
 
 std::chrono::milliseconds timerInterval(double seconds) {

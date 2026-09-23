@@ -935,8 +935,8 @@ private slots:
     plot.setModel(model);
     plot.show();
     QSignalSpy cursor(&plot, &striptool::PlotWidget::cursorLocationChanged);
-    QTest::mouseClick(&plot, Qt::LeftButton, Qt::NoModifier, QPoint(220, 18));
-    QTest::mouseMove(&plot, QPoint(400, 200));
+    QTest::mouseClick(&plot, Qt::LeftButton, Qt::NoModifier, QPoint(680, 76));
+    moveWhileDragging(&plot, QPoint(400, 200), Qt::NoButton);
     QVERIFY(!cursor.isEmpty());
     QCOMPARE(cursor.last().at(2).toInt(), 1);
   }
@@ -979,33 +979,34 @@ private slots:
     QTest::mouseClick(plot, Qt::LeftButton, Qt::NoModifier,
                       original + QPoint(44, 34));
     QCOMPARE(plot->selectedAnnotation(), 0);
-    QTest::mousePress(plot, Qt::RightButton, Qt::NoModifier, QPoint(500, 300));
+    QSignalSpy contextRequests(plot, &striptool::PlotWidget::plotContextMenuRequested);
+    QTest::mouseClick(plot, Qt::RightButton, Qt::NoModifier, QPoint(500, 300));
     auto* menu = window.findChild<QMenu*>(QStringLiteral("plotContextMenu"));
     QVERIFY(menu);
+    QCOMPARE(contextRequests.count(), 0);
+    QContextMenuEvent nativeMenu(QContextMenuEvent::Mouse, QPoint(500, 300),
+                                 plot->mapToGlobal(QPoint(500, 300)));
+    QApplication::sendEvent(plot, &nativeMenu);
+    QCOMPARE(contextRequests.count(), 1);
+    QVERIFY(nativeMenu.isAccepted());
     QTRY_VERIFY(menu->isVisible());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("newAnnotationAction"))->isEnabled());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("editAnnotationAction"))->isEnabled());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("deleteAnnotationAction"))->isEnabled());
     QVERIFY(menu->actions().contains(window.findChild<QAction*>(QStringLiteral("printAction"))));
     QVERIFY(menu->actions().contains(window.findChild<QAction*>(QStringLiteral("retryConnectionsAction"))));
-    QTest::mouseRelease(plot, Qt::RightButton, Qt::NoModifier, QPoint(500, 300));
-    menu->hide();
-    QContextMenuEvent nativeMenu(QContextMenuEvent::Mouse, QPoint(500, 300),
-                                 plot->mapToGlobal(QPoint(500, 300)));
-    QApplication::sendEvent(plot, &nativeMenu);
-    QVERIFY(nativeMenu.isAccepted());
-    QTRY_VERIFY(menu->isVisible());
     menu->hide();
     QContextMenuEvent keyboardMenu(QContextMenuEvent::Keyboard, QPoint(500, 300),
                                    plot->mapToGlobal(QPoint(500, 300)));
     QApplication::sendEvent(plot, &keyboardMenu);
+    QCOMPARE(contextRequests.count(), 2);
     QVERIFY(keyboardMenu.isAccepted());
     QTRY_VERIFY(menu->isVisible());
     menu->hide();
     const auto afterMove = plot->visibleTimeRange();
-    QTest::mousePress(plot, Qt::LeftButton, Qt::NoModifier, QPoint(600, 420));
-    moveWhileDragging(plot, QPoint(640, 420), Qt::LeftButton);
-    QTest::mouseRelease(plot, Qt::LeftButton, Qt::NoModifier, QPoint(640, 420));
+    QTest::mousePress(plot, Qt::LeftButton, Qt::NoModifier, QPoint(560, 420));
+    moveWhileDragging(plot, QPoint(590, 420), Qt::LeftButton);
+    QTest::mouseRelease(plot, Qt::LeftButton, Qt::NoModifier, QPoint(590, 420));
     QVERIFY(plot->visibleTimeRange().start < afterMove.start);
     QCOMPARE(plot->selectedAnnotation(), -1);
     model.annotations = window.model().annotations;
@@ -1080,16 +1081,19 @@ private slots:
     const auto base = std::chrono::system_clock::from_time_t(1000);
     plot.setVisibleTimeRange({base, base + std::chrono::seconds(100)});
     plot.show();
-    QVERIFY(plot.addAnnotationAt(QPoint(700, 200), QStringLiteral("edge")) >= 0);
+    QVERIFY(plot.addAnnotationAt(QPoint(615, 200), QStringLiteral("edge")) >= 0);
     const auto originalTime = plot.model().annotations[0].time;
     const auto originalValue = plot.model().annotations[0].value;
-    QTest::mousePress(&plot, Qt::MiddleButton, Qt::NoModifier, QPoint(690, 204));
-    moveWhileDragging(&plot, QPoint(720, 204), Qt::MiddleButton);
+    QTest::mousePress(&plot, Qt::MiddleButton, Qt::NoModifier, QPoint(605, 204));
+    moveWhileDragging(&plot, QPoint(635, 204), Qt::MiddleButton);
     QCOMPARE(plot.model().annotations[0].time, originalTime);
     QCOMPARE(plot.model().annotations[0].value, originalValue);
-    moveWhileDragging(&plot, QPoint(670, 204), Qt::MiddleButton);
+    moveWhileDragging(&plot, QPoint(585, 204), Qt::MiddleButton);
     QVERIFY(plot.model().annotations[0].time < originalTime);
-    QTest::mouseRelease(&plot, Qt::MiddleButton, Qt::NoModifier, QPoint(670, 204));
+    const double movedSeconds = std::chrono::duration<double>(
+        originalTime - plot.model().annotations[0].time).count();
+    QVERIFY(movedSeconds > 3.0 && movedSeconds < 5.0);
+    QTest::mouseRelease(&plot, Qt::MiddleButton, Qt::NoModifier, QPoint(585, 204));
   }
   void plotKeepsCrossingSegmentsAndDoesNotRewindOnLateSamples() {
     auto model = striptool::makeDefaultModel();
@@ -1109,10 +1113,11 @@ private slots:
     QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
     plot.render(&image);
     bool traceAtCenter = false;
-    for (int y = 247; y <= 253; ++y) {
-      const QColor pixel = image.pixelColor(400, y);
-      if (pixel.blue() > 150 && pixel.red() < 100) traceAtCenter = true;
-    }
+    for (int y = 200; y <= 280; ++y)
+      for (int x = 300; x <= 410; ++x) {
+        const QColor pixel = image.pixelColor(x, y);
+        if (pixel.blue() > 150 && pixel.red() < 100) traceAtCenter = true;
+      }
     QVERIFY(traceAtCenter);
     plot.resetView();
     const auto future = std::chrono::system_clock::now() + std::chrono::seconds(10);
@@ -1153,6 +1158,12 @@ private slots:
     QVERIFY(zoomIn);
     QVERIFY(zoomInY);
     QVERIFY(zoomOutY);
+    const auto beforeCancelledStep = plot->visibleTimeRange();
+    QTest::mousePress(panLeft, Qt::RightButton, Qt::NoModifier, panLeft->rect().center());
+    moveWhileDragging(panLeft, QPoint(-12, panLeft->height() / 2), Qt::RightButton);
+    QTest::mouseRelease(panLeft, Qt::RightButton, Qt::NoModifier,
+                        QPoint(-12, panLeft->height() / 2));
+    QCOMPARE(plot->visibleTimeRange().start, beforeCancelledStep.start);
     QTest::mouseClick(panLeft, Qt::RightButton);
     const double finePan = std::chrono::duration<double>(
         base - plot->visibleTimeRange().start).count();

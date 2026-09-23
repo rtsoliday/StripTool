@@ -15,7 +15,7 @@ what the build files intend to support.
 | Sampling/refresh | Independent Motif timers | Independent acquisition timers | Automated | `make test-qtstriptool-core` |
 | CA reconnect/metadata | `StripCA.c` | `ChannelAccessProvider` | Fake automated; IOC opt-in | `make test-qtstriptool-core`; `make test-qtstriptool-ioc TEST_PV=...` |
 | Plot transforms | `StripGraph.c`/`jlAxis.c` | Toolkit-neutral selection plus `QPainter` | Automated | core, UI, and visual targets |
-| Graph interaction | `Strip.c`/`Annotation.c` | Time and value pan/zoom, fine right-button toolbar steps, graph menu, annotation selection and middle-button drag | Automated offscreen and Cocoa event tests; physical mouse manual | `make test-qtstriptool-ui`; Qt 5/6 Cocoa interaction cases on 2026-09-23 |
+| Graph interaction | `Strip.c`/`Annotation.c` | Time and value pan/zoom, fine right-button toolbar steps, graph menu, annotation selection and middle-button drag | Automated offscreen and Cocoa event tests; physical mouse manual | `make test-qtstriptool-ui`; Qt 5/6 Cocoa interaction cases on 2026-09-23, including cancelled button drag and edge annotation drag |
 | Controls | `StripDialog.c` | Shared-model Qt controls | Automated | `make test-qtstriptool-ui` |
 | File/output | Motif dialogs and wide dump rows | Workflow/export services and long dump rows | Automated basics; format parity open | config, core, and UI targets; see known differences |
 | History lifecycle | `StripHistory.h` | Cancellable provider interface | Automated | no-history and deterministic providers |
@@ -28,7 +28,7 @@ what the build files intend to support.
 | Platform | Qt 5.15 | Qt 6 | Motif comparison | Status |
 |---|---|---|---|---|
 | Linux x86_64 | Build and tests available locally | Run when dependencies are installed | Builds locally | Qt 5 verified on 2026-09-17 |
-| macOS arm64 | Full non-IOC suite and visual render passed locally on 2026-09-23 | Full non-IOC suite, visual render, and local soft IOC CA test passed on 2026-09-23 | Compared available legacy single-curve screenshot; full side-by-side pending | Local build/test verified; site IOC, reconnect, and soak gates pending |
+| macOS arm64 | Full non-IOC suite and visual render passed locally on 2026-09-23 | Full non-IOC suite, visual render, and local soft IOC CA test passed on 2026-09-23 | Compared available legacy single-curve screenshot; Qt now uses the selected left Y axis and right legend; full side-by-side pending | Local build/test verified; site IOC, reconnect, and soak gates pending |
 | Windows MSVC | Optional Qt 5 | Required | Not applicable | Awaiting CI/host |
 
 Use `make test-qt-versions` to run every locally installed Qt major version.
