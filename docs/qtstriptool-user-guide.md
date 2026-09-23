@@ -60,6 +60,10 @@ samples cannot be plotted on a base-10 scale.
 The View menu can pause time scrolling, enable or disable auto-scroll, pan in time or
 value, zoom either axis, auto-scale configured curves, reset both axes, and
 force a replot. Moving the pointer over the plot updates the location readout.
+Each X-axis tick has two labels: minutes relative to the right edge above,
+and local clock time below. The rightmost relative label is always 0; earlier
+ticks are negative. With auto-scroll, the right edge tracks the latest time.
+With auto-scroll off, it is the end of the fixed visible range.
 The toolbar uses arrows for panning, X+/X− for time zoom, and Y+/Y− for value
 zoom. Right click a toolbar Pan or Zoom button for a smaller step, as in the
 legacy graph. Vertical zoom uses logarithmic units for Log 10 curves.

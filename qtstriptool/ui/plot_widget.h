@@ -101,6 +101,7 @@ private:
   DragMode dragMode_ = DragMode::None;
   QPoint dragStart_;
   TimeRange dragRange_;
+  bool panMoved_ = false;
   Annotation dragAnnotation_;
   QRectF dragAnnotationRect_;
   QPoint cursorPosition_{-1, -1};

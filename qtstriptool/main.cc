@@ -1,5 +1,6 @@
 #include "core/application.h"
 #include "core/config.h"
+#include "services/file_workflow.h"
 #include "ui/main_window.h"
 #include <QApplication>
 #include <QDir>
@@ -42,7 +43,7 @@ int main(int argc, char** argv) {
       qEnvironmentVariable("STRIP_FILE_SEARCH_PATH").toStdString());
   bool loaded = false;
   if (!configuration.empty()) {
-    const auto result = striptool::readConfigurationFile(configuration, model);
+    const auto result = striptool::FileWorkflow::open(configuration, model);
     loaded = result.success;
     if (!loaded) {
       QTextStream(stderr) << "qtstriptool: "
@@ -58,7 +59,7 @@ int main(int argc, char** argv) {
     const bool sameFile = !configuration.empty() &&
         std::filesystem::absolute(configuration).lexically_normal() == fallback;
     if (!sameFile && std::filesystem::is_regular_file(fallback, checkError)) {
-      const auto result = striptool::readConfigurationFile(fallback, model);
+      const auto result = striptool::FileWorkflow::open(fallback, model);
       if (!result.success)
         QTextStream(stderr) << "qtstriptool: "
                             << QString::fromStdString(result.diagnostics.front().message)

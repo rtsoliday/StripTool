@@ -361,6 +361,8 @@ private slots:
     QVERIFY(striptool::FileWorkflow::open(path, model).success);
     QCOMPARE(model.timing.timespanSeconds, 123U);
     QCOMPARE(model.timing.numberOfSamples, 2048);
+    QCOMPARE(model.filename, path.string());
+    QCOMPARE(model.title, std::string("saved.stp"));
     model.timing.sampleIntervalSeconds = -1.0;
     QVERIFY(!striptool::FileWorkflow::save(path, model, &error));
     auto saved = striptool::makeDefaultModel();
@@ -968,11 +970,14 @@ private slots:
     model.curves[0].nameSet = true;
     model.curves[1].name = "second:pv";
     model.curves[1].nameSet = true;
+    model.curves[1].comment = "Complete channel description";
     striptool::PlotWidget plot;
     plot.resize(800, 500);
     plot.setModel(model);
     plot.show();
     QSignalSpy cursor(&plot, &striptool::PlotWidget::cursorLocationChanged);
+    moveWhileDragging(&plot, QPoint(680, 76), Qt::NoButton);
+    QVERIFY(plot.toolTip().contains(QStringLiteral("Complete channel description")));
     QTest::mouseClick(&plot, Qt::LeftButton, Qt::NoModifier, QPoint(680, 76));
     moveWhileDragging(&plot, QPoint(400, 200), Qt::NoButton);
     QVERIFY(!cursor.isEmpty());
@@ -1366,6 +1371,41 @@ private slots:
     QCOMPARE(plot.visibleTimeRange().end, future);
     plot.advanceToNow();
     QCOMPARE(plot.visibleTimeRange().end, future);
+  }
+  void appendedSampleUpdatesLiveAutomaticRangeImmediately() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "append:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto now = std::chrono::system_clock::now();
+    plot.setCurveSamples(0, {{now, 1.0, 0, 0}});
+    const auto future = plot.visibleTimeRange().end + std::chrono::seconds(10);
+    plot.appendSample(0, {future, 100.0, 0, 0});
+    QCOMPARE(plot.visibleTimeRange().end, future);
+    QCOMPARE(plot.valueRange(0).maximum, 100.0);
+  }
+  void panDraggedBackToStartRestoresOriginalRange() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "pan:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(100)});
+    plot.show();
+    const auto original = plot.visibleTimeRange();
+    const QPoint start(400, 300);
+    QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, start);
+    moveWhileDragging(&plot, start + QPoint(60, 0), Qt::LeftButton);
+    QVERIFY(plot.visibleTimeRange().start < original.start);
+    moveWhileDragging(&plot, start, Qt::LeftButton);
+    QCOMPARE(plot.visibleTimeRange().start, original.start);
+    QCOMPARE(plot.visibleTimeRange().end, original.end);
+    QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, start);
+    QCOMPARE(plot.visibleTimeRange().start, original.start);
+    QCOMPARE(plot.visibleTimeRange().end, original.end);
   }
   void stationaryPanKeepsAutoScroll() {
     auto model = striptool::makeDefaultModel();

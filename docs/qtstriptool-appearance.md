@@ -95,3 +95,6 @@ right-click menus, middle-button annotation dragging, and toolbar fine steps.
 The ten-curve Qt 5 render showed clipped latest values in the narrow legend;
 the legend now moves those values to the next line when needed. Both Qt 5 and
 Qt 6 fixture renders were inspected after that change.
+The latest Qt 5 and Qt 6 fixture renders use the same concise Y-axis tick
+labels. Long curve comments take priority over repeated units in the legend;
+hovering a legend entry reveals its full name, units, and comment.

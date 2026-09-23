@@ -173,7 +173,9 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            autoScaleTracksVisibleTrace automaticMetadataDoesNotCancelRequestedAutoScale \
            automaticRangeUsesVisibleTraceAndManualBound \
            curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop \
-           liveRefreshDoesNotRewindTheTimeWindow stationaryPanKeepsAutoScroll \
+           liveRefreshDoesNotRewindTheTimeWindow \
+           appendedSampleUpdatesLiveAutomaticRangeImmediately \
+           panDraggedBackToStartRestoresOriginalRange stationaryPanKeepsAutoScroll \
            livePanDragUsesStableRangeAndStationaryReleaseCatchesUp \
            dragReleaseAppliesItsFinalPosition \
            lostMouseReleaseCannotContinueDragging \

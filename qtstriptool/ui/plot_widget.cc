@@ -25,7 +25,12 @@ qint64 milliseconds(std::chrono::system_clock::time_point time) {
 QString formattedValue(double value, int precision, ScaleMode scale) {
   if (scale == ScaleMode::Log10)
     return QString::number(std::pow(10.0, value), 'g', std::max(1, precision));
-  return QString::number(value, 'f', std::clamp(precision, 0, 12));
+  QString label = QString::number(value, 'f', std::clamp(precision, 0, 12));
+  if (label.contains(QLatin1Char('.'))) {
+    while (label.endsWith(QLatin1Char('0'))) label.chop(1);
+    if (label.endsWith(QLatin1Char('.'))) label.chop(1);
+  }
+  return label == QStringLiteral("-0") ? QStringLiteral("0") : label;
 }
 
 }  // namespace
@@ -132,12 +137,12 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
   if (data.size() > maximum)
     data.erase(data.begin(), data.end() - static_cast<std::ptrdiff_t>(maximum));
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], data);
-  if (dragMode_ == DragMode::None) updateAutoRange();
   if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
     visibleTimeRange_.end = std::max(visibleTimeRange_.end, sample.timestamp);
     visibleTimeRange_.start = visibleTimeRange_.end -
         std::chrono::seconds(model_.timing.timespanSeconds);
   }
+  if (dragMode_ == DragMode::None) updateAutoRange();
   update();
 }
 
@@ -372,7 +377,7 @@ void PlotWidget::editSelectedAnnotation() {
 
 QRectF PlotWidget::plotRect() const {
   // The Motif graph has one selectable Y axis and a legend beside the plot.
-  return rect().adjusted(72, 20, -178, -46);
+  return rect().adjusted(72, 20, -178, -64);
 }
 
 std::vector<std::size_t> PlotWidget::plottedCurves() const {
@@ -557,8 +562,11 @@ void PlotWidget::paintEvent(QPaintEvent*) {
       QString detail = config.units == "Undefined" ? QString()
                         : QString::fromStdString(config.units);
       if (!config.comment.empty()) {
-        if (!detail.isEmpty()) detail += QStringLiteral(" · ");
-        detail += QString::fromStdString(config.comment);
+        const QString comment = QString::fromStdString(config.comment);
+        const QString combined = detail.isEmpty() ? comment
+            : detail + QStringLiteral(" · ") + comment;
+        detail = painter.fontMetrics().horizontalAdvance(combined) <= legend.width() - 9
+                     ? combined : comment;
       }
       painter.drawText(QRectF(legend.left() + 5, legend.top() + 38,
                               legend.width() - 9, 16), Qt::AlignLeft | Qt::AlignTop,
@@ -590,13 +598,21 @@ void PlotWidget::paintEvent(QPaintEvent*) {
   const int timeDivisions = std::clamp(int(area.width() / (labelWidth + 12)), 1, 5);
   for (int i = 0; i <= timeDivisions; ++i) {
     const qint64 time = begin + (end - begin) * i / timeDivisions;
-    const QString label = QDateTime::fromMSecsSinceEpoch(time).toString(
+    const QString clockLabel = QDateTime::fromMSecsSinceEpoch(time).toString(
         showMilliseconds ? QStringLiteral("HH:mm:ss.zzz") : QStringLiteral("HH:mm:ss"));
+    const double minutesFromEnd = -double(end - begin) / 60000.0 *
+        (timeDivisions - i) / timeDivisions;
+    const QString minuteLabel = i == timeDivisions
+        ? QStringLiteral("0") : QString::number(minutesFromEnd, 'g', 6);
     const qreal x = area.left() + area.width() * i / timeDivisions;
-    painter.drawText(QRectF(x - labelWidth / 2.0, area.bottom() + 7,
-                            labelWidth, 20), Qt::AlignHCenter, label);
+    painter.drawText(QRectF(x - labelWidth / 2.0, area.bottom() + 5,
+                            labelWidth, 17), Qt::AlignHCenter, minuteLabel);
+    painter.drawText(QRectF(x - labelWidth / 2.0, area.bottom() + 22,
+                            labelWidth, 19), Qt::AlignHCenter, clockLabel);
   }
-  painter.drawText(QRectF(area.right() - 160, area.bottom() + 26, 160, 16),
+  painter.drawText(QRectF(area.left(), area.bottom() + 42, 230, 20),
+                   Qt::AlignLeft, tr("Minutes relative to right edge"));
+  painter.drawText(QRectF(area.right() - 160, area.bottom() + 42, 160, 20),
                    Qt::AlignRight,
                    QDateTime::fromMSecsSinceEpoch(milliseconds(visibleTimeRange_.end))
                        .toString(QStringLiteral("MMM d, yyyy")));
@@ -699,6 +715,23 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
     finishDrag();
   cursorPosition_ = event->pos();
   updateDrag(event->pos());
+  QString legendTip;
+  const auto curves = plottedCurves();
+  for (std::size_t row = 0; row < curves.size(); ++row) {
+    if (!legendRect(row).contains(event->pos())) continue;
+    const auto& curve = model_.curves[curves[row]];
+    legendTip = QString::fromStdString(curve.name);
+    if (curve.units != "Undefined" && !curve.units.empty()) {
+      legendTip += QLatin1Char('\n');
+      legendTip += QString::fromStdString(curve.units);
+    }
+    if (!curve.comment.empty()) {
+      legendTip += QLatin1Char('\n');
+      legendTip += QString::fromStdString(curve.comment);
+    }
+    break;
+  }
+  if (toolTip() != legendTip) setToolTip(legendTip);
   const QRectF area = plotRect();
   if (area.contains(event->pos())) {
     const qint64 begin = milliseconds(visibleTimeRange_.start);
@@ -761,7 +794,8 @@ void PlotWidget::updateDrag(const QPoint& position) {
       }
       emit annotationsChanged();
     } else if (dragMode_ == DragMode::Pan) {
-      if (position.x() != dragStart_.x()) {
+      if (position.x() != dragStart_.x()) panMoved_ = true;
+      if (panMoved_) {
         const double fraction = -double(position.x() - dragStart_.x()) / area.width();
         const auto duration = dragRange_.end - dragRange_.start;
         const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
@@ -808,6 +842,7 @@ void PlotWidget::mousePressEvent(QMouseEvent* event) {
     dragMode_ = DragMode::Pan;
     dragStart_ = event->pos();
     dragRange_ = visibleTimeRange_;
+    panMoved_ = false;
   }
 }
 
@@ -823,6 +858,7 @@ void PlotWidget::finishDrag() {
   if (dragMode_ == DragMode::None) return;
   const bool resumeAutoScroll = autoScroll_ && !paused_;
   dragMode_ = DragMode::None;
+  panMoved_ = false;
   if (resumeAutoScroll) resetView();
   else {
     updateAutoRange();
