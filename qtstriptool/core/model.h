@@ -44,6 +44,7 @@ struct ChannelMetadata {
   ConnectionState connection = ConnectionState::Disconnected;
   std::optional<std::chrono::system_clock::time_point> lastUpdate;
   std::string units;
+  std::string description;
   int precision = 0;
   std::optional<double> displayMinimum;
   std::optional<double> displayMaximum;

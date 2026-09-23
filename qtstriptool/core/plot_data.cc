@@ -33,6 +33,7 @@ std::optional<ValueRange> sampleValueRange(const std::vector<Sample>& samples,
   ValueRange range{std::numeric_limits<double>::infinity(),
                    -std::numeric_limits<double>::infinity()};
   for (const auto& sample : samples) {
+    if (!sample.plotable) continue;
     const double value = plotValue(sample.value, scale);
     if (!std::isfinite(value)) continue;
     range.minimum = std::min(range.minimum, value);

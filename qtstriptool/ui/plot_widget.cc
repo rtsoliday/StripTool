@@ -29,17 +29,25 @@ QString formattedValue(double value, int precision, ScaleMode scale) {
 
 PlotWidget::PlotWidget(QWidget* parent) : QWidget(parent) {
   setObjectName(QStringLiteral("plotWidget"));
-  setMinimumSize(420, 260);
+  setMinimumSize(800, 260);
   setMouseTracking(true);
   setFocusPolicy(Qt::StrongFocus);
   resetView();
 }
 
 void PlotWidget::setModel(const StripToolModel& model) {
+  for (std::size_t i = 0; i < kMaximumCurves; ++i) {
+    const auto& old = model_.curves[i];
+    const auto& next = model.curves[i];
+    if (old.nameSet != next.nameSet || old.name != next.name ||
+        old.scale != next.scale || old.minimum != next.minimum ||
+        old.maximum != next.maximum || old.minimumSet != next.minimumSet ||
+        old.maximumSet != next.maximumSet)
+      autoScaleOverrides_[i] = false;
+  }
   model_ = model;
-  autoScaleOverrides_.fill(false);
   updateAutoRange();
-  resetView();
+  update();
 }
 
 void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples) {
@@ -47,7 +55,8 @@ void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples)
   std::sort(samples.begin(), samples.end(), [](const auto& left, const auto& right) {
     return left.timestamp < right.timestamp;
   });
-  samples_[curve] = std::move(samples);
+  liveSamples_[curve] = std::move(samples);
+  samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
   updateAutoRange();
   if (autoScroll_ && !paused_) resetView();
   update();
@@ -55,7 +64,7 @@ void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples)
 
 void PlotWidget::appendSample(std::size_t curve, Sample sample) {
   if (curve >= samples_.size()) return;
-  auto& data = samples_[curve];
+  auto& data = liveSamples_[curve];
   if (!data.empty() && sample.timestamp < data.back().timestamp) {
     const auto at = std::upper_bound(data.begin(), data.end(), sample.timestamp,
                                      [](const auto& time, const Sample& item) {
@@ -68,6 +77,7 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
   const std::size_t maximum = std::max(1, model_.timing.numberOfSamples);
   if (data.size() > maximum)
     data.erase(data.begin(), data.end() - static_cast<std::ptrdiff_t>(maximum));
+  samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], data);
   updateAutoRange();
   if (autoScroll_ && !paused_) {
     visibleTimeRange_.end = sample.timestamp;
@@ -75,6 +85,21 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
         std::chrono::seconds(model_.timing.timespanSeconds);
   }
   update();
+}
+
+void PlotWidget::clearCurveSamples(std::size_t curve) {
+  if (curve >= samples_.size()) return;
+  liveSamples_[curve].clear();
+  historicalSamples_[curve].clear();
+  samples_[curve].clear();
+  automaticRanges_[curve].reset();
+  autoScaleOverrides_[curve] = false;
+  update();
+}
+
+void PlotWidget::clearSamples() {
+  for (std::size_t i = 0; i < samples_.size(); ++i) clearCurveSamples(i);
+  resetView();
 }
 
 const std::vector<Sample>& PlotWidget::curveSamples(std::size_t curve) const {
@@ -85,7 +110,12 @@ const std::vector<Sample>& PlotWidget::curveSamples(std::size_t curve) const {
 void PlotWidget::joinHistoricalSamples(std::size_t curve,
                                        const std::vector<Sample>& samples) {
   if (curve >= samples_.size()) return;
-  samples_[curve] = joinHistoricalAndLive(samples, samples_[curve]);
+  auto ordered = samples;
+  std::sort(ordered.begin(), ordered.end(), [](const auto& left, const auto& right) {
+    return left.timestamp < right.timestamp;
+  });
+  historicalSamples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], ordered);
+  samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
   updateAutoRange();
   update();
 }
@@ -100,16 +130,22 @@ ValueRange PlotWidget::valueRange(std::size_t curve) const {
 }
 
 void PlotWidget::setAutoScroll(bool enabled) {
+  const bool changed = autoScroll_ != enabled;
   autoScroll_ = enabled;
+  if (changed) emit autoScrollChanged(enabled);
   if (enabled && !paused_) resetView();
 }
 
-void PlotWidget::setPaused(bool paused) { paused_ = paused; }
+void PlotWidget::setPaused(bool paused) {
+  paused_ = paused;
+  if (!paused_ && autoScroll_) resetView();
+}
 
 void PlotWidget::setVisibleTimeRange(TimeRange range) {
   if (!range.isValid() || range.start == range.end) return;
   visibleTimeRange_ = range;
-  autoScroll_ = false;
+  setAutoScroll(false);
+  updateAutoRange();
   update();
 }
 
@@ -120,7 +156,8 @@ void PlotWidget::pan(double fractionOfWindow) {
           std::chrono::duration<double>(duration).count() * fractionOfWindow));
   visibleTimeRange_.start += shift;
   visibleTimeRange_.end += shift;
-  autoScroll_ = false;
+  setAutoScroll(false);
+  updateAutoRange();
   update();
 }
 
@@ -135,7 +172,8 @@ void PlotWidget::zoom(double factor) {
           factor / 2.0));
   if (half <= std::chrono::milliseconds(1)) return;
   visibleTimeRange_ = {center - half, center + half};
-  autoScroll_ = false;
+  setAutoScroll(false);
+  updateAutoRange();
   update();
 }
 
@@ -150,7 +188,19 @@ void PlotWidget::resetView() {
   }
   visibleTimeRange_.end = latest;
   visibleTimeRange_.start = latest - std::chrono::seconds(model_.timing.timespanSeconds);
+  const bool changed = !autoScroll_;
   autoScroll_ = true;
+  if (changed) emit autoScrollChanged(true);
+  updateAutoRange();
+  update();
+}
+
+void PlotWidget::advanceToNow() {
+  if (!autoScroll_ || paused_) return;
+  visibleTimeRange_.end = std::chrono::system_clock::now();
+  visibleTimeRange_.start = visibleTimeRange_.end -
+      std::chrono::seconds(model_.timing.timespanSeconds);
+  updateAutoRange();
   update();
 }
 
@@ -175,6 +225,7 @@ int PlotWidget::addAnnotation(Annotation annotation) {
   model_.annotations.push_back(std::move(annotation));
   selectedAnnotation_ = static_cast<int>(model_.annotations.size()) - 1;
   emit annotationSelectionChanged(selectedAnnotation_);
+  emit annotationsChanged();
   update();
   return selectedAnnotation_;
 }
@@ -182,6 +233,7 @@ int PlotWidget::addAnnotation(Annotation annotation) {
 bool PlotWidget::updateAnnotation(int index, Annotation annotation) {
   if (index < 0 || index >= static_cast<int>(model_.annotations.size())) return false;
   model_.annotations[static_cast<std::size_t>(index)] = std::move(annotation);
+  emit annotationsChanged();
   update();
   return true;
 }
@@ -191,6 +243,7 @@ bool PlotWidget::removeAnnotation(int index) {
   model_.annotations.erase(model_.annotations.begin() + index);
   selectedAnnotation_ = -1;
   emit annotationSelectionChanged(-1);
+  emit annotationsChanged();
   update();
   return true;
 }
@@ -208,17 +261,31 @@ QRectF PlotWidget::plotRect() const {
     if (curve.nameSet && curve.plotted) ++active;
   const int leftAxes = (active + 1) / 2;
   const int rightAxes = active / 2;
-  return rect().adjusted(18 + 48 * std::max(1, leftAxes), 22,
-                         -(18 + 48 * std::max(1, rightAxes)), -44);
+  return rect().adjusted(18 + 56 * std::max(1, leftAxes), 22,
+                         -(18 + 56 * std::max(1, rightAxes)), -44);
 }
 
 void PlotWidget::updateAutoRange() {
   for (std::size_t i = 0; i < kMaximumCurves; ++i) {
-    if (autoScaleOverrides_[i] || !model_.curves[i].minimumSet ||
-        !model_.curves[i].maximumSet)
-      automaticRanges_[i] = sampleValueRange(samples_[i], model_.curves[i].scale);
-    else
+    if (autoScaleOverrides_[i]) {
+      const auto visible = selectSamples(samples_[i], visibleTimeRange_.start,
+                                         visibleTimeRange_.end,
+                                         std::max(2, int(plotRect().width()) * 2));
+      automaticRanges_[i] = sampleValueRange(visible, model_.curves[i].scale);
+    } else if (!model_.curves[i].minimumSet || !model_.curves[i].maximumSet) {
+      const auto visible = selectSamples(samples_[i], visibleTimeRange_.start,
+                                         visibleTimeRange_.end,
+                                         std::max(2, int(plotRect().width()) * 2));
+      auto range = sampleValueRange(visible, model_.curves[i].scale);
+      if (range) {
+        const auto& config = model_.curves[i];
+        if (config.minimumSet) range->minimum = plotValue(config.minimum, config.scale);
+        if (config.maximumSet) range->maximum = plotValue(config.maximum, config.scale);
+      }
+      automaticRanges_[i] = range && range->isValid() ? range : std::nullopt;
+    } else {
       automaticRanges_[i].reset();
+    }
   }
 }
 
@@ -235,7 +302,7 @@ std::optional<QPointF> PlotWidget::mapSample(const Sample& sample,
   const qint64 end = milliseconds(visibleTimeRange_.end);
   const qint64 time = milliseconds(sample.timestamp);
   const double value = plotValue(sample.value, scale);
-  if (end <= begin || !range.isValid() || !std::isfinite(value) ||
+  if (end <= begin || !sample.plotable || !range.isValid() || !std::isfinite(value) ||
       time < begin || time > end) return std::nullopt;
   return QPointF(area.left() + area.width() * double(time - begin) / double(end - begin),
                  area.bottom() - area.height() * (value - range.minimum) /
@@ -265,37 +332,55 @@ void PlotWidget::paintEvent(QPaintEvent*) {
                        QPointF(area.right(), area.top() + area.height() * i / yDivisions));
 
   painter.setPen(foreground);
-  for (int i = 0; i <= 5; ++i) {
-    const qint64 begin = milliseconds(visibleTimeRange_.start);
-    const qint64 end = milliseconds(visibleTimeRange_.end);
-    const qint64 time = begin + (end - begin) * i / 5;
-    const QString label = QDateTime::fromMSecsSinceEpoch(time).toString(QStringLiteral("HH:mm:ss"));
-    const qreal x = area.left() + area.width() * i / 5.0;
-    painter.drawText(QRectF(x - 38, area.bottom() + 7, 76, 20), Qt::AlignHCenter, label);
+  const qint64 begin = milliseconds(visibleTimeRange_.start);
+  const qint64 end = milliseconds(visibleTimeRange_.end);
+  const bool showMilliseconds = end - begin < 10000;
+  const int labelWidth = showMilliseconds ? 106 : 76;
+  const int timeDivisions = std::clamp(int(area.width() / (labelWidth + 12)), 1, 5);
+  for (int i = 0; i <= timeDivisions; ++i) {
+    const qint64 time = begin + (end - begin) * i / timeDivisions;
+    const QString label = QDateTime::fromMSecsSinceEpoch(time).toString(
+        showMilliseconds ? QStringLiteral("HH:mm:ss.zzz") : QStringLiteral("HH:mm:ss"));
+    const qreal x = area.left() + area.width() * i / timeDivisions;
+    painter.drawText(QRectF(x - labelWidth / 2.0, area.bottom() + 7,
+                            labelWidth, 20), Qt::AlignHCenter, label);
   }
+  painter.drawText(QRectF(area.right() - 160, area.bottom() + 26, 160, 16),
+                   Qt::AlignRight,
+                   QDateTime::fromMSecsSinceEpoch(milliseconds(visibleTimeRange_.end))
+                       .toString(QStringLiteral("MMM d, yyyy")));
 
   int leftAxis = 0;
   int rightAxis = 0;
   for (std::size_t curveIndex = 0; curveIndex < kMaximumCurves; ++curveIndex) {
     const auto& config = model_.curves[curveIndex];
-    if (!config.nameSet || !config.plotted || samples_[curveIndex].empty()) continue;
+    if (!config.nameSet || !config.plotted) continue;
     const auto range = valueRange(curveIndex);
     const QColor curveColor = color(model_.colors.curves[curveIndex]);
     const QColor axisColor = model_.graph.coloredYAxis ? curveColor : foreground;
     painter.setPen(axisColor);
-    const QString maximum = formattedValue(range.maximum, config.precision, config.scale);
-    const QString minimum = formattedValue(range.minimum, config.precision, config.scale);
     const bool useLeftAxis = (leftAxis + rightAxis) % 2 == 0;
     const int axisNumber = useLeftAxis ? leftAxis++ : rightAxis++;
-    const qreal axisX = useLeftAxis ? area.left() - 46 * (axisNumber + 1)
-                                    : area.right() + 4 + 46 * axisNumber;
-    painter.drawText(QRectF(axisX, area.top(), 64, 18),
-                     useLeftAxis ? Qt::AlignRight : Qt::AlignLeft, maximum);
-    painter.drawText(QRectF(axisX, area.bottom() - 18, 64, 18),
-                     useLeftAxis ? Qt::AlignRight : Qt::AlignLeft, minimum);
-    painter.drawText(QRectF(axisX, area.center().y() - 9, 64, 18),
-                     useLeftAxis ? Qt::AlignRight : Qt::AlignLeft,
-                     QString::fromStdString(config.units));
+    const qreal axisX = useLeftAxis ? area.left() - 46 - 56 * axisNumber
+                                    : area.right() + 6 + 56 * axisNumber;
+    for (int tick = 0; tick <= 5; ++tick) {
+      const double value = range.maximum -
+          (range.maximum - range.minimum) * tick / 5.0;
+      QString label = formattedValue(value, config.precision, config.scale);
+      if (painter.fontMetrics().horizontalAdvance(label) > 40)
+        label = QString::number(config.scale == ScaleMode::Log10
+                                    ? std::pow(10.0, value) : value, 'g', 4);
+      painter.drawText(QRectF(axisX, area.top() + area.height() * tick / 5.0 - 9,
+                              40, 18),
+                       useLeftAxis ? Qt::AlignRight : Qt::AlignLeft, label);
+    }
+    painter.save();
+    const qreal unitX = useLeftAxis ? axisX - 9 : axisX + 49;
+    painter.translate(unitX, area.center().y());
+    painter.rotate(-90);
+    painter.drawText(QRectF(-area.height() / 2, -9, area.height(), 18),
+                     Qt::AlignCenter, QString::fromStdString(config.units));
+    painter.restore();
 
     const auto selected = selectSamples(samples_[curveIndex], visibleTimeRange_.start,
                                         visibleTimeRange_.end,
@@ -309,7 +394,10 @@ void PlotWidget::paintEvent(QPaintEvent*) {
       else path.lineTo(*point);
     }
     painter.setPen(QPen(curveColor, std::max(1, model_.graph.lineWidth)));
+    painter.save();
+    painter.setClipRect(area);
     painter.drawPath(path);
+    painter.restore();
   }
 
   for (std::size_t i = 0; i < model_.annotations.size(); ++i) {
@@ -353,7 +441,8 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
       const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
           std::chrono::duration<double>(std::chrono::duration<double>(duration).count() * fraction));
       visibleTimeRange_ = {dragRange_.start + shift, dragRange_.end + shift};
-      autoScroll_ = false;
+      setAutoScroll(false);
+      updateAutoRange();
     }
   }
   if (area.contains(event->pos())) {
@@ -399,6 +488,7 @@ void PlotWidget::mousePressEvent(QMouseEvent* event) {
 }
 
 void PlotWidget::mouseReleaseEvent(QMouseEvent*) {
+  if (draggingAnnotation_) emit annotationsChanged();
   dragging_ = false;
   draggingAnnotation_ = false;
 }

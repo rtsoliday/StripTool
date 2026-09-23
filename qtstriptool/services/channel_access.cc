@@ -13,9 +13,9 @@ struct ChannelAccessProvider::State {
   ChannelId id = 0;
   QString name;
   chid channel = nullptr;
+  chid descriptionChannel = nullptr;
   evid subscription = nullptr;
   std::atomic_bool active{true};
-  ChannelMetadata metadata;
 };
 
 ChannelAccessProvider::ChannelAccessProvider(QObject* parent)
@@ -29,8 +29,11 @@ ChannelAccessProvider::~ChannelAccessProvider() {
     if (contextReady_ && state->subscription)
       ca_clear_subscription(state->subscription);
     if (contextReady_ && state->channel) ca_clear_channel(state->channel);
+    if (contextReady_ && state->descriptionChannel)
+      ca_clear_channel(state->descriptionChannel);
     state->subscription = nullptr;
     state->channel = nullptr;
+    state->descriptionChannel = nullptr;
   }
   if (contextReady_) ca_context_destroy();
 }
@@ -56,6 +59,11 @@ ChannelId ChannelAccessProvider::connectChannel(const QString& name) {
                     QString::fromLatin1(ca_message(status)));
   } else {
     queueConnection(id, ConnectionState::Connecting, QStringLiteral("Connecting"));
+    const QString descriptionName = name.section(QLatin1Char('.'), 0, 0) +
+                                    QStringLiteral(".DESC");
+    ca_create_channel(descriptionName.toUtf8().constData(),
+                      descriptionConnectionCallback, raw, CA_PRIORITY_DEFAULT,
+                      &raw->descriptionChannel);
     ca_flush_io();
   }
   return id;
@@ -69,7 +77,9 @@ void ChannelAccessProvider::disconnectChannel(ChannelId id) {
   state->subscription = nullptr;
   if (state->channel) ca_clear_channel(state->channel);
   state->channel = nullptr;
-  ca_flush_io();
+  if (state->descriptionChannel) ca_clear_channel(state->descriptionChannel);
+  state->descriptionChannel = nullptr;
+  if (contextReady_) ca_flush_io();
   emit connectionChanged(id, ConnectionState::Disconnected,
                          QStringLiteral("Disconnected"));
 }
@@ -130,7 +140,6 @@ void ChannelAccessProvider::controlCallback(event_handler_args args) {
   }
   metadata.displayMinimum = low;
   metadata.displayMaximum = high;
-  state->metadata = metadata;
   state->owner->queueMetadata(state->id, metadata);
 }
 
@@ -156,6 +165,21 @@ void ChannelAccessProvider::valueCallback(event_handler_args args) {
   state->owner->queueSample(state->id, sample);
 }
 
+void ChannelAccessProvider::descriptionConnectionCallback(connection_handler_args args) {
+  auto* state = static_cast<State*>(ca_puser(args.chid));
+  if (!state || !state->active.load() || args.op != CA_OP_CONN_UP) return;
+  ca_get_callback(DBR_STRING, args.chid, descriptionCallback, state);
+  ca_flush_io();
+}
+
+void ChannelAccessProvider::descriptionCallback(event_handler_args args) {
+  auto* state = static_cast<State*>(args.usr);
+  if (!state || !state->active.load() || args.status != ECA_NORMAL || !args.dbr)
+    return;
+  state->owner->queueDescription(
+      state->id, QString::fromUtf8(static_cast<const char*>(args.dbr)).trimmed());
+}
+
 void ChannelAccessProvider::queueConnection(ChannelId id, ConnectionState state,
                                             QString message) {
   QMetaObject::invokeMethod(this, [this, id, state, message = std::move(message)] {
@@ -172,6 +196,12 @@ void ChannelAccessProvider::queueMetadata(ChannelId id, ChannelMetadata metadata
 void ChannelAccessProvider::queueSample(ChannelId id, Sample sample) {
   QMetaObject::invokeMethod(this, [this, id, sample] {
     if (active_.contains(id)) emit sampleReceived(id, sample);
+  }, Qt::QueuedConnection);
+}
+
+void ChannelAccessProvider::queueDescription(ChannelId id, QString description) {
+  QMetaObject::invokeMethod(this, [this, id, description = std::move(description)] {
+    if (active_.contains(id)) emit descriptionReceived(id, description);
   }, Qt::QueuedConnection);
 }
 

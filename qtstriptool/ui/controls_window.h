@@ -9,6 +9,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLineEdit;
+class QLabel;
 class QPushButton;
 class QSpinBox;
 
@@ -20,6 +21,7 @@ public:
   explicit ControlsWindow(StripToolModel* model, QWidget* parent = nullptr);
 
   void reloadFromModel();
+  void setChannelMetadata(std::size_t curve, const ChannelMetadata& metadata);
 
 signals:
   void modelChanged();
@@ -36,10 +38,14 @@ private:
     QCheckBox* plotted = nullptr;
     QComboBox* scale = nullptr;
     QSpinBox* precision = nullptr;
-    QDoubleSpinBox* minimum = nullptr;
-    QDoubleSpinBox* maximum = nullptr;
+    QLineEdit* minimum = nullptr;
+    QLineEdit* maximum = nullptr;
     QPushButton* modify = nullptr;
     QPushButton* remove = nullptr;
+    QLabel* status = nullptr;
+    bool precisionEdited = false;
+    bool minimumEdited = false;
+    bool maximumEdited = false;
   };
 
   QWidget* createCurvePage();

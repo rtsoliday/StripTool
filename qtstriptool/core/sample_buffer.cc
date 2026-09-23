@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace striptool {
 
@@ -54,6 +55,31 @@ std::vector<Sample> decimateSamples(const std::vector<Sample>& samples,
   if (maximumPoints == 0) return {};
   if (maximumPoints == 1) return {samples.back()};
   if (maximumPoints == 2) return {samples.front(), samples.back()};
+
+  const auto hasGap = std::any_of(samples.begin(), samples.end(),
+                                  [](const Sample& sample) { return !sample.plotable; });
+  if (hasGap) {
+    std::vector<Sample> data;
+    std::vector<Sample> gaps;
+    for (const auto& sample : samples)
+      (sample.plotable ? data : gaps).push_back(sample);
+    if (gaps.size() >= maximumPoints) {
+      std::vector<Sample> reduced;
+      reduced.reserve(maximumPoints);
+      for (std::size_t i = 0; i < maximumPoints; ++i)
+        reduced.push_back(gaps[i * (gaps.size() - 1) / (maximumPoints - 1)]);
+      return reduced;
+    }
+    const auto selected = decimateSamples(data, maximumPoints - gaps.size());
+    std::vector<Sample> result;
+    result.reserve(selected.size() + gaps.size());
+    std::merge(selected.begin(), selected.end(), gaps.begin(), gaps.end(),
+               std::back_inserter(result),
+               [](const Sample& left, const Sample& right) {
+                 return left.timestamp < right.timestamp;
+               });
+    return result;
+  }
 
   std::vector<Sample> result;
   result.reserve(maximumPoints);

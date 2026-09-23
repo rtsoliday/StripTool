@@ -145,6 +145,8 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              acquisitionTracksReconnectMetadataAndTimestamps \
              acquisitionShutdownDisconnectsActiveChannels \
              samplingAndRefreshCadencesRemainIndependent staleDataIsExplicit \
+             disconnectedChannelDoesNotRepeatOldSamples \
+             disconnectedIntervalsSurviveDecimation \
              cpuUsageIsASeparateLocalProvider \
              plotDataSelectionAndHistoryJoinAreToolkitNeutral \
              noHistoryProviderReportsFailureAndCancellation \
@@ -158,7 +160,15 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            mainAndControlWindowsShareOneModel historyDialogRoundTripsRange \
            mainWindowFileExportAndSnapshotEntryPointsWork iconResourceIsEmbedded \
-           plotWidgetSupportsViewAndAnnotationOperations
+           plotWidgetSupportsViewAndAnnotationOperations \
+           localChannelMetadataReachesControlsAndGraph \
+           connectButtonKeepsUntouchedLimitsAutomatic \
+           addingCurveKeepsExistingAcquisitionHistory \
+           openingConfigurationClearsPreviousAcquisitionData \
+           mainWindowExportsOnlyVisibleSamples \
+           plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits \
+           autoScaleTracksOnlyVisibleSamples automaticRangeUsesVisibleSamplesAndManualBound \
+           curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 
@@ -183,13 +193,14 @@ test-report: all $(TEST_PROGRAM)
 	@cat $(OBJ_DIR)/test-artifacts/smoke.txt
 
 test-ioc: $(IOC_TEST_PROGRAM)
-	QT_QPA_PLATFORM=offscreen QTSTRIPTOOL_TEST_PV="$(TEST_PV)" $(IOC_TEST_PROGRAM)
+	QT_QPA_PLATFORM=offscreen QTSTRIPTOOL_TEST_PV="$(TEST_PV)" \
+	  QTSTRIPTOOL_TEST_DESC="$(TEST_DESC)" $(IOC_TEST_PROGRAM)
 
 test-visual: $(TEST_PROGRAM)
 	@mkdir -p $(OBJ_DIR)/test-artifacts
 	QT_QPA_PLATFORM=offscreen \
 	  QTSTRIPTOOL_VISUAL_OUTPUT=$(OBJ_DIR)/test-artifacts/plot-baseline.png \
-	  $(TEST_PROGRAM) plotWidgetRendersFixtureOffscreen
+	  $(TEST_PROGRAM) plotWidgetRendersFixtureOffscreen mainAndControlsRenderOffscreen
 	@echo "Visual review image: $(OBJ_DIR)/test-artifacts/plot-baseline.png"
 
 test-qt-versions:

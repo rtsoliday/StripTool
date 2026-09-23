@@ -28,6 +28,7 @@
 #include <QSpinBox>
 #include <QSettings>
 #include <QTabWidget>
+#include <QTemporaryDir>
 #include <QTest>
 #include <cmath>
 #include <filesystem>
@@ -58,6 +59,9 @@ public:
   void publishMetadata(striptool::ChannelId id,
                        const striptool::ChannelMetadata& metadata) {
     emit metadataChanged(id, metadata);
+  }
+  void publishDescription(striptool::ChannelId id, const QString& description) {
+    emit descriptionReceived(id, description);
   }
   void publishSample(striptool::ChannelId id, const striptool::Sample& sample) {
     emit sampleReceived(id, sample);
@@ -138,10 +142,10 @@ private slots:
     QCOMPARE(changed.count(), 1);
     QCOMPARE(acquisition.count(), 1);
 
-    controls.findChild<QDoubleSpinBox*>(QStringLiteral("curveMinimum0"))
-        ->setValue(-12.5);
-    controls.findChild<QDoubleSpinBox*>(QStringLiteral("curveMaximum0"))
-        ->setValue(24.5);
+    controls.findChild<QLineEdit*>(QStringLiteral("curveMinimum0"))
+        ->setText(QStringLiteral("-12.5"));
+    controls.findChild<QLineEdit*>(QStringLiteral("curveMaximum0"))
+        ->setText(QStringLiteral("24.5"));
     controls.findChild<QComboBox*>(QStringLiteral("curveScale0"))->setCurrentIndex(1);
     controls.findChild<QPushButton*>(QStringLiteral("curveModify0"))->click();
     QCOMPARE(model.curves[0].minimum, -12.5);
@@ -160,6 +164,27 @@ private slots:
     QVERIFY(!model.curves[0].nameSet);
     QCOMPARE(acquisition.count(), 3);
   }
+  void curveLimitEditorsPreserveScientificValues() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "test:limits";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 1e-50;
+    model.curves[0].maximum = 1e50;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    striptool::ControlsWindow controls(&model);
+    auto* minimum = controls.findChild<QLineEdit*>(QStringLiteral("curveMinimum0"));
+    auto* maximum = controls.findChild<QLineEdit*>(QStringLiteral("curveMaximum0"));
+    QCOMPARE(minimum->text().toDouble(), 1e-50);
+    QCOMPARE(maximum->text().toDouble(), 1e50);
+    controls.findChild<QPushButton*>(QStringLiteral("curveModify0"))->click();
+    QCOMPARE(model.curves[0].minimum, 1e-50);
+    QCOMPARE(model.curves[0].maximum, 1e50);
+    minimum->setText(QStringLiteral("2e-50"));
+    controls.findChild<QPushButton*>(QStringLiteral("curveModify0"))->click();
+    QCOMPARE(model.curves[0].minimum, 2e-50);
+    QCOMPARE(model.curves[0].maximum, 1e50);
+  }
   void mainAndControlWindowsShareOneModel() {
     striptool::MainWindow window;
     auto* controls = window.controlsWindow();
@@ -167,10 +192,85 @@ private slots:
     lineWidth->setValue(7);
     QCOMPARE(window.model().graph.lineWidth, 7);
     QCOMPARE(window.plotWidget()->model().graph.lineWidth, 7);
+    window.plotWidget()->addAnnotation({std::chrono::system_clock::now(),
+                                        std::nullopt, "shared annotation"});
+    QCOMPARE(window.model().annotations.size(), std::size_t{1});
+    lineWidth->setValue(8);
+    QCOMPARE(window.plotWidget()->model().annotations.size(), std::size_t{1});
     window.showControls();
     QVERIFY(controls->isVisible());
     controls->findChild<QAction*>(QStringLiteral("showGraphAction"))->trigger();
     QVERIFY(window.isVisible());
+  }
+  void localChannelMetadataReachesControlsAndGraph() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "CPU_Usage";
+    model.curves[0].nameSet = true;
+    striptool::MainWindow window(model);
+    window.startAcquisition();
+    QTRY_COMPARE(QString::fromStdString(window.model().curves[0].units),
+                 QStringLiteral("percent"));
+    QCOMPARE(window.plotWidget()->model().curves[0].maximum, 100.0);
+    QCOMPARE(window.controlsWindow()->findChild<QLabel*>(QStringLiteral("curveStatus0"))->text(),
+             QStringLiteral("Live"));
+    window.stopAcquisition();
+    QCOMPARE(window.controlsWindow()->findChild<QLabel*>(QStringLiteral("curveStatus0"))->text(),
+             QStringLiteral("Offline"));
+  }
+  void connectButtonKeepsUntouchedLimitsAutomatic() {
+    striptool::MainWindow window;
+    window.startAcquisition();
+    auto* controls = window.controlsWindow();
+    controls->findChild<QLineEdit*>(QStringLiteral("pvEntry"))
+        ->setText(QStringLiteral("CPU_Usage"));
+    controls->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
+    QVERIFY(window.model().curves[0].nameSet);
+    QVERIFY(!window.model().curves[0].minimumSet);
+    QVERIFY(!window.model().curves[0].maximumSet);
+    QTRY_COMPARE(QString::fromStdString(window.model().curves[0].units),
+                 QStringLiteral("percent"));
+    QCOMPARE(window.model().curves[0].minimum, 0.0);
+    QCOMPARE(window.model().curves[0].maximum, 100.0);
+    controls->findChild<QLineEdit*>(QStringLiteral("curveMinimum0"))
+        ->setText(QStringLiteral("10"));
+    controls->findChild<QPushButton*>(QStringLiteral("curveModify0"))->click();
+    QVERIFY(window.model().curves[0].minimumSet);
+    QCOMPARE(window.model().curves[0].minimum, 10.0);
+  }
+  void addingCurveKeepsExistingAcquisitionHistory() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "CPU_Usage";
+    model.curves[0].nameSet = true;
+    striptool::MainWindow window(model);
+    window.startAcquisition();
+    QTRY_VERIFY_WITH_TIMEOUT(!window.plotWidget()->curveSamples(0).empty(), 2500);
+    const auto oldest = window.plotWidget()->curveSamples(0).front().timestamp;
+    auto* controls = window.controlsWindow();
+    controls->findChild<QLineEdit*>(QStringLiteral("pvEntry"))
+        ->setText(QStringLiteral("CPU_Usage"));
+    controls->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
+    QTRY_VERIFY_WITH_TIMEOUT(!window.plotWidget()->curveSamples(1).empty(), 2500);
+    const auto& original = window.plotWidget()->curveSamples(0);
+    QVERIFY(std::any_of(original.begin(), original.end(), [&](const auto& sample) {
+      return sample.timestamp == oldest;
+    }));
+  }
+  void openingConfigurationClearsPreviousAcquisitionData() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "CPU_Usage";
+    model.curves[0].nameSet = true;
+    striptool::MainWindow window(model);
+    window.startAcquisition();
+    QTRY_VERIFY_WITH_TIMEOUT(!window.plotWidget()->curveSamples(0).empty(), 2500);
+    const auto previous = window.plotWidget()->curveSamples(0).front().timestamp;
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.filePath(QStringLiteral("same-pv.stp"));
+    QString error;
+    QVERIFY(window.saveConfiguration(path, &error));
+    QVERIFY(window.openConfiguration(path, &error));
+    QTRY_VERIFY_WITH_TIMEOUT(!window.plotWidget()->curveSamples(0).empty(), 2500);
+    QVERIFY(window.plotWidget()->curveSamples(0).front().timestamp > previous);
   }
   void fileWorkflowIsTransactionalAndTracksRecentFiles() {
     const auto root = std::filesystem::temp_directory_path() /
@@ -179,12 +279,19 @@ private slots:
     const auto path = root / "saved.stp";
     auto model = striptool::makeDefaultModel();
     model.timing.timespanSeconds = 123;
+    model.timing.numberOfSamples = 2048;
     std::string error;
     QVERIFY(striptool::FileWorkflow::save(path, model, &error));
     QCOMPARE(model.filename, path.string());
     model.timing.timespanSeconds = 1;
     QVERIFY(striptool::FileWorkflow::open(path, model).success);
     QCOMPARE(model.timing.timespanSeconds, 123U);
+    QCOMPARE(model.timing.numberOfSamples, 2048);
+    model.timing.sampleIntervalSeconds = -1.0;
+    QVERIFY(!striptool::FileWorkflow::save(path, model, &error));
+    auto saved = striptool::makeDefaultModel();
+    QVERIFY(striptool::FileWorkflow::open(path, saved).success);
+    QCOMPARE(saved.timing.timespanSeconds, 123U);
     auto recent = striptool::FileWorkflow::addRecent(
         {"one.stp", path.string(), "two.stp"}, path.string(), 3);
     QCOMPARE(recent.size(), std::size_t{3});
@@ -286,6 +393,28 @@ private slots:
     QVERIFY(std::filesystem::file_size(root / "plot.png") > 0);
     std::filesystem::remove_all(root);
   }
+  void mainWindowExportsOnlyVisibleSamples() {
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "visible:test";
+    model.curves[0].nameSet = true;
+    striptool::MainWindow window(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    window.plotWidget()->setCurveSamples(0,
+        {{base, 1.0, 0, 0}, {base + std::chrono::seconds(10), 2.0, 0, 0},
+         {base + std::chrono::seconds(20), 3.0, 0, 0}});
+    window.plotWidget()->setVisibleTimeRange(
+        {base + std::chrono::seconds(5), base + std::chrono::seconds(15)});
+    const QString path = temporary.filePath(QStringLiteral("visible.csv"));
+    QVERIFY(window.exportData(path, true));
+    std::ifstream input(path.toStdString());
+    const std::string content((std::istreambuf_iterator<char>(input)),
+                              std::istreambuf_iterator<char>());
+    QVERIFY(content.find(",2,") != std::string::npos);
+    QVERIFY(content.find(",1,") == std::string::npos);
+    QVERIFY(content.find(",3,") == std::string::npos);
+  }
   void iconResourceIsEmbedded() {
     QVERIFY(!QIcon(QStringLiteral(":/icons/qtstriptool.svg")).isNull());
   }
@@ -375,7 +504,7 @@ private slots:
         "Strip.Option.GraphLineWidth 99\n");
     QVERIFY(striptool::readConfiguration(input, model).success);
     QCOMPARE(model.timing.timespanSeconds, 1U);
-    QCOMPARE(model.timing.numberOfSamples, 7200);
+    QCOMPARE(model.timing.numberOfSamples, 2);
     QCOMPARE(model.timing.sampleIntervalSeconds, 0.01);
     QCOMPARE(model.timing.refreshIntervalSeconds, 0.1);
     QCOMPARE(model.graph.xGrid, striptool::GridMode::Some);
@@ -455,6 +584,22 @@ private slots:
       return a.timestamp < b.timestamp;
     }));
   }
+  void disconnectedIntervalsSurviveDecimation() {
+    const auto base = std::chrono::system_clock::time_point{};
+    std::vector<striptool::Sample> samples;
+    for (int i = 0; i < 100; ++i)
+      samples.push_back({base + std::chrono::seconds(i), double(i), 0, 0});
+    samples[50].plotable = false;
+    samples[50].value = 1e9;
+    const auto reduced = striptool::decimateSamples(samples, 12);
+    QVERIFY(reduced.size() <= std::size_t{12});
+    QVERIFY(std::any_of(reduced.begin(), reduced.end(), [](const auto& sample) {
+      return !sample.plotable;
+    }));
+    const auto range = striptool::sampleValueRange(samples, striptool::ScaleMode::Linear);
+    QVERIFY(range.has_value());
+    QVERIFY(range->maximum < 1e9);
+  }
   void acquisitionTracksReconnectMetadataAndTimestamps() {
     FakeChannelProvider provider;
     striptool::AcquisitionManager acquisition(&provider);
@@ -475,11 +620,16 @@ private slots:
     metadata.displayMaximum = 2.0;
     provider.publishMetadata(id, metadata);
     QCOMPARE(QString::fromStdString(acquisition.metadata(id).units), QStringLiteral("A"));
+    provider.publishDescription(id, QStringLiteral("Power supply current"));
+    QCOMPARE(acquisition.metadata(id).description, std::string("Power supply current"));
+    provider.publishMetadata(id, metadata);
+    QCOMPARE(acquisition.metadata(id).description, std::string("Power supply current"));
 
     const auto now = std::chrono::system_clock::now();
     provider.publishSample(id, {now, 1.5, 2, 1});
+    const auto sampledAfter = std::chrono::system_clock::now();
     acquisition.sampleNow();
-    QCOMPARE(acquisition.buffer(id)->latest()->timestamp, now);
+    QVERIFY(acquisition.buffer(id)->latest()->timestamp >= sampledAfter);
     QCOMPARE(acquisition.buffer(id)->latest()->severity, std::uint16_t{1});
     QCOMPARE(acquisition.metadata(id).lastUpdate.value(), now);
     provider.publishSample(id, {now + std::chrono::seconds(1), 2.5, 0, 0});
@@ -488,6 +638,9 @@ private slots:
     acquisition.sampleNow();
     QCOMPARE(acquisition.buffer(id)->size(), std::size_t{2});
     QCOMPARE(acquisition.buffer(id)->samples().front().value, 2.5);
+    acquisition.setBufferCapacity(1);
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{1});
+    QCOMPARE(acquisition.buffer(id)->latest()->value, 3.5);
 
     provider.publishConnection(id, striptool::ConnectionState::Disconnected);
     QCOMPARE(acquisition.metadata(id).connection, striptool::ConnectionState::Disconnected);
@@ -510,6 +663,7 @@ private slots:
     acquisition.setSampleInterval(std::chrono::milliseconds(10));
     acquisition.setRefreshInterval(std::chrono::milliseconds(45));
     const auto id = acquisition.addChannel(QStringLiteral("timing:test"), 100);
+    provider.publishConnection(id, striptool::ConnectionState::Connected);
     provider.publishSample(id, {std::chrono::system_clock::now(), 5.0, 0, 0});
     QSignalSpy refreshes(&acquisition,
                          &striptool::AcquisitionManager::displayRefreshRequested);
@@ -522,7 +676,7 @@ private slots:
   void staleDataIsExplicit() {
     FakeChannelProvider provider;
     striptool::AcquisitionManager acquisition(&provider);
-    acquisition.setStaleAfter(std::chrono::milliseconds(1));
+    acquisition.setStaleAfter(std::chrono::milliseconds(0));
     const auto id = acquisition.addChannel(QStringLiteral("test:stale"));
     provider.publishConnection(id, striptool::ConnectionState::Connected);
     provider.publishSample(id, {std::chrono::system_clock::now() - std::chrono::seconds(1),
@@ -531,7 +685,28 @@ private slots:
                            &striptool::AcquisitionManager::channelMetadataChanged);
     acquisition.sampleNow();
     QCOMPARE(acquisition.metadata(id).connection, striptool::ConnectionState::Stale);
+    QVERIFY(acquisition.buffer(id)->empty());
     QVERIFY(metadataSpy.count() >= 1);
+  }
+  void disconnectedChannelDoesNotRepeatOldSamples() {
+    FakeChannelProvider provider;
+    striptool::AcquisitionManager acquisition(&provider);
+    const auto id = acquisition.addChannel(QStringLiteral("test:disconnect"));
+    provider.publishConnection(id, striptool::ConnectionState::Connected);
+    provider.publishSample(id, {std::chrono::system_clock::now(), 42.0, 0, 0});
+    acquisition.sampleNow();
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{1});
+    provider.publishConnection(id, striptool::ConnectionState::Disconnected);
+    acquisition.sampleNow();
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{2});
+    QVERIFY(!acquisition.buffer(id)->latest()->plotable);
+    provider.publishConnection(id, striptool::ConnectionState::Connected);
+    provider.publishSample(id, {std::chrono::system_clock::now(), 43.0, 0, 0});
+    acquisition.sampleNow();
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{3});
+    QVERIFY(acquisition.buffer(id)->latest()->plotable);
+    acquisition.clearSamples();
+    QVERIFY(acquisition.buffer(id)->empty());
   }
   void cpuUsageIsASeparateLocalProvider() {
     striptool::CpuUsageProvider provider;
@@ -606,6 +781,79 @@ private slots:
     QVERIFY(plot.removeAnnotation(0));
     QCOMPARE(plot.selectedAnnotation(), -1);
   }
+  void plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "history:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setCurveSamples(0, {{base + std::chrono::seconds(10), 10.0, 0, 0}});
+    plot.joinHistoricalSamples(0, {{base, 1.0, 0, 0}});
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(20)});
+    const auto range = plot.visibleTimeRange();
+    model.graph.lineWidth = 3;
+    plot.setModel(model);
+    QCOMPARE(plot.visibleTimeRange().start, range.start);
+    QVERIFY(!plot.autoScroll());
+    plot.setCurveSamples(0, {{base + std::chrono::seconds(20), 20.0, 0, 0}});
+    QCOMPARE(plot.curveSamples(0).size(), std::size_t{2});
+    QCOMPARE(plot.curveSamples(0).front().value, 1.0);
+    plot.clearCurveSamples(0);
+    QVERIFY(plot.curveSamples(0).empty());
+  }
+  void autoScaleTracksOnlyVisibleSamples() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "scale:test";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setCurveSamples(0, {{base, 5.0, 0, 0},
+                             {base + std::chrono::seconds(10), 1000.0, 0, 0}});
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(5)});
+    plot.autoScale(0);
+    QVERIFY(plot.valueRange(0).maximum < 10.0);
+    plot.setCurveSamples(0, {{base, 5.0, 0, 0},
+                             {base + std::chrono::seconds(10), 2000.0, 0, 0}});
+    QVERIFY(plot.valueRange(0).maximum < 10.0);
+  }
+  void automaticRangeUsesVisibleSamplesAndManualBound() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "visible:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setCurveSamples(0, {{base, 5.0, 0, 0},
+                             {base + std::chrono::seconds(10), 1000.0, 0, 0}});
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(5)});
+    QVERIFY(plot.valueRange(0).maximum < 10.0);
+    model.curves[0].minimum = 4.0;
+    model.curves[0].minimumSet = true;
+    plot.setModel(model);
+    QCOMPARE(plot.valueRange(0).minimum, 4.0);
+    QVERIFY(plot.valueRange(0).maximum < 10.0);
+  }
+  void liveScrollAdvancesWhenSamplesStop() {
+    auto model = striptool::makeDefaultModel();
+    model.timing.timespanSeconds = 10;
+    model.curves[0].name = "stopped:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto old = std::chrono::system_clock::now() - std::chrono::seconds(30);
+    plot.setCurveSamples(0, {{old, 1.0, 0, 0}});
+    QCOMPARE(plot.visibleTimeRange().end, old);
+    plot.advanceToNow();
+    QVERIFY(plot.visibleTimeRange().end > old + std::chrono::seconds(20));
+    const auto liveRange = plot.visibleTimeRange();
+    plot.setPaused(true);
+    plot.advanceToNow();
+    QCOMPARE(plot.visibleTimeRange().end, liveRange.end);
+  }
   void plotWidgetRendersFixtureOffscreen() {
     auto model = striptool::makeDefaultModel();
     QVERIFY(striptool::readConfigurationFile(fixture("visual-baseline-1.2.stp"), model).success);
@@ -631,6 +879,36 @@ private slots:
     QVERIFY(nonBackground > 100);
     const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
     if (!output.isEmpty()) QVERIFY(image.save(output));
+  }
+  void mainAndControlsRenderOffscreen() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "CPU_Usage";
+    model.curves[0].nameSet = true;
+    model.curves[0].units = "percent";
+    model.curves[0].minimum = 0.0;
+    model.curves[0].maximum = 100.0;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    striptool::MainWindow window(model);
+    window.resize(900, 620);
+    const auto end = std::chrono::system_clock::now();
+    window.plotWidget()->setCurveSamples(0,
+        {{end - std::chrono::seconds(120), 40.0, 0, 0},
+         {end - std::chrono::seconds(60), 70.0, 0, 0},
+         {end, 50.0, 0, 0}});
+    window.show();
+    window.showControls();
+    striptool::ChannelMetadata metadata;
+    metadata.connection = striptool::ConnectionState::Connected;
+    window.controlsWindow()->setChannelMetadata(0, metadata);
+    QApplication::processEvents();
+    const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
+    if (!output.isEmpty()) {
+      const auto directory = std::filesystem::path(output.toStdString()).parent_path();
+      QVERIFY(window.grab().save(QString::fromStdString((directory / "main-window.png").string())));
+      QVERIFY(window.controlsWindow()->grab().save(
+          QString::fromStdString((directory / "controls-window.png").string())));
+    }
   }
   void performanceTenCurveBufferAndLargeRender() {
     auto model = striptool::makeDefaultModel();

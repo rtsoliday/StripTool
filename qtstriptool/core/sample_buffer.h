@@ -13,6 +13,7 @@ struct Sample {
   double value = 0.0;
   std::uint16_t status = 0;
   std::uint16_t severity = 0;
+  bool plotable = true;
 };
 
 class SampleBuffer {
