@@ -38,6 +38,9 @@ public:
   void setVisibleTimeRange(TimeRange range);
   void pan(double fractionOfWindow);
   void zoom(double factor);
+  void panY(double fractionOfRange);
+  void zoomY(double factor);
+  void resetVerticalView();
   void resetView();
   void advanceToNow();
   void autoScale(std::optional<std::size_t> curve = std::nullopt);
@@ -88,6 +91,7 @@ private:
   std::array<std::vector<Sample>, kMaximumCurves> historicalSamples_;
   std::array<std::vector<Sample>, kMaximumCurves> samples_;
   std::array<std::optional<ValueRange>, kMaximumCurves> automaticRanges_;
+  std::array<std::optional<ValueRange>, kMaximumCurves> verticalRanges_;
   std::array<bool, kMaximumCurves> autoScaleOverrides_{};
   TimeRange visibleTimeRange_;
   bool autoScroll_ = true;
@@ -97,7 +101,6 @@ private:
   QPoint dragStart_;
   TimeRange dragRange_;
   Annotation dragAnnotation_;
-  bool annotationMoved_ = false;
   QPoint cursorPosition_{-1, -1};
   int selectedAnnotation_ = -1;
   int selectedCurve_ = -1;

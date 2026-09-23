@@ -57,12 +57,12 @@ samples cannot be plotted on a base-10 scale.
 
 ## Work with the graph
 
-The View menu can pause drawing, enable or disable auto-scroll, pan left or
-right, zoom in or out, auto-scale configured curves, reset the visible range,
-and force a replot. Moving the pointer over the plot updates the location
-readout.
-Right click a toolbar Pan or Zoom button for a smaller step, as in the legacy
-graph.
+The View menu can pause drawing, enable or disable auto-scroll, pan in time or
+value, zoom either axis, auto-scale configured curves, reset both axes, and
+force a replot. Moving the pointer over the plot updates the location readout.
+The toolbar uses arrows for panning, X+/X− for time zoom, and Y+/Y− for value
+zoom. Right click a toolbar Pan or Zoom button for a smaller step, as in the
+legacy graph. Vertical zoom uses logarithmic units for Log 10 curves.
 The legend above the plot shows each visible curve's name and latest value.
 Click a legend entry to read that curve's value at the pointer location.
 

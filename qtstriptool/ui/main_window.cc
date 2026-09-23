@@ -114,10 +114,18 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   panLeftAction->setObjectName(QStringLiteral("panLeftAction"));
   auto* panRightAction = viewMenu->addAction(tr("Pan &Right"));
   panRightAction->setObjectName(QStringLiteral("panRightAction"));
+  auto* panUpAction = viewMenu->addAction(tr("Pan &Up"));
+  panUpAction->setObjectName(QStringLiteral("panUpAction"));
+  auto* panDownAction = viewMenu->addAction(tr("Pan &Down"));
+  panDownAction->setObjectName(QStringLiteral("panDownAction"));
   auto* zoomInAction = viewMenu->addAction(tr("Zoom &In"));
   zoomInAction->setObjectName(QStringLiteral("zoomInAction"));
   auto* zoomOutAction = viewMenu->addAction(tr("Zoom &Out"));
   zoomOutAction->setObjectName(QStringLiteral("zoomOutAction"));
+  auto* zoomInYAction = viewMenu->addAction(tr("Zoom In &Y"));
+  zoomInYAction->setObjectName(QStringLiteral("zoomInYAction"));
+  auto* zoomOutYAction = viewMenu->addAction(tr("Zoom Out Y"));
+  zoomOutYAction->setObjectName(QStringLiteral("zoomOutYAction"));
   auto* autoScaleAction = viewMenu->addAction(tr("Auto &Scale"));
   autoScaleAction->setObjectName(QStringLiteral("autoScaleAction"));
   auto* resetAction = viewMenu->addAction(tr("&Reset View"));
@@ -148,21 +156,37 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   auto* toolbar = new QToolBar(tr("Graph"), this);
   addToolBar(Qt::BottomToolBarArea, toolbar);
   toolbar->setObjectName(QStringLiteral("graphToolbar"));
-  const auto addStepButton = [toolbar](QAction* action,
-                                             const QString& name,
-                                             std::function<void()> fineStep) {
+  const auto addStepButton = [toolbar](QAction* action, const QString& name,
+                                      const QString& label,
+                                      std::function<void()> fineStep) {
     auto* button = new GraphToolButton(action, std::move(fineStep), toolbar);
     button->setObjectName(name);
+    button->setText(label);
+    button->setToolTip(action->text());
     toolbar->addWidget(button);
   };
   addStepButton(panLeftAction, QStringLiteral("panLeftButton"),
+                tr("←"),
                 [this] { plotWidget_->pan(-0.05); });
   addStepButton(panRightAction, QStringLiteral("panRightButton"),
+                tr("→"),
                 [this] { plotWidget_->pan(0.05); });
+  addStepButton(panUpAction, QStringLiteral("panUpButton"), tr("↑"),
+                [this] { plotWidget_->panY(0.05); });
+  addStepButton(panDownAction, QStringLiteral("panDownButton"), tr("↓"),
+                [this] { plotWidget_->panY(-0.05); });
+  toolbar->addSeparator();
   addStepButton(zoomInAction, QStringLiteral("zoomInButton"),
+                tr("X+"),
                 [this] { plotWidget_->zoom(1.0 / 1.071773462536293); });
   addStepButton(zoomOutAction, QStringLiteral("zoomOutButton"),
+                tr("X−"),
                 [this] { plotWidget_->zoom(1.071773462536293); });
+  addStepButton(zoomInYAction, QStringLiteral("zoomInYButton"), tr("Y+"),
+                [this] { plotWidget_->zoomY(1.0 / 1.071773462536293); });
+  addStepButton(zoomOutYAction, QStringLiteral("zoomOutYButton"), tr("Y−"),
+                [this] { plotWidget_->zoomY(1.071773462536293); });
+  toolbar->addSeparator();
   toolbar->addAction(autoScaleAction);
   toolbar->addAction(resetAction);
   toolbar->addAction(autoScrollAction);
@@ -215,7 +239,10 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     QPainter painter(printer);
     const QRect page = printer->pageLayout().paintRectPixels(printer->resolution());
     const QPixmap plot = plotWidget_->grab();
-    painter.drawPixmap(page, plot, plot.rect());
+    const QSize scaled = plot.size().scaled(page.size(), Qt::KeepAspectRatio);
+    const QRect target(page.x() + (page.width() - scaled.width()) / 2,
+                       page.y(), scaled.width(), scaled.height());
+    painter.drawPixmap(target, plot, plot.rect());
   };
   connect(printAction, &QAction::triggered, this, [this, paintPlot] {
     QPrinter printer(QPrinter::HighResolution);
@@ -236,13 +263,24 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
           [this] { plotWidget_->pan(-0.5); });
   connect(panRightAction, &QAction::triggered, this,
           [this] { plotWidget_->pan(0.5); });
+  connect(panUpAction, &QAction::triggered, this,
+          [this] { plotWidget_->panY(0.5); });
+  connect(panDownAction, &QAction::triggered, this,
+          [this] { plotWidget_->panY(-0.5); });
   connect(zoomInAction, &QAction::triggered, this,
           [this] { plotWidget_->zoom(0.5); });
   connect(zoomOutAction, &QAction::triggered, this,
           [this] { plotWidget_->zoom(2.0); });
+  connect(zoomInYAction, &QAction::triggered, this,
+          [this] { plotWidget_->zoomY(0.5); });
+  connect(zoomOutYAction, &QAction::triggered, this,
+          [this] { plotWidget_->zoomY(2.0); });
   connect(autoScaleAction, &QAction::triggered, this,
           [this] { plotWidget_->autoScale(); });
-  connect(resetAction, &QAction::triggered, plotWidget_, &PlotWidget::resetView);
+  connect(resetAction, &QAction::triggered, this, [this] {
+    plotWidget_->resetVerticalView();
+    plotWidget_->resetView();
+  });
   connect(replotAction, &QAction::triggered, plotWidget_, &PlotWidget::replot);
   connect(historyAction, &QAction::triggered, this, &MainWindow::requestHistory);
   connect(clearAction, &QAction::triggered, this, [this] {

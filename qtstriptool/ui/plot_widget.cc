@@ -47,8 +47,10 @@ void PlotWidget::setModel(const StripToolModel& model) {
         old.scale != next.scale || old.minimumSet != next.minimumSet ||
         old.maximumSet != next.maximumSet ||
         (old.minimumSet && old.minimum != next.minimum) ||
-        (old.maximumSet && old.maximum != next.maximum))
+        (old.maximumSet && old.maximum != next.maximum)) {
       autoScaleOverrides_[i] = false;
+      verticalRanges_[i].reset();
+    }
     replacedCurves[i] = old.nameSet &&
         (!next.nameSet || old.name != next.name);
   }
@@ -120,6 +122,7 @@ void PlotWidget::clearCurveSamples(std::size_t curve) {
   historicalSamples_[curve].clear();
   samples_[curve].clear();
   automaticRanges_[curve].reset();
+  verticalRanges_[curve].reset();
   autoScaleOverrides_[curve] = false;
   update();
 }
@@ -149,6 +152,7 @@ void PlotWidget::joinHistoricalSamples(std::size_t curve,
 
 ValueRange PlotWidget::valueRange(std::size_t curve) const {
   if (curve >= kMaximumCurves) return {};
+  if (verticalRanges_[curve]) return *verticalRanges_[curve];
   if (automaticRanges_[curve]) return *automaticRanges_[curve];
   const auto& config = model_.curves[curve];
   ValueRange range{plotValue(config.minimum, config.scale),
@@ -204,6 +208,40 @@ void PlotWidget::zoom(double factor) {
   update();
 }
 
+void PlotWidget::panY(double fractionOfRange) {
+  if (!std::isfinite(fractionOfRange)) return;
+  for (const auto index : plottedCurves()) {
+    const ValueRange range = valueRange(index);
+    if (!range.isValid()) continue;
+    const double shift = (range.maximum - range.minimum) * fractionOfRange;
+    const ValueRange moved{range.minimum + shift, range.maximum + shift};
+    if (std::isfinite(moved.minimum) && std::isfinite(moved.maximum) &&
+        moved.isValid()) verticalRanges_[index] = moved;
+  }
+  update();
+}
+
+void PlotWidget::zoomY(double factor) {
+  if (!std::isfinite(factor) || factor <= 0.0) return;
+  for (const auto index : plottedCurves()) {
+    const ValueRange range = valueRange(index);
+    if (!range.isValid()) continue;
+    const double center = range.minimum / 2.0 + range.maximum / 2.0;
+    const double half = (range.maximum - range.minimum) * factor / 2.0;
+    const ValueRange zoomed{center - half, center + half};
+    if (std::isfinite(zoomed.minimum) && std::isfinite(zoomed.maximum) &&
+        zoomed.isValid()) verticalRanges_[index] = zoomed;
+  }
+  update();
+}
+
+void PlotWidget::resetVerticalView() {
+  verticalRanges_.fill(std::nullopt);
+  autoScaleOverrides_.fill(false);
+  updateAutoRange();
+  update();
+}
+
 void PlotWidget::resetView() {
   auto latest = std::chrono::system_clock::now();
   bool hasSamples = false;
@@ -233,6 +271,7 @@ void PlotWidget::advanceToNow() {
 
 void PlotWidget::autoScale(std::optional<std::size_t> curve) {
   const auto apply = [this](std::size_t index) {
+    verticalRanges_[index].reset();
     const auto selected = selectSamples(samples_[index], visibleTimeRange_.start,
                                         visibleTimeRange_.end,
                                         std::max(2, plotRect().width() > 0
@@ -635,7 +674,7 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
           if (std::isfinite(value)) annotation.value = value;
         }
       }
-      annotationMoved_ = true;
+      emit annotationsChanged();
     } else if (dragMode_ == DragMode::Pan) {
       const double fraction = -double(event->pos().x() - dragStart_.x()) / area.width();
       const auto duration = dragRange_.end - dragRange_.start;
@@ -696,7 +735,6 @@ void PlotWidget::mousePressEvent(QMouseEvent* event) {
       dragMode_ = DragMode::Annotation;
       dragStart_ = event->pos();
       dragAnnotation_ = model_.annotations[static_cast<std::size_t>(touched)];
-      annotationMoved_ = false;
     }
   } else if (event->button() == Qt::LeftButton) {
     selectAnnotation(-1);
@@ -710,7 +748,6 @@ void PlotWidget::mouseReleaseEvent(QMouseEvent* event) {
   if ((dragMode_ == DragMode::Annotation && event->button() == Qt::MiddleButton) ||
       (dragMode_ == DragMode::Pan && event->button() == Qt::LeftButton)) {
     const bool draggedAnnotation = dragMode_ == DragMode::Annotation;
-    if (draggedAnnotation && annotationMoved_) emit annotationsChanged();
     const bool resumeAutoScroll = dragMode_ == DragMode::Annotation &&
                                   autoScroll_ && !paused_;
     dragMode_ = DragMode::None;

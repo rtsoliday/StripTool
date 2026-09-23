@@ -967,6 +967,9 @@ private slots:
     QTest::mousePress(plot, Qt::MiddleButton, Qt::NoModifier, original + QPoint(4, 4));
     QVERIFY(!middleSelection.isEmpty());
     moveWhileDragging(plot, original + QPoint(44, 34), Qt::MiddleButton);
+    QCOMPARE(window.model().annotations[0].time,
+             plot->model().annotations[0].time);
+    window.controlsWindow()->modelChanged();
     QTest::mouseRelease(plot, Qt::MiddleButton, Qt::NoModifier,
                         original + QPoint(44, 34));
     QVERIFY(plot->model().annotations[0].time > selectedTime);
@@ -1071,15 +1074,37 @@ private slots:
     QCOMPARE(plot.visibleTimeRange().end, end);
   }
   void toolbarRightClickUsesFinePanAndZoomSteps() {
-    striptool::MainWindow window;
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "linear:test";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0;
+    model.curves[0].maximum = 100;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    model.curves[1].name = "log:test";
+    model.curves[1].nameSet = true;
+    model.curves[1].scale = striptool::ScaleMode::Log10;
+    model.curves[1].minimum = 1;
+    model.curves[1].maximum = 1000;
+    model.curves[1].minimumSet = true;
+    model.curves[1].maximumSet = true;
+    striptool::MainWindow window(model);
     window.show();
     auto* plot = window.plotWidget();
     const auto base = std::chrono::system_clock::from_time_t(1000);
     plot->setVisibleTimeRange({base, base + std::chrono::seconds(100)});
     auto* panLeft = window.findChild<QToolButton*>(QStringLiteral("panLeftButton"));
+    auto* panUp = window.findChild<QToolButton*>(QStringLiteral("panUpButton"));
+    auto* panDown = window.findChild<QToolButton*>(QStringLiteral("panDownButton"));
     auto* zoomIn = window.findChild<QToolButton*>(QStringLiteral("zoomInButton"));
+    auto* zoomInY = window.findChild<QToolButton*>(QStringLiteral("zoomInYButton"));
+    auto* zoomOutY = window.findChild<QToolButton*>(QStringLiteral("zoomOutYButton"));
     QVERIFY(panLeft);
+    QVERIFY(panUp);
+    QVERIFY(panDown);
     QVERIFY(zoomIn);
+    QVERIFY(zoomInY);
+    QVERIFY(zoomOutY);
     QTest::mouseClick(panLeft, Qt::RightButton);
     const double finePan = std::chrono::duration<double>(
         base - plot->visibleTimeRange().start).count();
@@ -1096,6 +1121,41 @@ private slots:
     const double coarseZoom = std::chrono::duration<double>(
         plot->visibleTimeRange().end - plot->visibleTimeRange().start).count();
     QVERIFY(coarseZoom > 46.6 && coarseZoom < 46.7);
+    QTest::mouseClick(panUp, Qt::RightButton);
+    QVERIFY(std::abs(plot->valueRange(0).minimum - 5.0) < 1e-9);
+    QVERIFY(std::abs(plot->valueRange(1).minimum - 0.15) < 1e-9);
+    QTest::mouseClick(panUp, Qt::LeftButton);
+    QVERIFY(std::abs(plot->valueRange(0).minimum - 55.0) < 1e-9);
+    QTest::mouseClick(panDown, Qt::RightButton);
+    QVERIFY(std::abs(plot->valueRange(0).minimum - 50.0) < 1e-9);
+    QTest::mouseClick(zoomInY, Qt::RightButton);
+    const double fineYWidth = plot->valueRange(0).maximum -
+                              plot->valueRange(0).minimum;
+    QVERIFY(fineYWidth > 93.2 && fineYWidth < 93.4);
+    QTest::mouseClick(zoomInY, Qt::LeftButton);
+    const double coarseYWidth = plot->valueRange(0).maximum -
+                                plot->valueRange(0).minimum;
+    QVERIFY(coarseYWidth > 46.6 && coarseYWidth < 46.7);
+    QTest::mouseClick(zoomOutY, Qt::RightButton);
+    QVERIFY(std::abs(plot->valueRange(0).maximum -
+                     plot->valueRange(0).minimum -
+                     coarseYWidth * 1.071773462536293) < 1e-9);
+    plot->setCurveSamples(0, {{base, 50.0, 0, 0}});
+    QVERIFY(std::abs(plot->valueRange(0).maximum -
+                     plot->valueRange(0).minimum -
+                     coarseYWidth * 1.071773462536293) < 1e-9);
+    window.findChild<QAction*>(QStringLiteral("resetAction"))->trigger();
+    QCOMPARE(plot->valueRange(0).minimum, 0.0);
+    QCOMPARE(plot->valueRange(0).maximum, 100.0);
+    QCOMPARE(plot->valueRange(1).minimum, 0.0);
+    QCOMPARE(plot->valueRange(1).maximum, 3.0);
+    plot->setVisibleTimeRange({base - std::chrono::seconds(1),
+                               base + std::chrono::seconds(1)});
+    plot->autoScale(0);
+    QVERIFY(plot->valueRange(0).maximum < 60.0);
+    window.findChild<QAction*>(QStringLiteral("resetAction"))->trigger();
+    QCOMPARE(plot->valueRange(0).minimum, 0.0);
+    QCOMPARE(plot->valueRange(0).maximum, 100.0);
   }
   void plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits() {
     auto model = striptool::makeDefaultModel();
