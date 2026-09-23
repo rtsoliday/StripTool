@@ -525,7 +525,7 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     painter.drawLine(QPointF(legend.left() + 4, legend.top() + 10),
                      QPointF(legend.left() + 18, legend.top() + 10));
     const auto& config = model_.curves[index];
-    QString label = QString::fromStdString(config.name);
+    const QString label = QString::fromStdString(config.name);
     QString latestValue;
     if (!samples_[index].empty() && samples_[index].back().plotable &&
         std::isfinite(samples_[index].back().value))
@@ -534,11 +534,6 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     painter.setPen(foreground);
     const QRectF textArea(legend.left() + 23, legend.top(),
                           legend.width() - 26, 21);
-    const bool splitLatest = legend.height() >= 38 && !latestValue.isEmpty() &&
-        painter.fontMetrics().horizontalAdvance(label + QStringLiteral("  ") +
-                                                 latestValue) > textArea.width();
-    if (!splitLatest && !latestValue.isEmpty())
-      label += QStringLiteral("  ") + latestValue;
     painter.drawText(textArea, Qt::AlignVCenter | Qt::AlignLeft,
                      painter.fontMetrics().elidedText(label, Qt::ElideRight,
                                                        static_cast<int>(textArea.width())));
@@ -551,8 +546,8 @@ void PlotWidget::paintEvent(QPaintEvent*) {
       const QString limits = QStringLiteral("%1(%2, %3)")
           .arg(config.scale == ScaleMode::Log10 ? QStringLiteral("log10 ") : QString())
           .arg(lower, 0, 'g', 4).arg(upper, 0, 'g', 4);
-      const QString secondLine = splitLatest
-          ? latestValue + QStringLiteral("  ") + limits : limits;
+      const QString secondLine = latestValue.isEmpty()
+          ? limits : latestValue + QStringLiteral("  ") + limits;
       painter.drawText(QRectF(legend.left() + 5, legend.top() + 21,
                               legend.width() - 9, 18), Qt::AlignLeft | Qt::AlignTop,
                        painter.fontMetrics().elidedText(secondLine, Qt::ElideRight,

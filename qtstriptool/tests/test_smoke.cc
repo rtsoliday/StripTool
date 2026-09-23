@@ -182,6 +182,45 @@ private slots:
     QVERIFY(!model.curves[0].nameSet);
     QCOMPARE(acquisition.count(), 3);
   }
+  void returnInCurveFieldsAppliesModify() {
+    auto model = striptool::makeDefaultModel();
+    striptool::ControlsWindow controls(&model);
+    controls.show();
+    auto* name = controls.findChild<QLineEdit*>(QStringLiteral("curveName0"));
+    auto* minimum = controls.findChild<QLineEdit*>(QStringLiteral("curveMinimum0"));
+    auto* maximum = controls.findChild<QLineEdit*>(QStringLiteral("curveMaximum0"));
+    QVERIFY(name);
+    QVERIFY(minimum);
+    QVERIFY(maximum);
+    QSignalSpy changed(&controls, &striptool::ControlsWindow::modelChanged);
+    QSignalSpy acquisition(
+        &controls, &striptool::ControlsWindow::acquisitionConfigurationChanged);
+
+    name->setText(QStringLiteral("first:pv"));
+    QTest::keyClick(name, Qt::Key_Return);
+    QCOMPARE(model.curves[0].name, std::string("first:pv"));
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(acquisition.count(), 1);
+
+    minimum->setText(QStringLiteral("2.5"));
+    QTest::keyClick(minimum, Qt::Key_Return);
+    QCOMPARE(model.curves[0].minimum, 2.5);
+    QVERIFY(model.curves[0].minimumSet);
+    QCOMPARE(changed.count(), 2);
+    QCOMPARE(acquisition.count(), 1);
+
+    maximum->setText(QStringLiteral("25"));
+    QTest::keyClick(maximum, Qt::Key_Return);
+    QCOMPARE(model.curves[0].maximum, 25.0);
+    QVERIFY(model.curves[0].maximumSet);
+    QCOMPARE(changed.count(), 3);
+    QCOMPARE(acquisition.count(), 1);
+
+    name->setText(QStringLiteral("replacement:pv"));
+    QTest::keyClick(name, Qt::Key_Return);
+    QCOMPARE(model.curves[0].name, std::string("replacement:pv"));
+    QCOMPARE(acquisition.count(), 2);
+  }
   void curveLimitEditorsPreserveScientificValues() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "test:limits";

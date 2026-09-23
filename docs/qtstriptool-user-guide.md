@@ -44,8 +44,8 @@ The Controls window opens at startup and is available later through
 1. Enter a PV in the **PV** field and select **Connect**, or enter a name in an
    unused curve row.
 2. Set Plot, Linear or Log 10 scale, precision, minimum, maximum, and color.
-3. Select **Modify** to apply row edits. **Remove** frees the row and stops its
-   acquisition.
+3. Select **Modify**, or press Return in that row's Name, Minimum, or Maximum
+   field, to apply row edits. **Remove** frees the row and stops its acquisition.
 4. Use the Timing tab to set history length, bounded sample count, sampling
    interval, and independent display-refresh interval.
 5. Use Appearance for graph colors, grid density, colored Y axes, and line

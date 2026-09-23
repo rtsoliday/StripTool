@@ -180,6 +180,9 @@ QWidget* ControlsWindow::createCurvePage() {
     grid->addWidget(row.remove, int(i + 1), 9);
     grid->addWidget(row.status, int(i + 1), 10);
     connect(row.modify, &QPushButton::clicked, this, [this, i] { applyCurve(i); });
+    connect(row.name, &QLineEdit::returnPressed, row.modify, &QPushButton::click);
+    connect(row.minimum, &QLineEdit::returnPressed, row.modify, &QPushButton::click);
+    connect(row.maximum, &QLineEdit::returnPressed, row.modify, &QPushButton::click);
     connect(row.remove, &QPushButton::clicked, this, [this, i] { removeCurve(i); });
     connect(row.color, &QPushButton::clicked, this,
             [this, i] { chooseColor(model_->colors.curves[i], curveRows_[i].color); });
