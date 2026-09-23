@@ -147,6 +147,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              samplingAndRefreshCadencesRemainIndependent staleDataIsExplicit \
              disconnectedChannelDoesNotRepeatOldSamples \
              disconnectedIntervalsSurviveDecimation \
+             denseGapsRetainDataWithoutJoiningDisconnectedSegments \
              cpuUsageIsASeparateLocalProvider \
              plotDataSelectionAndHistoryJoinAreToolkitNeutral \
              noHistoryProviderReportsFailureAndCancellation \
@@ -168,9 +169,11 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            openingConfigurationClearsPreviousAcquisitionData \
            mainWindowExportsOnlyVisibleSamples \
            plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits \
-           autoScaleTracksOnlyVisibleSamples automaticRangeUsesVisibleSamplesAndManualBound \
+           autoScaleTracksOnlyVisibleSamples automaticMetadataDoesNotCancelRequestedAutoScale \
+           automaticRangeUsesVisibleSamplesAndManualBound \
            curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop \
            metadataRefreshPreservesPendingCurveEdits reopeningControlsPreservesPendingEdits \
+           removingCurvePreservesOtherPendingEdits \
            legendSelectionChangesCursorCurve
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown

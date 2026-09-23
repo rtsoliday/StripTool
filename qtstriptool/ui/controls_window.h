@@ -56,6 +56,7 @@ private:
   void connectEnteredPv();
   void applyCurve(std::size_t index);
   void removeCurve(std::size_t index);
+  void reloadCurveRow(std::size_t index);
   void chooseColor(Rgba16& color, QPushButton* button);
   void updateColorButton(QPushButton* button, const Rgba16& color);
 

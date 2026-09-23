@@ -40,9 +40,10 @@ void PlotWidget::setModel(const StripToolModel& model) {
     const auto& old = model_.curves[i];
     const auto& next = model.curves[i];
     if (old.nameSet != next.nameSet || old.name != next.name ||
-        old.scale != next.scale || old.minimum != next.minimum ||
-        old.maximum != next.maximum || old.minimumSet != next.minimumSet ||
-        old.maximumSet != next.maximumSet)
+        old.scale != next.scale || old.minimumSet != next.minimumSet ||
+        old.maximumSet != next.maximumSet ||
+        (old.minimumSet && old.minimum != next.minimum) ||
+        (old.maximumSet && old.maximum != next.maximum))
       autoScaleOverrides_[i] = false;
   }
   model_ = model;

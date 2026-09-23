@@ -59,25 +59,65 @@ std::vector<Sample> decimateSamples(const std::vector<Sample>& samples,
   const auto hasGap = std::any_of(samples.begin(), samples.end(),
                                   [](const Sample& sample) { return !sample.plotable; });
   if (hasGap) {
-    std::vector<Sample> data;
-    std::vector<Sample> gaps;
-    for (const auto& sample : samples)
-      (sample.plotable ? data : gaps).push_back(sample);
-    if (gaps.size() >= maximumPoints) {
-      std::vector<Sample> reduced;
-      reduced.reserve(maximumPoints);
-      for (std::size_t i = 0; i < maximumPoints; ++i)
-        reduced.push_back(gaps[i * (gaps.size() - 1) / (maximumPoints - 1)]);
-      return reduced;
+    // Reserve space for a break between any two retained data points. A dense
+    // series of invalid samples must not consume the entire point budget and
+    // make the valid parts of a curve disappear.
+    std::vector<std::size_t> validIndices;
+    validIndices.reserve(samples.size());
+    for (std::size_t i = 0; i < samples.size(); ++i)
+      if (samples[i].plotable) validIndices.push_back(i);
+    if (validIndices.empty()) return {samples.front(), samples.back()};
+
+    const std::size_t dataBudget = (maximumPoints + 1) / 2;
+    std::vector<std::size_t> selected;
+    if (validIndices.size() <= dataBudget) {
+      selected = validIndices;
+    } else if (dataBudget == 1) {
+      selected.push_back(validIndices.back());
+    } else {
+      // Keep original indices while selecting a min/max envelope. This lets
+      // the output mark every skipped invalid interval explicitly.
+      selected.push_back(validIndices.front());
+      if (dataBudget > 2) {
+        const std::size_t bucketCount = std::max<std::size_t>(1, (dataBudget - 2) / 2);
+        const std::size_t interior = validIndices.size() - 2;
+        for (std::size_t bucket = 0; bucket < bucketCount; ++bucket) {
+          const std::size_t first = 1 + bucket * interior / bucketCount;
+          const std::size_t last = 1 + (bucket + 1) * interior / bucketCount;
+          std::size_t minimum = first;
+          std::size_t maximum = first;
+          for (std::size_t item = first + 1; item < last; ++item) {
+            if (samples[validIndices[item]].value < samples[validIndices[minimum]].value)
+              minimum = item;
+            if (samples[validIndices[item]].value > samples[validIndices[maximum]].value)
+              maximum = item;
+          }
+          if (minimum > maximum) std::swap(minimum, maximum);
+          if (selected.size() < dataBudget - 1) selected.push_back(validIndices[minimum]);
+          if (minimum != maximum && selected.size() < dataBudget - 1)
+            selected.push_back(validIndices[maximum]);
+        }
+      }
+      selected.push_back(validIndices.back());
     }
-    const auto selected = decimateSamples(data, maximumPoints - gaps.size());
+
     std::vector<Sample> result;
-    result.reserve(selected.size() + gaps.size());
-    std::merge(selected.begin(), selected.end(), gaps.begin(), gaps.end(),
-               std::back_inserter(result),
-               [](const Sample& left, const Sample& right) {
-                 return left.timestamp < right.timestamp;
-               });
+    result.reserve(maximumPoints);
+    if (selected.front() > 0 && 2 * selected.size() <= maximumPoints)
+      result.push_back(samples.front());
+    for (std::size_t i = 0; i < selected.size(); ++i) {
+      if (i > 0) {
+        const auto gap = std::find_if(
+            samples.begin() + static_cast<std::ptrdiff_t>(selected[i - 1] + 1),
+            samples.begin() + static_cast<std::ptrdiff_t>(selected[i]),
+            [](const Sample& sample) { return !sample.plotable; });
+        if (gap != samples.begin() + static_cast<std::ptrdiff_t>(selected[i]))
+          result.push_back(*gap);
+      }
+      result.push_back(samples[selected[i]]);
+    }
+    if (selected.back() + 1 < samples.size() && result.size() < maximumPoints)
+      result.push_back(samples.back());
     return result;
   }
 

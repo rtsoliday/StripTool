@@ -365,7 +365,7 @@ void ControlsWindow::applyCurve(std::size_t index) {
 void ControlsWindow::removeCurve(std::size_t index) {
   auto defaults = makeDefaultModel();
   model_->curves[index] = defaults.curves[index];
-  reloadFromModel();
+  reloadCurveRow(index);
   setChannelMetadata(index, {});
   emit modelChanged();
   emit acquisitionConfigurationChanged();
@@ -386,26 +386,31 @@ void ControlsWindow::updateColorButton(QPushButton* button, const Rgba16& color)
                             .arg(value.name(), text.name()));
 }
 
+void ControlsWindow::reloadCurveRow(std::size_t index) {
+  const bool wasLoading = loading_;
+  loading_ = true;
+  const auto& curve = model_->curves[index];
+  auto& row = curveRows_[index];
+  row.name->setText(curve.nameSet ? QString::fromStdString(curve.name) : QString());
+  row.name->setToolTip(QString::fromStdString(curve.comment));
+  row.plotted->setChecked(curve.plotted);
+  row.scale->setCurrentIndex(static_cast<int>(curve.scale));
+  row.precision->setValue(curve.precision);
+  row.minimum->setText(limitText(curve.minimum));
+  row.maximum->setText(limitText(curve.maximum));
+  row.minimum->setCursorPosition(0);
+  row.maximum->setCursorPosition(0);
+  row.precisionEdited = false;
+  row.minimumEdited = false;
+  row.maximumEdited = false;
+  updateColorButton(row.color, model_->colors.curves[index]);
+  loading_ = wasLoading;
+}
+
 void ControlsWindow::reloadFromModel() {
   updateTitle();
   loading_ = true;
-  for (std::size_t i = 0; i < curveRows_.size(); ++i) {
-    const auto& curve = model_->curves[i];
-    auto& row = curveRows_[i];
-    row.name->setText(curve.nameSet ? QString::fromStdString(curve.name) : QString());
-    row.name->setToolTip(QString::fromStdString(curve.comment));
-    row.plotted->setChecked(curve.plotted);
-    row.scale->setCurrentIndex(static_cast<int>(curve.scale));
-    row.precision->setValue(curve.precision);
-    row.minimum->setText(limitText(curve.minimum));
-    row.maximum->setText(limitText(curve.maximum));
-    row.minimum->setCursorPosition(0);
-    row.maximum->setCursorPosition(0);
-    row.precisionEdited = false;
-    row.minimumEdited = false;
-    row.maximumEdited = false;
-    updateColorButton(row.color, model_->colors.curves[i]);
-  }
+  for (std::size_t i = 0; i < curveRows_.size(); ++i) reloadCurveRow(i);
   timespan_->setValue(static_cast<int>(model_->timing.timespanSeconds));
   sampleCount_->setValue(model_->timing.numberOfSamples);
   sampleInterval_->setValue(model_->timing.sampleIntervalSeconds);

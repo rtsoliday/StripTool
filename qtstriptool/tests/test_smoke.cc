@@ -223,6 +223,25 @@ private slots:
     QCOMPARE(name->text(), QStringLiteral("draft:pv"));
     QVERIFY(!window.model().curves[0].nameSet);
   }
+  void removingCurvePreservesOtherPendingEdits() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "remove:pv";
+    model.curves[0].nameSet = true;
+    model.curves[1].name = "keep:pv";
+    model.curves[1].nameSet = true;
+    striptool::ControlsWindow controls(&model);
+    auto* pendingName = controls.findChild<QLineEdit*>(QStringLiteral("curveName1"));
+    auto* pendingMinimum = controls.findChild<QLineEdit*>(QStringLiteral("curveMinimum1"));
+    pendingName->setText(QStringLiteral("draft:pv"));
+    pendingMinimum->setText(QStringLiteral("2.5"));
+    controls.findChild<QPushButton*>(QStringLiteral("curveRemove0"))->click();
+    QVERIFY(!model.curves[0].nameSet);
+    QCOMPARE(pendingName->text(), QStringLiteral("draft:pv"));
+    QCOMPARE(pendingMinimum->text(), QStringLiteral("2.5"));
+    controls.findChild<QPushButton*>(QStringLiteral("curveModify1"))->click();
+    QCOMPARE(model.curves[1].name, std::string("draft:pv"));
+    QCOMPARE(model.curves[1].minimum, 2.5);
+  }
   void mainAndControlWindowsShareOneModel() {
     striptool::MainWindow window;
     auto* controls = window.controlsWindow();
@@ -654,6 +673,46 @@ private slots:
     QVERIFY(range.has_value());
     QVERIFY(range->maximum < 1e9);
   }
+  void denseGapsRetainDataWithoutJoiningDisconnectedSegments() {
+    const auto base = std::chrono::system_clock::time_point{};
+    std::vector<striptool::Sample> samples;
+    for (int i = 0; i < 100; ++i)
+      samples.push_back({base + std::chrono::seconds(i), double(i), 0, 0,
+                         i % 2 == 0});
+    const auto reduced = striptool::decimateSamples(samples, 8);
+    QVERIFY(reduced.size() <= std::size_t{8});
+    QVERIFY(std::any_of(reduced.begin(), reduced.end(),
+                        [](const auto& sample) { return sample.plotable; }));
+    QVERIFY(std::any_of(reduced.begin(), reduced.end(),
+                        [](const auto& sample) { return !sample.plotable; }));
+    for (std::size_t i = 1; i < reduced.size(); ++i)
+      QVERIFY(!reduced[i - 1].plotable || !reduced[i].plotable);
+    QVERIFY(striptool::sampleValueRange(reduced, striptool::ScaleMode::Linear));
+    for (int gapPeriod = 2; gapPeriod <= 5; ++gapPeriod) {
+      for (auto& sample : samples) {
+        const auto offset = std::chrono::duration_cast<std::chrono::seconds>(
+            sample.timestamp - base).count();
+        sample.plotable = offset % gapPeriod != 1;
+      }
+      for (std::size_t budget = 3; budget <= 12; ++budget) {
+        const auto points = striptool::decimateSamples(samples, budget);
+        QVERIFY(points.size() <= budget);
+        QVERIFY(std::is_sorted(points.begin(), points.end(),
+                               [](const auto& a, const auto& b) {
+                                 return a.timestamp < b.timestamp;
+                               }));
+        for (std::size_t i = 1; i < points.size(); ++i) {
+          if (!points[i - 1].plotable || !points[i].plotable) continue;
+          const auto first = std::chrono::duration_cast<std::chrono::seconds>(
+              points[i - 1].timestamp - base).count();
+          const auto last = std::chrono::duration_cast<std::chrono::seconds>(
+              points[i].timestamp - base).count();
+          for (auto original = first + 1; original < last; ++original)
+            QVERIFY(samples[static_cast<std::size_t>(original)].plotable);
+        }
+      }
+    }
+  }
   void logDecimationKeepsNonPositiveGap() {
     const auto base = std::chrono::system_clock::time_point{};
     std::vector<striptool::Sample> samples;
@@ -902,6 +961,25 @@ private slots:
     plot.setCurveSamples(0, {{base, 5.0, 0, 0},
                              {base + std::chrono::seconds(10), 2000.0, 0, 0}});
     QVERIFY(plot.valueRange(0).maximum < 10.0);
+  }
+  void automaticMetadataDoesNotCancelRequestedAutoScale() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "scale:metadata";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0.0;
+    model.curves[0].minimumSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setCurveSamples(0, {{base, 5.0, 0, 0},
+                             {base + std::chrono::seconds(10), 10.0, 0, 0}});
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(10)});
+    plot.autoScale(0);
+    QVERIFY(plot.valueRange(0).minimum > 0.0);
+    model.curves[0].maximum = 100.0;
+    plot.setModel(model);
+    QVERIFY(plot.valueRange(0).minimum > 0.0);
+    QVERIFY(plot.valueRange(0).maximum < 100.0);
   }
   void automaticRangeUsesVisibleSamplesAndManualBound() {
     auto model = striptool::makeDefaultModel();
