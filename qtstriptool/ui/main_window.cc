@@ -148,7 +148,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   auto* toolbar = new QToolBar(tr("Graph"), this);
   addToolBar(Qt::BottomToolBarArea, toolbar);
   toolbar->setObjectName(QStringLiteral("graphToolbar"));
-  const auto addStepButton = [this, toolbar](QAction* action,
+  const auto addStepButton = [toolbar](QAction* action,
                                              const QString& name,
                                              std::function<void()> fineStep) {
     auto* button = new GraphToolButton(action, std::move(fineStep), toolbar);
@@ -370,7 +370,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
             const bool selected = plotWidget_->selectedAnnotation() >= 0;
             editAnnotationAction->setEnabled(selected);
             deleteAnnotationAction->setEnabled(selected);
-            plotMenu_->popup(globalPosition);
+            if (!plotMenu_->isVisible()) plotMenu_->popup(globalPosition);
           });
 }
 

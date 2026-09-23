@@ -1,6 +1,7 @@
 #include "ui/plot_widget.h"
 
 #include <QDateTime>
+#include <QContextMenuEvent>
 #include <QMouseEvent>
 #include <QInputDialog>
 #include <QKeyEvent>
@@ -83,8 +84,8 @@ void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples)
   });
   liveSamples_[curve] = std::move(samples);
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
-  updateAutoRange();
-  if (autoScroll_ && !paused_) resetView();
+  if (dragMode_ != DragMode::Annotation) updateAutoRange();
+  if (autoScroll_ && !paused_ && dragMode_ != DragMode::Annotation) resetView();
   update();
 }
 
@@ -104,8 +105,8 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
   if (data.size() > maximum)
     data.erase(data.begin(), data.end() - static_cast<std::ptrdiff_t>(maximum));
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], data);
-  updateAutoRange();
-  if (autoScroll_ && !paused_) {
+  if (dragMode_ != DragMode::Annotation) updateAutoRange();
+  if (autoScroll_ && !paused_ && dragMode_ != DragMode::Annotation) {
     visibleTimeRange_.end = std::max(visibleTimeRange_.end, sample.timestamp);
     visibleTimeRange_.start = visibleTimeRange_.end -
         std::chrono::seconds(model_.timing.timespanSeconds);
@@ -222,7 +223,7 @@ void PlotWidget::resetView() {
 }
 
 void PlotWidget::advanceToNow() {
-  if (!autoScroll_ || paused_) return;
+  if (!autoScroll_ || paused_ || dragMode_ == DragMode::Annotation) return;
   visibleTimeRange_.end = std::chrono::system_clock::now();
   visibleTimeRange_.start = visibleTimeRange_.end -
       std::chrono::seconds(model_.timing.timespanSeconds);
@@ -708,10 +709,24 @@ void PlotWidget::mousePressEvent(QMouseEvent* event) {
 void PlotWidget::mouseReleaseEvent(QMouseEvent* event) {
   if ((dragMode_ == DragMode::Annotation && event->button() == Qt::MiddleButton) ||
       (dragMode_ == DragMode::Pan && event->button() == Qt::LeftButton)) {
-    if (dragMode_ == DragMode::Annotation && annotationMoved_)
-      emit annotationsChanged();
+    const bool draggedAnnotation = dragMode_ == DragMode::Annotation;
+    if (draggedAnnotation && annotationMoved_) emit annotationsChanged();
+    const bool resumeAutoScroll = dragMode_ == DragMode::Annotation &&
+                                  autoScroll_ && !paused_;
     dragMode_ = DragMode::None;
+    if (resumeAutoScroll) resetView();
+    else if (draggedAnnotation) {
+      updateAutoRange();
+      update();
+    }
   }
+}
+
+void PlotWidget::contextMenuEvent(QContextMenuEvent* event) {
+  // Qt also sends this event for a native right click. MainWindow keeps the
+  // menu opened by mousePressEvent and handles keyboard context requests here.
+  emit plotContextMenuRequested(event->globalPos(), event->pos());
+  event->accept();
 }
 
 void PlotWidget::mouseDoubleClickEvent(QMouseEvent* event) {

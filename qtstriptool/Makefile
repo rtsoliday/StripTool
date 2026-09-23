@@ -175,6 +175,7 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            metadataRefreshPreservesPendingCurveEdits reopeningControlsPreservesPendingEdits \
            removingCurvePreservesOtherPendingEdits \
            legendSelectionChangesCursorCurve plotMouseButtonsSelectMovePanAndShowCommands \
+           middleDragKeepsLiveViewStableUntilRelease \
            plotKeepsCrossingSegmentsAndDoesNotRewindOnLateSamples \
            toolbarRightClickUsesFinePanAndZoomSteps
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \

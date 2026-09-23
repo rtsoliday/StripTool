@@ -16,6 +16,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QContextMenuEvent>
 #include <QDoubleSpinBox>
 #include <QDateTimeEdit>
 #include <QIcon>
@@ -986,6 +987,18 @@ private slots:
     QVERIFY(menu->actions().contains(window.findChild<QAction*>(QStringLiteral("retryConnectionsAction"))));
     QTest::mouseRelease(plot, Qt::RightButton, Qt::NoModifier, QPoint(500, 300));
     menu->hide();
+    QContextMenuEvent nativeMenu(QContextMenuEvent::Mouse, QPoint(500, 300),
+                                 plot->mapToGlobal(QPoint(500, 300)));
+    QApplication::sendEvent(plot, &nativeMenu);
+    QVERIFY(nativeMenu.isAccepted());
+    QTRY_VERIFY(menu->isVisible());
+    menu->hide();
+    QContextMenuEvent keyboardMenu(QContextMenuEvent::Keyboard, QPoint(500, 300),
+                                   plot->mapToGlobal(QPoint(500, 300)));
+    QApplication::sendEvent(plot, &keyboardMenu);
+    QVERIFY(keyboardMenu.isAccepted());
+    QTRY_VERIFY(menu->isVisible());
+    menu->hide();
     const auto afterMove = plot->visibleTimeRange();
     QTest::mousePress(plot, Qt::LeftButton, Qt::NoModifier, QPoint(600, 420));
     moveWhileDragging(plot, QPoint(640, 420), Qt::LeftButton);
@@ -997,6 +1010,35 @@ private slots:
     plot->setModel(model);
     QVERIFY(plot->model().annotations.empty());
     QVERIFY(window.model().annotations.empty());
+  }
+  void middleDragKeepsLiveViewStableUntilRelease() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "test:pv";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.show();
+    const auto first = std::chrono::system_clock::now() - std::chrono::seconds(10);
+    plot.setCurveSamples(0, {{first, 5, 0, 0}});
+    const QPoint start(400, 240);
+    QVERIFY(plot.addAnnotationAt(start, QStringLiteral("drag me")) >= 0);
+    const auto original = plot.visibleTimeRange();
+    const auto originalValues = plot.valueRange(0);
+    const auto annotationTime = plot.model().annotations[0].time;
+    QTest::mousePress(&plot, Qt::MiddleButton, Qt::NoModifier, start + QPoint(4, 4));
+    const auto later = first + std::chrono::seconds(20);
+    plot.setCurveSamples(0, {{first, 5, 0, 0}, {later, 9, 0, 0}});
+    plot.advanceToNow();
+    QCOMPARE(plot.visibleTimeRange().end, original.end);
+    QCOMPARE(plot.valueRange(0).maximum, originalValues.maximum);
+    moveWhileDragging(&plot, start + QPoint(44, 4), Qt::MiddleButton);
+    QVERIFY(plot.model().annotations[0].time > annotationTime);
+    QTest::mouseRelease(&plot, Qt::MiddleButton, Qt::NoModifier,
+                        start + QPoint(44, 4));
+    QCOMPARE(plot.visibleTimeRange().end, later);
+    QVERIFY(plot.valueRange(0).maximum > originalValues.maximum);
+    QVERIFY(plot.autoScroll());
   }
   void plotKeepsCrossingSegmentsAndDoesNotRewindOnLateSamples() {
     auto model = striptool::makeDefaultModel();
