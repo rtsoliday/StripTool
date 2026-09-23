@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 
 namespace striptool {
@@ -45,6 +46,51 @@ std::optional<ValueRange> sampleValueRange(const std::vector<Sample>& samples,
     range.minimum = std::min(range.minimum, value);
     range.maximum = std::max(range.maximum, value);
   }
+  if (!std::isfinite(range.minimum)) return std::nullopt;
+  if (range.minimum == range.maximum) {
+    const double padding = range.minimum == 0.0 ? 1.0 : std::abs(range.minimum) * 0.05;
+    range.minimum -= padding;
+    range.maximum += padding;
+  }
+  return range;
+}
+
+std::optional<ValueRange> visibleSampleValueRange(
+    const std::vector<Sample>& samples,
+    std::chrono::system_clock::time_point start,
+    std::chrono::system_clock::time_point end,
+    ScaleMode scale) {
+  if (start > end || samples.empty()) return std::nullopt;
+  const auto first = std::lower_bound(samples.begin(), samples.end(), start,
+      [](const Sample& sample, const auto& time) { return sample.timestamp < time; });
+  const auto last = std::upper_bound(first, samples.end(), end,
+      [](const auto& time, const Sample& sample) { return time < sample.timestamp; });
+  ValueRange range{std::numeric_limits<double>::infinity(),
+                   -std::numeric_limits<double>::infinity()};
+  const auto include = [&range](double value) {
+    if (!std::isfinite(value)) return;
+    range.minimum = std::min(range.minimum, value);
+    range.maximum = std::max(range.maximum, value);
+  };
+  for (auto it = first; it != last; ++it)
+    if (it->plotable) include(plotValue(it->value, scale));
+
+  const auto includeCrossing = [&](const Sample& before, const Sample& after,
+                                   std::chrono::system_clock::time_point boundary) {
+    if (!before.plotable || !after.plotable ||
+        before.timestamp >= boundary || after.timestamp <= boundary) return;
+    const double low = plotValue(before.value, scale);
+    const double high = plotValue(after.value, scale);
+    if (!std::isfinite(low) || !std::isfinite(high)) return;
+    const double fraction = std::chrono::duration<double>(boundary - before.timestamp).count() /
+                            std::chrono::duration<double>(after.timestamp - before.timestamp).count();
+    include(low + (high - low) * fraction);
+  };
+  if (first != samples.begin() && first != samples.end())
+    includeCrossing(*std::prev(first), *first, start);
+  if (last != samples.begin() && last != samples.end())
+    includeCrossing(*std::prev(last), *last, end);
+
   if (!std::isfinite(range.minimum)) return std::nullopt;
   if (range.minimum == range.maximum) {
     const double padding = range.minimum == 0.0 ? 1.0 : std::abs(range.minimum) * 0.05;

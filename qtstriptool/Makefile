@@ -150,6 +150,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              denseGapsRetainDataWithoutJoiningDisconnectedSegments \
              cpuUsageIsASeparateLocalProvider \
              plotDataSelectionAndHistoryJoinAreToolkitNeutral \
+             visibleRangeIncludesCrossingSegments \
              noHistoryProviderReportsFailureAndCancellation \
              testHistoryProviderReturnsSelectedOwnedSamples \
              activeHistoryRequestCanBeDestroyedSafely exportsTextAndCsvData
@@ -169,11 +170,12 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            openingConfigurationClearsPreviousAcquisitionData \
            mainWindowExportsOnlyVisibleSamples \
            plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits \
-           autoScaleTracksOnlyVisibleSamples automaticMetadataDoesNotCancelRequestedAutoScale \
-           automaticRangeUsesVisibleSamplesAndManualBound \
+           autoScaleTracksVisibleTrace automaticMetadataDoesNotCancelRequestedAutoScale \
+           automaticRangeUsesVisibleTraceAndManualBound \
            curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop \
            liveRefreshDoesNotRewindTheTimeWindow stationaryPanKeepsAutoScroll \
            livePanDragUsesStableRangeAndStationaryReleaseCatchesUp \
+           dragReleaseAppliesItsFinalPosition \
            lostMouseReleaseCannotContinueDragging \
            lightAnnotationTextRemainsReadable \
            metadataRefreshPreservesPendingCurveEdits reopeningControlsPreservesPendingEdits \

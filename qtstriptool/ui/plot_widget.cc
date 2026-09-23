@@ -300,13 +300,9 @@ void PlotWidget::advanceToNow() {
 void PlotWidget::autoScale(std::optional<std::size_t> curve) {
   const auto apply = [this](std::size_t index) {
     verticalRanges_[index].reset();
-    const auto selected = selectSamples(samples_[index], visibleTimeRange_.start,
-                                        visibleTimeRange_.end,
-                                        std::max(2, plotRect().width() > 0
-                                                        ? int(plotRect().width()) * 2
-                                                        : 2),
-                                        model_.curves[index].scale);
-    automaticRanges_[index] = sampleValueRange(selected, model_.curves[index].scale);
+    automaticRanges_[index] = visibleSampleValueRange(
+        samples_[index], visibleTimeRange_.start, visibleTimeRange_.end,
+        model_.curves[index].scale);
     autoScaleOverrides_[index] = true;
   };
   if (curve && *curve < kMaximumCurves) apply(*curve);
@@ -467,17 +463,13 @@ int PlotWidget::annotationAt(const QPoint& position) const {
 void PlotWidget::updateAutoRange() {
   for (std::size_t i = 0; i < kMaximumCurves; ++i) {
     if (autoScaleOverrides_[i]) {
-      const auto visible = selectSamples(samples_[i], visibleTimeRange_.start,
-                                         visibleTimeRange_.end,
-                                         std::max(2, int(plotRect().width()) * 2),
-                                         model_.curves[i].scale);
-      automaticRanges_[i] = sampleValueRange(visible, model_.curves[i].scale);
+      automaticRanges_[i] = visibleSampleValueRange(
+          samples_[i], visibleTimeRange_.start, visibleTimeRange_.end,
+          model_.curves[i].scale);
     } else if (!model_.curves[i].minimumSet || !model_.curves[i].maximumSet) {
-      const auto visible = selectSamples(samples_[i], visibleTimeRange_.start,
-                                         visibleTimeRange_.end,
-                                         std::max(2, int(plotRect().width()) * 2),
-                                         model_.curves[i].scale);
-      auto range = sampleValueRange(visible, model_.curves[i].scale);
+      auto range = visibleSampleValueRange(
+          samples_[i], visibleTimeRange_.start, visibleTimeRange_.end,
+          model_.curves[i].scale);
       if (range) {
         const auto& config = model_.curves[i];
         if (config.minimumSet) range->minimum = plotValue(config.minimum, config.scale);
@@ -706,14 +698,41 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
       (dragMode_ == DragMode::Annotation && !(event->buttons() & Qt::MiddleButton)))
     finishDrag();
   cursorPosition_ = event->pos();
+  updateDrag(event->pos());
+  const QRectF area = plotRect();
+  if (area.contains(event->pos())) {
+    const qint64 begin = milliseconds(visibleTimeRange_.start);
+    const qint64 end = milliseconds(visibleTimeRange_.end);
+    const qint64 time = begin + qint64((end - begin) *
+        (event->pos().x() - area.left()) / area.width());
+    int curveIndex = selectedCurve_;
+    if (curveIndex < 0) {
+      const auto curves = plottedCurves();
+      if (!curves.empty()) curveIndex = static_cast<int>(curves.front());
+    }
+    double value = std::numeric_limits<double>::quiet_NaN();
+    if (curveIndex >= 0) {
+      const auto range = valueRange(static_cast<std::size_t>(curveIndex));
+      const double plotted = range.maximum -
+          (event->pos().y() - area.top()) / area.height() *
+              (range.maximum - range.minimum);
+      value = model_.curves[static_cast<std::size_t>(curveIndex)].scale == ScaleMode::Log10
+                  ? std::pow(10.0, plotted) : plotted;
+    }
+    emit cursorLocationChanged(QDateTime::fromMSecsSinceEpoch(time), value, curveIndex);
+  }
+  update();
+}
+
+void PlotWidget::updateDrag(const QPoint& position) {
   const QRectF area = plotRect();
   if (area.width() > 0) {
     if (dragMode_ == DragMode::Annotation && selectedAnnotation_ >= 0) {
       const qreal targetX = std::clamp(dragAnnotationRect_.left() +
-                                          event->pos().x() - dragStart_.x(),
+                                          position.x() - dragStart_.x(),
                                       area.left(), area.right() - dragAnnotationRect_.width());
       const qreal targetY = std::clamp(dragAnnotationRect_.top() +
-                                          event->pos().y() - dragStart_.y(),
+                                          position.y() - dragStart_.y(),
                                       area.top(), area.bottom() - dragAnnotationRect_.height());
       auto& annotation = model_.annotations[static_cast<std::size_t>(selectedAnnotation_)];
       const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
@@ -742,8 +761,8 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
       }
       emit annotationsChanged();
     } else if (dragMode_ == DragMode::Pan) {
-      if (event->pos().x() != dragStart_.x()) {
-        const double fraction = -double(event->pos().x() - dragStart_.x()) / area.width();
+      if (position.x() != dragStart_.x()) {
+        const double fraction = -double(position.x() - dragStart_.x()) / area.width();
         const auto duration = dragRange_.end - dragRange_.start;
         const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
             std::chrono::duration<double>(std::chrono::duration<double>(duration).count() * fraction));
@@ -753,28 +772,6 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
       }
     }
   }
-  if (area.contains(event->pos())) {
-    const qint64 begin = milliseconds(visibleTimeRange_.start);
-    const qint64 end = milliseconds(visibleTimeRange_.end);
-    const qint64 time = begin + qint64((end - begin) *
-        (event->pos().x() - area.left()) / area.width());
-    int curveIndex = selectedCurve_;
-    if (curveIndex < 0) {
-      const auto curves = plottedCurves();
-      if (!curves.empty()) curveIndex = static_cast<int>(curves.front());
-    }
-    double value = std::numeric_limits<double>::quiet_NaN();
-    if (curveIndex >= 0) {
-      const auto range = valueRange(static_cast<std::size_t>(curveIndex));
-      const double plotted = range.maximum -
-          (event->pos().y() - area.top()) / area.height() *
-              (range.maximum - range.minimum);
-      value = model_.curves[static_cast<std::size_t>(curveIndex)].scale == ScaleMode::Log10
-                  ? std::pow(10.0, plotted) : plotted;
-    }
-    emit cursorLocationChanged(QDateTime::fromMSecsSinceEpoch(time), value, curveIndex);
-  }
-  update();
 }
 
 void PlotWidget::mousePressEvent(QMouseEvent* event) {
@@ -816,8 +813,10 @@ void PlotWidget::mousePressEvent(QMouseEvent* event) {
 
 void PlotWidget::mouseReleaseEvent(QMouseEvent* event) {
   if ((dragMode_ == DragMode::Annotation && event->button() == Qt::MiddleButton) ||
-      (dragMode_ == DragMode::Pan && event->button() == Qt::LeftButton))
+      (dragMode_ == DragMode::Pan && event->button() == Qt::LeftButton)) {
+    updateDrag(event->pos());
     finishDrag();
+  }
 }
 
 void PlotWidget::finishDrag() {
@@ -832,8 +831,7 @@ void PlotWidget::finishDrag() {
 }
 
 void PlotWidget::contextMenuEvent(QContextMenuEvent* event) {
-  // Qt also sends this event for a native right click. MainWindow keeps the
-  // menu opened by mousePressEvent and handles keyboard context requests here.
+  // Native right clicks and keyboard context requests are handled here.
   emit plotContextMenuRequested(event->globalPos(), event->pos());
   event->accept();
 }

@@ -924,6 +924,44 @@ private slots:
     QVERIFY(plot.removeAnnotation(0));
     QCOMPARE(plot.selectedAnnotation(), -1);
   }
+  void visibleRangeIncludesCrossingSegments() {
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    const std::vector<striptool::Sample> crossing{
+        {base - std::chrono::seconds(5), 0.0, 0, 0},
+        {base + std::chrono::seconds(15), 100.0, 0, 0}};
+    const auto linear = striptool::visibleSampleValueRange(
+        crossing, base, base + std::chrono::seconds(10),
+        striptool::ScaleMode::Linear);
+    QVERIFY(linear);
+    QCOMPARE(linear->minimum, 25.0);
+    QCOMPARE(linear->maximum, 75.0);
+
+    auto disconnected = crossing;
+    disconnected[0].plotable = false;
+    QVERIFY(!striptool::visibleSampleValueRange(
+        disconnected, base, base + std::chrono::seconds(10),
+        striptool::ScaleMode::Linear));
+
+    auto logarithmic = crossing;
+    logarithmic[0].value = 1.0;
+    logarithmic[1].value = 10000.0;
+    const auto logRange = striptool::visibleSampleValueRange(
+        logarithmic, base, base + std::chrono::seconds(10),
+        striptool::ScaleMode::Log10);
+    QVERIFY(logRange);
+    QCOMPARE(logRange->minimum, 1.0);
+    QCOMPARE(logRange->maximum, 3.0);
+
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "crossing";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    plot.setCurveSamples(0, crossing);
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(10)});
+    QCOMPARE(plot.valueRange(0).minimum, 25.0);
+    QCOMPARE(plot.valueRange(0).maximum, 75.0);
+  }
   void legendSelectionChangesCursorCurve() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "first:pv";
@@ -1237,7 +1275,7 @@ private slots:
     plot.clearCurveSamples(0);
     QVERIFY(plot.curveSamples(0).empty());
   }
-  void autoScaleTracksOnlyVisibleSamples() {
+  void autoScaleTracksVisibleTrace() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "scale:test";
     model.curves[0].nameSet = true;
@@ -1250,10 +1288,11 @@ private slots:
                              {base + std::chrono::seconds(10), 1000.0, 0, 0}});
     plot.setVisibleTimeRange({base, base + std::chrono::seconds(5)});
     plot.autoScale(0);
-    QVERIFY(plot.valueRange(0).maximum < 10.0);
+    QCOMPARE(plot.valueRange(0).minimum, 5.0);
+    QCOMPARE(plot.valueRange(0).maximum, 502.5);
     plot.setCurveSamples(0, {{base, 5.0, 0, 0},
                              {base + std::chrono::seconds(10), 2000.0, 0, 0}});
-    QVERIFY(plot.valueRange(0).maximum < 10.0);
+    QCOMPARE(plot.valueRange(0).maximum, 1002.5);
   }
   void automaticMetadataDoesNotCancelRequestedAutoScale() {
     auto model = striptool::makeDefaultModel();
@@ -1274,7 +1313,7 @@ private slots:
     QVERIFY(plot.valueRange(0).minimum > 0.0);
     QVERIFY(plot.valueRange(0).maximum < 100.0);
   }
-  void automaticRangeUsesVisibleSamplesAndManualBound() {
+  void automaticRangeUsesVisibleTraceAndManualBound() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "visible:test";
     model.curves[0].nameSet = true;
@@ -1284,12 +1323,12 @@ private slots:
     plot.setCurveSamples(0, {{base, 5.0, 0, 0},
                              {base + std::chrono::seconds(10), 1000.0, 0, 0}});
     plot.setVisibleTimeRange({base, base + std::chrono::seconds(5)});
-    QVERIFY(plot.valueRange(0).maximum < 10.0);
+    QCOMPARE(plot.valueRange(0).maximum, 502.5);
     model.curves[0].minimum = 4.0;
     model.curves[0].minimumSet = true;
     plot.setModel(model);
     QCOMPARE(plot.valueRange(0).minimum, 4.0);
-    QVERIFY(plot.valueRange(0).maximum < 10.0);
+    QCOMPARE(plot.valueRange(0).maximum, 502.5);
   }
   void liveScrollAdvancesWhenSamplesStop() {
     auto model = striptool::makeDefaultModel();
@@ -1375,6 +1414,37 @@ private slots:
     QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, start);
     QCOMPARE(plot.visibleTimeRange().end, later);
     QVERIFY(plot.autoScroll());
+  }
+  void dragReleaseAppliesItsFinalPosition() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "drag:test";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0.0;
+    model.curves[0].maximum = 10.0;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(100)});
+    plot.show();
+
+    QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, QPoint(300, 300));
+    QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, QPoint(350, 300));
+    QVERIFY(plot.visibleTimeRange().start < base - std::chrono::seconds(8));
+    QVERIFY(!plot.autoScroll());
+
+    const QPoint anchor(400, 200);
+    QVERIFY(plot.addAnnotationAt(anchor, QStringLiteral("note")) >= 0);
+    const auto originalTime = plot.model().annotations[0].time;
+    const double originalValue = *plot.model().annotations[0].value;
+    QTest::mousePress(&plot, Qt::MiddleButton, Qt::NoModifier,
+                      anchor + QPoint(4, 4));
+    QTest::mouseRelease(&plot, Qt::MiddleButton, Qt::NoModifier,
+                        anchor + QPoint(44, 24));
+    QVERIFY(plot.model().annotations[0].time > originalTime);
+    QVERIFY(*plot.model().annotations[0].value < originalValue);
   }
   void lostMouseReleaseCannotContinueDragging() {
     auto model = striptool::makeDefaultModel();

@@ -24,6 +24,13 @@ std::vector<Sample> selectSamples(
 std::optional<ValueRange> sampleValueRange(const std::vector<Sample>& samples,
                                            ScaleMode scale);
 
+// Include the values where line segments cross the edges of the visible window.
+std::optional<ValueRange> visibleSampleValueRange(
+    const std::vector<Sample>& samples,
+    std::chrono::system_clock::time_point start,
+    std::chrono::system_clock::time_point end,
+    ScaleMode scale);
+
 double plotValue(double value, ScaleMode scale);
 
 // Joins sorted historical and live samples. Equal timestamps use the live
