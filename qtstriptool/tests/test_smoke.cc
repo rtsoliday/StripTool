@@ -1241,13 +1241,75 @@ private slots:
     plot.setModel(model);
     const auto old = std::chrono::system_clock::now() - std::chrono::seconds(30);
     plot.setCurveSamples(0, {{old, 1.0, 0, 0}});
-    QCOMPARE(plot.visibleTimeRange().end, old);
-    plot.advanceToNow();
     QVERIFY(plot.visibleTimeRange().end > old + std::chrono::seconds(20));
+    const auto beforeRefresh = plot.visibleTimeRange().end;
+    QTest::qWait(20);
+    plot.advanceToNow();
+    QVERIFY(plot.visibleTimeRange().end > beforeRefresh);
     const auto liveRange = plot.visibleTimeRange();
     plot.setPaused(true);
     plot.advanceToNow();
     QCOMPARE(plot.visibleTimeRange().end, liveRange.end);
+  }
+  void liveRefreshDoesNotRewindTheTimeWindow() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "delayed:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto old = std::chrono::system_clock::now() - std::chrono::seconds(30);
+    plot.setCurveSamples(0, {{old, 1.0, 0, 0}});
+    plot.advanceToNow();
+    const auto liveEnd = plot.visibleTimeRange().end;
+    plot.setCurveSamples(0, {{old, 1.0, 0, 0}});
+    QCOMPARE(plot.visibleTimeRange().end, liveEnd);
+    const auto future = liveEnd + std::chrono::seconds(10);
+    plot.setCurveSamples(0, {{old, 1.0, 0, 0}, {future, 2.0, 0, 0}});
+    QCOMPARE(plot.visibleTimeRange().end, future);
+    plot.advanceToNow();
+    QCOMPARE(plot.visibleTimeRange().end, future);
+  }
+  void stationaryPanKeepsAutoScroll() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "pan:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.show();
+    const QPoint panPoint(500, 300);
+    QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, panPoint);
+    moveWhileDragging(&plot, panPoint, Qt::LeftButton);
+    QVERIFY(plot.autoScroll());
+    QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, panPoint);
+  }
+  void lightAnnotationTextRemainsReadable() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "light:test";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0;
+    model.curves[0].maximum = 100;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    model.colors.curves[0] = {65535, 65535, 0, 65535};
+    model.graph.xGrid = striptool::GridMode::None;
+    model.graph.yGrid = striptool::GridMode::None;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.show();
+    QVERIFY(plot.addAnnotationAt(QPoint(300, 190), QStringLiteral("Note")) >= 0);
+    plot.selectAnnotation(-1);
+    QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    plot.render(&image);
+    int darkTextPixels = 0;
+    for (int y = 194; y < 215; ++y)
+      for (int x = 306; x < 345; ++x) {
+        const QColor pixel = image.pixelColor(x, y);
+        if (pixel.red() < 120 && pixel.green() < 120 && pixel.blue() < 120)
+          ++darkTextPixels;
+      }
+    QVERIFY(darkTextPixels > 5);
   }
   void plotWidgetRendersFixtureOffscreen() {
     auto model = striptool::makeDefaultModel();
@@ -1272,11 +1334,23 @@ private slots:
       for (int x = 0; x < image.width(); x += 5)
         if (image.pixelColor(x, y) != background) ++nonBackground;
     QVERIFY(nonBackground > 100);
+    const auto tracePixels = [](const QImage& frame) {
+      int count = 0;
+      for (int y = 70; y < 430; ++y)
+        for (int x = 100; x < 700; ++x) {
+          const QColor pixel = frame.pixelColor(x, y);
+          if (pixel.blue() > 150 && pixel.red() < 100 && pixel.green() < 100)
+            ++count;
+        }
+      return count;
+    };
+    QVERIFY(tracePixels(image) > 100);
     const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
     if (!output.isEmpty()) {
       QVERIFY(image.save(output));
       QVERIFY(plot.addAnnotationAt(QPoint(300, 190), QStringLiteral("Operator note")) >= 0);
       plot.render(&image);
+      QVERIFY(tracePixels(image) > 100);
       const auto directory = std::filesystem::path(output.toStdString()).parent_path();
       QVERIFY(image.save(QString::fromStdString((directory / "annotation.png").string())));
       auto manyCurves = striptool::makeDefaultModel();

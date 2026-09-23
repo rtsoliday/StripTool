@@ -172,6 +172,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            autoScaleTracksOnlyVisibleSamples automaticMetadataDoesNotCancelRequestedAutoScale \
            automaticRangeUsesVisibleSamplesAndManualBound \
            curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop \
+           liveRefreshDoesNotRewindTheTimeWindow stationaryPanKeepsAutoScroll \
+           lightAnnotationTextRemainsReadable \
            metadataRefreshPreservesPendingCurveEdits reopeningControlsPreservesPendingEdits \
            removingCurvePreservesOtherPendingEdits \
            legendSelectionChangesCursorCurve plotMouseButtonsSelectMovePanAndShowCommands \

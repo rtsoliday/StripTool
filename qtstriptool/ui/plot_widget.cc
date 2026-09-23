@@ -81,13 +81,23 @@ void PlotWidget::setModel(const StripToolModel& model) {
 
 void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples) {
   if (curve >= samples_.size()) return;
+  const bool hadSamples = std::any_of(samples_.begin(), samples_.end(),
+                                      [](const auto& data) { return !data.empty(); });
   std::sort(samples.begin(), samples.end(), [](const auto& left, const auto& right) {
     return left.timestamp < right.timestamp;
   });
   liveSamples_[curve] = std::move(samples);
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
+  if (autoScroll_ && !paused_ && dragMode_ != DragMode::Annotation) {
+    if (!hadSamples) resetView();
+    else if (!samples_[curve].empty()) {
+      visibleTimeRange_.end = std::max(visibleTimeRange_.end,
+                                       samples_[curve].back().timestamp);
+      visibleTimeRange_.start = visibleTimeRange_.end -
+          std::chrono::seconds(model_.timing.timespanSeconds);
+    }
+  }
   if (dragMode_ != DragMode::Annotation) updateAutoRange();
-  if (autoScroll_ && !paused_ && dragMode_ != DragMode::Annotation) resetView();
   update();
 }
 
@@ -244,11 +254,9 @@ void PlotWidget::resetVerticalView() {
 
 void PlotWidget::resetView() {
   auto latest = std::chrono::system_clock::now();
-  bool hasSamples = false;
   for (const auto& curve : samples_) {
-    if (!curve.empty() && (!hasSamples || curve.back().timestamp > latest)) {
+    if (!curve.empty() && curve.back().timestamp > latest) {
       latest = curve.back().timestamp;
-      hasSamples = true;
     }
   }
   visibleTimeRange_.end = latest;
@@ -262,7 +270,12 @@ void PlotWidget::resetView() {
 
 void PlotWidget::advanceToNow() {
   if (!autoScroll_ || paused_ || dragMode_ == DragMode::Annotation) return;
-  visibleTimeRange_.end = std::chrono::system_clock::now();
+  visibleTimeRange_.end = std::max(visibleTimeRange_.end,
+                                   std::chrono::system_clock::now());
+  for (const auto& curve : samples_)
+    if (!curve.empty())
+      visibleTimeRange_.end = std::max(visibleTimeRange_.end,
+                                       curve.back().timestamp);
   visibleTimeRange_.start = visibleTimeRange_.end -
       std::chrono::seconds(model_.timing.timespanSeconds);
   updateAutoRange();
@@ -635,6 +648,7 @@ void PlotWidget::paintEvent(QPaintEvent*) {
                         i == static_cast<std::size_t>(selectedAnnotation_)
                             ? Qt::DashLine : Qt::SolidLine));
     painter.drawRect(box);
+    painter.setPen(foreground);
     painter.drawText(box.adjusted(6, 4, -6, -4), Qt::TextWordWrap,
                      QString::fromStdString(annotation.text));
   }
@@ -676,13 +690,15 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
       }
       emit annotationsChanged();
     } else if (dragMode_ == DragMode::Pan) {
-      const double fraction = -double(event->pos().x() - dragStart_.x()) / area.width();
-      const auto duration = dragRange_.end - dragRange_.start;
-      const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
-          std::chrono::duration<double>(std::chrono::duration<double>(duration).count() * fraction));
-      visibleTimeRange_ = {dragRange_.start + shift, dragRange_.end + shift};
-      setAutoScroll(false);
-      updateAutoRange();
+      if (event->pos().x() != dragStart_.x()) {
+        const double fraction = -double(event->pos().x() - dragStart_.x()) / area.width();
+        const auto duration = dragRange_.end - dragRange_.start;
+        const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
+            std::chrono::duration<double>(std::chrono::duration<double>(duration).count() * fraction));
+        visibleTimeRange_ = {dragRange_.start + shift, dragRange_.end + shift};
+        setAutoScroll(false);
+        updateAutoRange();
+      }
     }
   }
   if (area.contains(event->pos())) {

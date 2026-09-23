@@ -87,3 +87,9 @@ scales, a dashed grid, a white plotting area, and time context. The traces and
 platforms differ, so this is a layout check rather than the required
 same-data parity capture. The remaining checklist states and print output
 still need side-by-side review.
+
+A follow-up render check confirmed that unselected annotation text stays
+readable when its curve color is light; the border retains the curve color.
+The visual fixture now checks that the trace remains visible before and after
+adding an annotation. Qt 5 and Qt 6 Cocoa event tests also passed for plot
+right-click menus, middle-button annotation dragging, and toolbar fine steps.
