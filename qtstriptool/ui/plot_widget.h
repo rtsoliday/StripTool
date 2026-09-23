@@ -29,6 +29,7 @@ public:
   TimeRange visibleTimeRange() const { return visibleTimeRange_; }
   ValueRange valueRange(std::size_t curve) const;
   int selectedAnnotation() const { return selectedAnnotation_; }
+  bool isInPlot(const QPoint& position) const { return plotRect().contains(position); }
 
   void setAutoScroll(bool enabled);
   void setPaused(bool paused);
@@ -41,9 +42,11 @@ public:
   void replot();
 
   int addAnnotation(Annotation annotation);
+  int addAnnotationAt(const QPoint& position, const QString& text);
   bool updateAnnotation(int index, Annotation annotation);
   bool removeAnnotation(int index);
   void selectAnnotation(int index);
+  void editSelectedAnnotation();
 
 signals:
   void cursorLocationChanged(QDateTime timestamp, double value,
@@ -51,6 +54,7 @@ signals:
   void annotationSelectionChanged(int index);
   void annotationsChanged();
   void autoScrollChanged(bool enabled);
+  void plotContextMenuRequested(QPoint globalPosition, QPoint plotPosition);
 
 protected:
   void paintEvent(QPaintEvent* event) override;
@@ -66,6 +70,10 @@ private:
   std::vector<std::size_t> plottedCurves() const;
   int legendColumns() const;
   QRectF legendRect(std::size_t position) const;
+  QRectF annotationRect(std::size_t index) const;
+  int annotationAt(const QPoint& position) const;
+  std::chrono::system_clock::time_point timeAt(const QPoint& position) const;
+  std::optional<double> valueAt(const QPoint& position) const;
   void updateAutoRange();
   QColor color(const Rgba16& value) const;
   std::optional<QPointF> mapSample(const Sample& sample,
@@ -81,10 +89,12 @@ private:
   TimeRange visibleTimeRange_;
   bool autoScroll_ = true;
   bool paused_ = false;
-  bool dragging_ = false;
-  bool draggingAnnotation_ = false;
+  enum class DragMode { None, Pan, Annotation };
+  DragMode dragMode_ = DragMode::None;
   QPoint dragStart_;
   TimeRange dragRange_;
+  Annotation dragAnnotation_;
+  bool annotationMoved_ = false;
   QPoint cursorPosition_{-1, -1};
   int selectedAnnotation_ = -1;
   int selectedCurve_ = -1;

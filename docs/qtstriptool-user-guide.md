@@ -61,12 +61,18 @@ The View menu can pause drawing, enable or disable auto-scroll, pan left or
 right, zoom in or out, auto-scale configured curves, reset the visible range,
 and force a replot. Moving the pointer over the plot updates the location
 readout.
+Right click a toolbar Pan or Zoom button for a smaller step, as in the legacy
+graph.
 The legend above the plot shows each visible curve's name and latest value.
 Click a legend entry to read that curve's value at the pointer location.
 
-Annotations can be created and manipulated on the plot using its interaction
-controls. They are part of the runtime graph state; verify the desired
-annotation behavior before relying on them as a permanent operational record.
+Drag the empty plot with the left button to pan. Left click an annotation box
+to select it; hold the middle button on the box to move it. Right click the
+graph for controls, annotation, print, snapshot, export, and retry commands.
+**Annotate Here** creates a note at the clicked time and value. Double click
+an annotation to edit its text, or double click empty plot space to add one.
+Delete or Backspace removes the selected annotation. Annotations are runtime
+graph state and are not saved in `.stp` files.
 
 **View > Historical Range** asks the configured history provider for the
 selected range and joins returned samples with live data. The distributed

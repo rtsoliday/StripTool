@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace striptool {
@@ -38,6 +39,13 @@ struct Annotation {
   std::chrono::system_clock::time_point time;
   std::optional<double> value;
   std::string text;
+  std::optional<std::size_t> curveIndex;
+
+  Annotation() = default;
+  Annotation(std::chrono::system_clock::time_point when,
+             std::optional<double> atValue, std::string label,
+             std::optional<std::size_t> curve = std::nullopt)
+      : time(when), value(atValue), text(std::move(label)), curveIndex(curve) {}
 };
 
 struct ChannelMetadata {

@@ -2,6 +2,7 @@
 #include "core/model.h"
 #include <QHash>
 #include <QMainWindow>
+#include <QPoint>
 #include <QString>
 #include <array>
 #include <memory>
@@ -39,6 +40,8 @@ private:
   StripToolModel model_;
   PlotWidget* plotWidget_ = nullptr;
   QMenu* recentMenu_ = nullptr;
+  QMenu* plotMenu_ = nullptr;
+  QPoint contextPlotPosition_;
   std::unique_ptr<ControlsWindow> controlsWindow_;
   std::unique_ptr<ChannelAccessProvider> channelAccess_;
   std::unique_ptr<CpuUsageProvider> cpuUsage_;

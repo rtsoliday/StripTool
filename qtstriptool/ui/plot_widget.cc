@@ -6,9 +6,11 @@
 #include <QKeyEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QFontMetrics>
 #include <QWheelEvent>
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 
 namespace striptool {
@@ -36,6 +38,7 @@ PlotWidget::PlotWidget(QWidget* parent) : QWidget(parent) {
 }
 
 void PlotWidget::setModel(const StripToolModel& model) {
+  std::array<bool, kMaximumCurves> replacedCurves{};
   for (std::size_t i = 0; i < kMaximumCurves; ++i) {
     const auto& old = model_.curves[i];
     const auto& next = model.curves[i];
@@ -45,8 +48,26 @@ void PlotWidget::setModel(const StripToolModel& model) {
         (old.minimumSet && old.minimum != next.minimum) ||
         (old.maximumSet && old.maximum != next.maximum))
       autoScaleOverrides_[i] = false;
+    replacedCurves[i] = old.nameSet &&
+        (!next.nameSet || old.name != next.name);
   }
   model_ = model;
+  const auto count = model_.annotations.size();
+  model_.annotations.erase(std::remove_if(model_.annotations.begin(),
+                                          model_.annotations.end(),
+      [&replacedCurves](const Annotation& annotation) {
+        return annotation.curveIndex &&
+               *annotation.curveIndex < kMaximumCurves &&
+               replacedCurves[*annotation.curveIndex];
+      }), model_.annotations.end());
+  const bool annotationsRemoved = model_.annotations.size() != count;
+  if (annotationsRemoved) emit annotationsChanged();
+  if (annotationsRemoved ||
+      selectedAnnotation_ >= static_cast<int>(model_.annotations.size())) {
+    selectedAnnotation_ = -1;
+    if (dragMode_ == DragMode::Annotation) dragMode_ = DragMode::None;
+    emit annotationSelectionChanged(-1);
+  }
   if (selectedCurve_ >= 0 &&
       (!model_.curves[static_cast<std::size_t>(selectedCurve_)].nameSet ||
        !model_.curves[static_cast<std::size_t>(selectedCurve_)].plotted))
@@ -85,8 +106,8 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], data);
   updateAutoRange();
   if (autoScroll_ && !paused_) {
-    visibleTimeRange_.end = sample.timestamp;
-    visibleTimeRange_.start = sample.timestamp -
+    visibleTimeRange_.end = std::max(visibleTimeRange_.end, sample.timestamp);
+    visibleTimeRange_.start = visibleTimeRange_.end -
         std::chrono::seconds(model_.timing.timespanSeconds);
   }
   update();
@@ -236,6 +257,16 @@ int PlotWidget::addAnnotation(Annotation annotation) {
   return selectedAnnotation_;
 }
 
+int PlotWidget::addAnnotationAt(const QPoint& position, const QString& text) {
+  if (!plotRect().contains(position)) return -1;
+  Annotation annotation{timeAt(position), valueAt(position), text.toStdString()};
+  const auto curves = plottedCurves();
+  if (!curves.empty())
+    annotation.curveIndex = selectedCurve_ >= 0
+                                ? static_cast<std::size_t>(selectedCurve_) : curves.front();
+  return addAnnotation(std::move(annotation));
+}
+
 bool PlotWidget::updateAnnotation(int index, Annotation annotation) {
   if (index < 0 || index >= static_cast<int>(model_.annotations.size())) return false;
   model_.annotations[static_cast<std::size_t>(index)] = std::move(annotation);
@@ -259,6 +290,20 @@ void PlotWidget::selectAnnotation(int index) {
   selectedAnnotation_ = index;
   emit annotationSelectionChanged(index);
   update();
+}
+
+void PlotWidget::editSelectedAnnotation() {
+  if (selectedAnnotation_ < 0 ||
+      selectedAnnotation_ >= static_cast<int>(model_.annotations.size())) return;
+  bool accepted = false;
+  const QString text = QInputDialog::getText(
+      this, tr("Edit Annotation"), tr("Text:"), QLineEdit::Normal,
+      QString::fromStdString(model_.annotations[static_cast<std::size_t>(selectedAnnotation_)].text),
+      &accepted);
+  if (!accepted || text.isEmpty()) return;
+  auto annotation = model_.annotations[static_cast<std::size_t>(selectedAnnotation_)];
+  annotation.text = text.toStdString();
+  updateAnnotation(selectedAnnotation_, std::move(annotation));
 }
 
 QRectF PlotWidget::plotRect() const {
@@ -288,6 +333,76 @@ QRectF PlotWidget::legendRect(std::size_t position) const {
   const qreal columnWidth = qreal(width() - 24) / columns;
   return QRectF(12 + (position % columns) * columnWidth,
                 8 + (position / columns) * 22, columnWidth - 6, 20);
+}
+
+std::chrono::system_clock::time_point PlotWidget::timeAt(const QPoint& position) const {
+  const QRectF area = plotRect();
+  const qint64 begin = milliseconds(visibleTimeRange_.start);
+  const qint64 end = milliseconds(visibleTimeRange_.end);
+  const qreal fraction = std::clamp<qreal>((position.x() - area.left()) /
+                                           std::max<qreal>(1, area.width()), 0, 1);
+  return std::chrono::system_clock::time_point(
+      std::chrono::milliseconds(begin + qint64((end - begin) * fraction)));
+}
+
+std::optional<double> PlotWidget::valueAt(const QPoint& position) const {
+  const auto curves = plottedCurves();
+  if (curves.empty()) return std::nullopt;
+  const std::size_t index = selectedCurve_ >= 0
+                                ? static_cast<std::size_t>(selectedCurve_) : curves.front();
+  const ValueRange range = valueRange(index);
+  const QRectF area = plotRect();
+  if (!range.isValid() || area.height() <= 0) return std::nullopt;
+  const double plotted = range.maximum -
+      (position.y() - area.top()) / area.height() *
+          (range.maximum - range.minimum);
+  const double value = model_.curves[index].scale == ScaleMode::Log10
+                           ? std::pow(10.0, plotted) : plotted;
+  return std::isfinite(value) ? std::optional<double>(value) : std::nullopt;
+}
+
+QRectF PlotWidget::annotationRect(std::size_t index) const {
+  if (index >= model_.annotations.size()) return {};
+  const auto& annotation = model_.annotations[index];
+  const QRectF area = plotRect();
+  const qint64 begin = milliseconds(visibleTimeRange_.start);
+  const qint64 end = milliseconds(visibleTimeRange_.end);
+  const qint64 time = milliseconds(annotation.time);
+  if (end <= begin || time < begin || time > end) return {};
+  const qreal x = area.left() + area.width() * double(time - begin) / double(end - begin);
+  qreal y = area.top() + 4;
+  const auto curves = plottedCurves();
+  if (annotation.value && !curves.empty()) {
+    const std::size_t curve = annotation.curveIndex &&
+                                      *annotation.curveIndex < kMaximumCurves &&
+                                      model_.curves[*annotation.curveIndex].nameSet &&
+                                      model_.curves[*annotation.curveIndex].plotted
+                                  ? *annotation.curveIndex : curves.front();
+    const ValueRange range = valueRange(curve);
+    const double plotted = plotValue(*annotation.value, model_.curves[curve].scale);
+    if (range.isValid() && std::isfinite(plotted))
+      y = area.bottom() - area.height() *
+          (plotted - range.minimum) / (range.maximum - range.minimum);
+  }
+  const QFontMetrics metrics(font());
+  const QString text = QString::fromStdString(annotation.text);
+  const int wrapWidth = std::max(16, std::min(240, int(area.width()) - 12));
+  const QRect bounds = metrics.boundingRect(QRect(0, 0, wrapWidth, 1000),
+                                             Qt::TextWordWrap, text);
+  const qreal boxWidth = std::min<qreal>(area.width(),
+                                        std::max(28, bounds.width() + 12));
+  const qreal boxHeight = std::min<qreal>(area.height(),
+                                         std::max(metrics.height() + 8,
+                                                  bounds.height() + 8));
+  return QRectF(std::clamp(x, area.left(), area.right() - boxWidth),
+                std::clamp(y, area.top(), area.bottom() - boxHeight),
+                boxWidth, boxHeight);
+}
+
+int PlotWidget::annotationAt(const QPoint& position) const {
+  for (int i = static_cast<int>(model_.annotations.size()) - 1; i >= 0; --i)
+    if (annotationRect(static_cast<std::size_t>(i)).contains(position)) return i;
+  return -1;
 }
 
 void PlotWidget::updateAutoRange() {
@@ -329,8 +444,8 @@ std::optional<QPointF> PlotWidget::mapSample(const Sample& sample,
   const qint64 end = milliseconds(visibleTimeRange_.end);
   const qint64 time = milliseconds(sample.timestamp);
   const double value = plotValue(sample.value, scale);
-  if (end <= begin || !sample.plotable || !range.isValid() || !std::isfinite(value) ||
-      time < begin || time > end) return std::nullopt;
+  if (end <= begin || !sample.plotable || !range.isValid() || !std::isfinite(value))
+    return std::nullopt;
   return QPointF(area.left() + area.width() * double(time - begin) / double(end - begin),
                  area.bottom() - area.height() * (value - range.minimum) /
                                      (range.maximum - range.minimum));
@@ -432,9 +547,17 @@ void PlotWidget::paintEvent(QPaintEvent*) {
                      Qt::AlignCenter, QString::fromStdString(config.units));
     painter.restore();
 
-    const auto selected = selectSamples(samples_[curveIndex], visibleTimeRange_.start,
-                                        visibleTimeRange_.end,
-                                        std::max(2, int(area.width()) * 2), config.scale);
+    auto selected = selectSamples(samples_[curveIndex], visibleTimeRange_.start,
+                                  visibleTimeRange_.end,
+                                  std::max(2, int(area.width()) * 2), config.scale);
+    const auto& source = samples_[curveIndex];
+    const auto first = std::lower_bound(source.begin(), source.end(),
+                                        visibleTimeRange_.start,
+        [](const Sample& sample, const auto& time) { return sample.timestamp < time; });
+    const auto last = std::upper_bound(first, source.end(), visibleTimeRange_.end,
+        [](const auto& time, const Sample& sample) { return time < sample.timestamp; });
+    if (first != source.begin()) selected.insert(selected.begin(), *std::prev(first));
+    if (last != source.end()) selected.push_back(*last);
     QPainterPath path;
     bool started = false;
     for (const auto& sample : selected) {
@@ -450,20 +573,6 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     painter.restore();
   }
 
-  for (std::size_t i = 0; i < model_.annotations.size(); ++i) {
-    const auto& annotation = model_.annotations[i];
-    const qint64 begin = milliseconds(visibleTimeRange_.start);
-    const qint64 end = milliseconds(visibleTimeRange_.end);
-    const qint64 time = milliseconds(annotation.time);
-    if (time < begin || time > end || end <= begin) continue;
-    const qreal x = area.left() + area.width() * double(time - begin) / double(end - begin);
-    painter.setPen(QPen(i == static_cast<std::size_t>(selectedAnnotation_)
-                            ? QColor(255, 140, 0) : foreground, 1));
-    painter.drawLine(QPointF(x, area.top()), QPointF(x, area.bottom()));
-    painter.drawText(QRectF(x + 3, area.top() + 3, 180, 18),
-                     QString::fromStdString(annotation.text));
-  }
-
   if (area.contains(cursorPosition_)) {
     painter.setPen(QPen(foreground, 1, Qt::DotLine));
     painter.drawLine(QPointF(cursorPosition_.x(), area.top()),
@@ -471,21 +580,62 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     painter.drawLine(QPointF(area.left(), cursorPosition_.y()),
                      QPointF(area.right(), cursorPosition_.y()));
   }
+
+  for (std::size_t i = 0; i < model_.annotations.size(); ++i) {
+    const auto& annotation = model_.annotations[i];
+    const QRectF box = annotationRect(i);
+    if (box.isEmpty()) continue;
+    painter.fillRect(box, color(model_.colors.background));
+    const QColor border = annotation.curveIndex &&
+                                  *annotation.curveIndex < kMaximumCurves
+                              ? color(model_.colors.curves[*annotation.curveIndex])
+                              : foreground;
+    painter.setPen(QPen(i == static_cast<std::size_t>(selectedAnnotation_)
+                            ? foreground : border, 1,
+                        i == static_cast<std::size_t>(selectedAnnotation_)
+                            ? Qt::DashLine : Qt::SolidLine));
+    painter.drawRect(box);
+    painter.drawText(box.adjusted(6, 4, -6, -4), Qt::TextWordWrap,
+                     QString::fromStdString(annotation.text));
+  }
+
 }
 
 void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
   cursorPosition_ = event->pos();
   const QRectF area = plotRect();
-  if (dragging_ && area.width() > 0) {
-    if (draggingAnnotation_ && selectedAnnotation_ >= 0) {
-      const qint64 begin = milliseconds(visibleTimeRange_.start);
-      const qint64 end = milliseconds(visibleTimeRange_.end);
-      const qreal position = std::clamp<qreal>(
-          (event->pos().x() - area.left()) / area.width(), 0.0, 1.0);
-      model_.annotations[static_cast<std::size_t>(selectedAnnotation_)].time =
-          std::chrono::system_clock::time_point(
-              std::chrono::milliseconds(begin + qint64((end - begin) * position)));
-    } else {
+  if (area.width() > 0) {
+    if (dragMode_ == DragMode::Annotation && selectedAnnotation_ >= 0) {
+      const qreal originalFraction = double(milliseconds(dragAnnotation_.time) -
+                                            milliseconds(visibleTimeRange_.start)) /
+                                     std::max<qint64>(1, milliseconds(visibleTimeRange_.end) -
+                                                            milliseconds(visibleTimeRange_.start));
+      const QPoint target(qRound(area.left() + originalFraction * area.width() +
+                                 event->pos().x() - dragStart_.x()),
+                          event->pos().y());
+      auto& annotation = model_.annotations[static_cast<std::size_t>(selectedAnnotation_)];
+      annotation.time = timeAt(target);
+      if (dragAnnotation_.value) {
+        const auto curves = plottedCurves();
+        if (!curves.empty()) {
+          const std::size_t index = dragAnnotation_.curveIndex &&
+                                          *dragAnnotation_.curveIndex < kMaximumCurves &&
+                                          model_.curves[*dragAnnotation_.curveIndex].nameSet &&
+                                          model_.curves[*dragAnnotation_.curveIndex].plotted
+                                        ? *dragAnnotation_.curveIndex : curves.front();
+          const ValueRange range = valueRange(index);
+          const double initial = plotValue(*dragAnnotation_.value,
+                                           model_.curves[index].scale);
+          const double moved = initial -
+              (event->pos().y() - dragStart_.y()) / area.height() *
+                  (range.maximum - range.minimum);
+          const double value = model_.curves[index].scale == ScaleMode::Log10
+                                   ? std::pow(10.0, moved) : moved;
+          if (std::isfinite(value)) annotation.value = value;
+        }
+      }
+      annotationMoved_ = true;
+    } else if (dragMode_ == DragMode::Pan) {
       const double fraction = -double(event->pos().x() - dragStart_.x()) / area.width();
       const auto duration = dragRange_.end - dragRange_.start;
       const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
@@ -520,63 +670,63 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void PlotWidget::mousePressEvent(QMouseEvent* event) {
-  if (event->button() != Qt::LeftButton) return;
+  if (event->button() == Qt::RightButton) {
+    emit plotContextMenuRequested(mapToGlobal(event->pos()), event->pos());
+    event->accept();
+    return;
+  }
+  if (event->button() != Qt::LeftButton && event->button() != Qt::MiddleButton) return;
+  setFocus();
   const auto curves = plottedCurves();
-  for (std::size_t position = 0; position < curves.size(); ++position) {
-    if (legendRect(position).contains(event->pos())) {
-      selectedCurve_ = static_cast<int>(curves[position]);
-      update();
-      return;
+  if (event->button() == Qt::LeftButton) {
+    for (std::size_t position = 0; position < curves.size(); ++position) {
+      if (legendRect(position).contains(event->pos())) {
+        selectedCurve_ = static_cast<int>(curves[position]);
+        update();
+        return;
+      }
     }
   }
   if (!plotRect().contains(event->pos())) return;
-  const qint64 begin = milliseconds(visibleTimeRange_.start);
-  const qint64 end = milliseconds(visibleTimeRange_.end);
-  const qint64 time = begin + qint64((end - begin) *
-      (event->pos().x() - plotRect().left()) / plotRect().width());
-  int nearest = -1;
-  qint64 distance = std::numeric_limits<qint64>::max();
-  for (std::size_t i = 0; i < model_.annotations.size(); ++i) {
-    const qint64 candidate = std::abs(milliseconds(model_.annotations[i].time) - time);
-    if (candidate < distance) { distance = candidate; nearest = static_cast<int>(i); }
+  const int touched = annotationAt(event->pos());
+  if (touched >= 0) {
+    selectAnnotation(touched);
+    if (event->button() == Qt::MiddleButton) {
+      dragMode_ = DragMode::Annotation;
+      dragStart_ = event->pos();
+      dragAnnotation_ = model_.annotations[static_cast<std::size_t>(touched)];
+      annotationMoved_ = false;
+    }
+  } else if (event->button() == Qt::LeftButton) {
+    selectAnnotation(-1);
+    dragMode_ = DragMode::Pan;
+    dragStart_ = event->pos();
+    dragRange_ = visibleTimeRange_;
   }
-  const qint64 tolerance = (end - begin) * 6 / std::max(1, int(plotRect().width()));
-  selectAnnotation(distance <= tolerance ? nearest : -1);
-  dragging_ = true;
-  draggingAnnotation_ = selectedAnnotation_ >= 0;
-  dragStart_ = event->pos();
-  dragRange_ = visibleTimeRange_;
 }
 
-void PlotWidget::mouseReleaseEvent(QMouseEvent*) {
-  if (draggingAnnotation_) emit annotationsChanged();
-  dragging_ = false;
-  draggingAnnotation_ = false;
+void PlotWidget::mouseReleaseEvent(QMouseEvent* event) {
+  if ((dragMode_ == DragMode::Annotation && event->button() == Qt::MiddleButton) ||
+      (dragMode_ == DragMode::Pan && event->button() == Qt::LeftButton)) {
+    if (dragMode_ == DragMode::Annotation && annotationMoved_)
+      emit annotationsChanged();
+    dragMode_ = DragMode::None;
+  }
 }
 
 void PlotWidget::mouseDoubleClickEvent(QMouseEvent* event) {
   if (event->button() != Qt::LeftButton || !plotRect().contains(event->pos())) return;
-  const qint64 begin = milliseconds(visibleTimeRange_.start);
-  const qint64 end = milliseconds(visibleTimeRange_.end);
-  const qint64 time = begin + qint64((end - begin) *
-      (event->pos().x() - plotRect().left()) / plotRect().width());
+  dragMode_ = DragMode::None;
+  const int touched = annotationAt(event->pos());
+  if (touched >= 0) {
+    selectAnnotation(touched);
+    editSelectedAnnotation();
+    return;
+  }
   bool accepted = false;
   const QString text = QInputDialog::getText(
-      this, tr("Plot Annotation"), tr("Text:"), QLineEdit::Normal,
-      selectedAnnotation_ >= 0
-          ? QString::fromStdString(model_.annotations[static_cast<std::size_t>(
-                                      selectedAnnotation_)].text)
-          : QString(),
-      &accepted);
-  if (!accepted) return;
-  if (selectedAnnotation_ >= 0) {
-    auto annotation = model_.annotations[static_cast<std::size_t>(selectedAnnotation_)];
-    annotation.text = text.toStdString();
-    updateAnnotation(selectedAnnotation_, std::move(annotation));
-  } else {
-    addAnnotation({std::chrono::system_clock::time_point(std::chrono::milliseconds(time)),
-                   std::nullopt, text.toStdString()});
-  }
+      this, tr("Plot Annotation"), tr("Text:"), QLineEdit::Normal, {}, &accepted);
+  if (accepted && !text.isEmpty()) addAnnotationAt(event->pos(), text);
 }
 
 void PlotWidget::wheelEvent(QWheelEvent* event) {

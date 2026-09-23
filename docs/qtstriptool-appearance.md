@@ -35,6 +35,8 @@ DPI/scaling, window size, and fixture used.
 - The curve legend sits above the Qt plot rather than beside it. It shows each
   plotted curve's name and latest value; clicking an entry selects that curve
   for cursor value readout.
+- Annotations use small text boxes with a dashed selection outline. Their
+  position follows the associated curve's time and value axes.
 - Window icons and desktop identity use the Qt StripTool artwork and name so
   both variants can be installed simultaneously.
 - High-DPI scaling is delegated to Qt instead of relying on legacy X display

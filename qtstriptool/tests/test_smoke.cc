@@ -23,6 +23,8 @@
 #include <QElapsedTimer>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSpinBox>
@@ -30,6 +32,7 @@
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QToolButton>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -39,6 +42,19 @@
 namespace {
 std::filesystem::path fixture(const char* name) {
   return std::filesystem::path("../tests/fixtures/config") / name;
+}
+
+void moveWhileDragging(QWidget* widget, const QPoint& position,
+                       Qt::MouseButton heldButton) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  QMouseEvent move(QEvent::MouseMove, QPointF(position),
+                   QPointF(widget->mapToGlobal(position)), Qt::NoButton,
+                   heldButton, Qt::NoModifier);
+#else
+  QMouseEvent move(QEvent::MouseMove, QPointF(position), Qt::NoButton,
+                   heldButton, Qt::NoModifier);
+#endif
+  QApplication::sendEvent(widget, &move);
 }
 
 class FakeChannelProvider final : public striptool::ChannelProvider {
@@ -923,6 +939,122 @@ private slots:
     QVERIFY(!cursor.isEmpty());
     QCOMPARE(cursor.last().at(2).toInt(), 1);
   }
+  void plotMouseButtonsSelectMovePanAndShowCommands() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "test:pv";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0;
+    model.curves[0].maximum = 10;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    striptool::MainWindow window(model);
+    window.resize(900, 620);
+    window.show();
+    auto* plot = window.plotWidget();
+    plot->setVisibleTimeRange({base, base + std::chrono::seconds(100)});
+    const QPoint original(440, 280);
+    QVERIFY(plot->isInPlot(original));
+    const int annotation = plot->addAnnotationAt(original, QStringLiteral("test note"));
+    QCOMPARE(annotation, 0);
+    plot->selectAnnotation(-1);
+    QTest::mouseClick(plot, Qt::LeftButton, Qt::NoModifier, original + QPoint(4, 4));
+    QCOMPARE(plot->selectedAnnotation(), 0);
+    const auto selectedTime = plot->model().annotations[0].time;
+    const auto selectedValue = *plot->model().annotations[0].value;
+    QSignalSpy middleSelection(plot, &striptool::PlotWidget::annotationSelectionChanged);
+    QTest::mousePress(plot, Qt::MiddleButton, Qt::NoModifier, original + QPoint(4, 4));
+    QVERIFY(!middleSelection.isEmpty());
+    moveWhileDragging(plot, original + QPoint(44, 34), Qt::MiddleButton);
+    QTest::mouseRelease(plot, Qt::MiddleButton, Qt::NoModifier,
+                        original + QPoint(44, 34));
+    QVERIFY(plot->model().annotations[0].time > selectedTime);
+    QVERIFY(*plot->model().annotations[0].value < selectedValue);
+    QCOMPARE(window.model().annotations[0].time, plot->model().annotations[0].time);
+    plot->selectAnnotation(-1);
+    QTest::mouseClick(plot, Qt::LeftButton, Qt::NoModifier,
+                      original + QPoint(44, 34));
+    QCOMPARE(plot->selectedAnnotation(), 0);
+    QTest::mousePress(plot, Qt::RightButton, Qt::NoModifier, QPoint(500, 300));
+    auto* menu = window.findChild<QMenu*>(QStringLiteral("plotContextMenu"));
+    QVERIFY(menu);
+    QTRY_VERIFY(menu->isVisible());
+    QVERIFY(window.findChild<QAction*>(QStringLiteral("newAnnotationAction"))->isEnabled());
+    QVERIFY(window.findChild<QAction*>(QStringLiteral("editAnnotationAction"))->isEnabled());
+    QVERIFY(window.findChild<QAction*>(QStringLiteral("deleteAnnotationAction"))->isEnabled());
+    QVERIFY(menu->actions().contains(window.findChild<QAction*>(QStringLiteral("printAction"))));
+    QVERIFY(menu->actions().contains(window.findChild<QAction*>(QStringLiteral("retryConnectionsAction"))));
+    QTest::mouseRelease(plot, Qt::RightButton, Qt::NoModifier, QPoint(500, 300));
+    menu->hide();
+    const auto afterMove = plot->visibleTimeRange();
+    QTest::mousePress(plot, Qt::LeftButton, Qt::NoModifier, QPoint(600, 420));
+    moveWhileDragging(plot, QPoint(640, 420), Qt::LeftButton);
+    QTest::mouseRelease(plot, Qt::LeftButton, Qt::NoModifier, QPoint(640, 420));
+    QVERIFY(plot->visibleTimeRange().start < afterMove.start);
+    QCOMPARE(plot->selectedAnnotation(), -1);
+    model.annotations = window.model().annotations;
+    model.curves[0].nameSet = false;
+    plot->setModel(model);
+    QVERIFY(plot->model().annotations.empty());
+    QVERIFY(window.model().annotations.empty());
+  }
+  void plotKeepsCrossingSegmentsAndDoesNotRewindOnLateSamples() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "test:pv";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0;
+    model.curves[0].maximum = 10;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.setCurveSamples(0, {{base - std::chrono::seconds(5), 0, 0, 0},
+                             {base + std::chrono::seconds(15), 10, 0, 0}});
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(10)});
+    QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    plot.render(&image);
+    bool traceAtCenter = false;
+    for (int y = 247; y <= 253; ++y) {
+      const QColor pixel = image.pixelColor(400, y);
+      if (pixel.blue() > 150 && pixel.red() < 100) traceAtCenter = true;
+    }
+    QVERIFY(traceAtCenter);
+    plot.resetView();
+    const auto future = std::chrono::system_clock::now() + std::chrono::seconds(10);
+    plot.appendSample(0, {future, 5, 0, 0});
+    const auto end = plot.visibleTimeRange().end;
+    plot.appendSample(0, {future - std::chrono::seconds(5), 6, 0, 0});
+    QCOMPARE(plot.visibleTimeRange().end, end);
+  }
+  void toolbarRightClickUsesFinePanAndZoomSteps() {
+    striptool::MainWindow window;
+    window.show();
+    auto* plot = window.plotWidget();
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot->setVisibleTimeRange({base, base + std::chrono::seconds(100)});
+    auto* panLeft = window.findChild<QToolButton*>(QStringLiteral("panLeftButton"));
+    auto* zoomIn = window.findChild<QToolButton*>(QStringLiteral("zoomInButton"));
+    QVERIFY(panLeft);
+    QVERIFY(zoomIn);
+    QTest::mouseClick(panLeft, Qt::RightButton);
+    const double finePan = std::chrono::duration<double>(
+        base - plot->visibleTimeRange().start).count();
+    QVERIFY(finePan > 4.9 && finePan < 5.1);
+    QTest::mouseClick(panLeft, Qt::LeftButton);
+    const double coarsePan = std::chrono::duration<double>(
+        base - plot->visibleTimeRange().start).count();
+    QVERIFY(coarsePan > 54.9 && coarsePan < 55.1);
+    QTest::mouseClick(zoomIn, Qt::RightButton);
+    const double fineZoom = std::chrono::duration<double>(
+        plot->visibleTimeRange().end - plot->visibleTimeRange().start).count();
+    QVERIFY(fineZoom > 93.2 && fineZoom < 93.4);
+    QTest::mouseClick(zoomIn, Qt::LeftButton);
+    const double coarseZoom = std::chrono::duration<double>(
+        plot->visibleTimeRange().end - plot->visibleTimeRange().start).count();
+    QVERIFY(coarseZoom > 46.6 && coarseZoom < 46.7);
+  }
   void plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "history:test";
@@ -1041,6 +1173,10 @@ private slots:
     const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
     if (!output.isEmpty()) {
       QVERIFY(image.save(output));
+      QVERIFY(plot.addAnnotationAt(QPoint(300, 190), QStringLiteral("Operator note")) >= 0);
+      plot.render(&image);
+      const auto directory = std::filesystem::path(output.toStdString()).parent_path();
+      QVERIFY(image.save(QString::fromStdString((directory / "annotation.png").string())));
       auto manyCurves = striptool::makeDefaultModel();
       manyCurves.timing.timespanSeconds = 300;
       for (std::size_t curve = 0; curve < striptool::kMaximumCurves; ++curve) {
@@ -1067,7 +1203,6 @@ private slots:
       QImage tenCurveImage(tenCurvePlot.size(), QImage::Format_ARGB32_Premultiplied);
       tenCurveImage.fill(Qt::transparent);
       tenCurvePlot.render(&tenCurveImage);
-      const auto directory = std::filesystem::path(output.toStdString()).parent_path();
       QVERIFY(tenCurveImage.save(QString::fromStdString((directory / "ten-curves.png").string())));
     }
   }

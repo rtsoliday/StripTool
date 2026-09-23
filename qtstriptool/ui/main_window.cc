@@ -13,25 +13,52 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QContextMenuEvent>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QSettings>
 #include <QStatusBar>
 #include <QToolBar>
+#include <QToolButton>
 #include <QUrl>
 #include <QtPrintSupport/QPrintDialog>
 #include <QtPrintSupport/QPrintPreviewDialog>
 #include <QtPrintSupport/QPrinter>
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <limits>
 #include <utility>
 namespace striptool {
 namespace {
+class GraphToolButton final : public QToolButton {
+public:
+  GraphToolButton(QAction* action, std::function<void()> fineStep, QWidget* parent)
+      : QToolButton(parent), fineStep_(std::move(fineStep)) {
+    setDefaultAction(action);
+  }
+
+protected:
+  void mousePressEvent(QMouseEvent* event) override {
+    if (event->button() == Qt::RightButton) {
+      fineStep_();
+      event->accept();
+      return;
+    }
+    QToolButton::mousePressEvent(event);
+  }
+  void contextMenuEvent(QContextMenuEvent* event) override { event->accept(); }
+
+private:
+  std::function<void()> fineStep_;
+};
+
 std::chrono::milliseconds timerInterval(double seconds) {
   return std::chrono::milliseconds(static_cast<int>(std::clamp(
       seconds * 1000.0, 10.0, double(std::numeric_limits<int>::max()))));
@@ -118,12 +145,24 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   plotWidget_->setObjectName(QStringLiteral("plotArea"));
   plotWidget_->setModel(model_);
   setCentralWidget(plotWidget_);
-  auto* toolbar = addToolBar(tr("Graph"));
+  auto* toolbar = new QToolBar(tr("Graph"), this);
+  addToolBar(Qt::BottomToolBarArea, toolbar);
   toolbar->setObjectName(QStringLiteral("graphToolbar"));
-  toolbar->addAction(panLeftAction);
-  toolbar->addAction(panRightAction);
-  toolbar->addAction(zoomInAction);
-  toolbar->addAction(zoomOutAction);
+  const auto addStepButton = [this, toolbar](QAction* action,
+                                             const QString& name,
+                                             std::function<void()> fineStep) {
+    auto* button = new GraphToolButton(action, std::move(fineStep), toolbar);
+    button->setObjectName(name);
+    toolbar->addWidget(button);
+  };
+  addStepButton(panLeftAction, QStringLiteral("panLeftButton"),
+                [this] { plotWidget_->pan(-0.05); });
+  addStepButton(panRightAction, QStringLiteral("panRightButton"),
+                [this] { plotWidget_->pan(0.05); });
+  addStepButton(zoomInAction, QStringLiteral("zoomInButton"),
+                [this] { plotWidget_->zoom(1.0 / 1.071773462536293); });
+  addStepButton(zoomOutAction, QStringLiteral("zoomOutButton"),
+                [this] { plotWidget_->zoom(1.071773462536293); });
   toolbar->addAction(autoScaleAction);
   toolbar->addAction(resetAction);
   toolbar->addAction(autoScrollAction);
@@ -194,9 +233,9 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   connect(plotWidget_, &PlotWidget::autoScrollChanged, autoScrollAction,
           &QAction::setChecked);
   connect(panLeftAction, &QAction::triggered, this,
-          [this] { plotWidget_->pan(-0.25); });
+          [this] { plotWidget_->pan(-0.5); });
   connect(panRightAction, &QAction::triggered, this,
-          [this] { plotWidget_->pan(0.25); });
+          [this] { plotWidget_->pan(0.5); });
   connect(zoomInAction, &QAction::triggered, this,
           [this] { plotWidget_->zoom(0.5); });
   connect(zoomOutAction, &QAction::triggered, this,
@@ -286,6 +325,53 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
         tr("Use the Controls window to connect curves and configure timing and appearance. "
            "Use the graph View menu to pan, zoom, pause, and reset the display."));
   });
+  plotMenu_ = new QMenu(plotWidget_);
+  plotMenu_->setObjectName(QStringLiteral("plotContextMenu"));
+  plotMenu_->addAction(showControlsAction);
+  plotMenu_->addAction(autoScrollAction);
+  plotMenu_->addSeparator();
+  auto* newAnnotationAction = plotMenu_->addAction(tr("Annotate Here…"));
+  newAnnotationAction->setObjectName(QStringLiteral("newAnnotationAction"));
+  auto* editAnnotationAction = plotMenu_->addAction(tr("Edit Selected Annotation…"));
+  editAnnotationAction->setObjectName(QStringLiteral("editAnnotationAction"));
+  auto* deleteAnnotationAction = plotMenu_->addAction(tr("Delete Selected Annotation"));
+  deleteAnnotationAction->setObjectName(QStringLiteral("deleteAnnotationAction"));
+  plotMenu_->addSeparator();
+  plotMenu_->addAction(printAction);
+  plotMenu_->addAction(snapshotAction);
+  plotMenu_->addAction(textAction);
+  plotMenu_->addAction(csvAction);
+  plotMenu_->addAction(retryAction);
+  plotMenu_->addSeparator();
+  auto* dismissAction = plotMenu_->addAction(tr("Dismiss Graph"));
+  dismissAction->setObjectName(QStringLiteral("dismissGraphAction"));
+  plotMenu_->addAction(exitAction);
+  connect(newAnnotationAction, &QAction::triggered, this, [this] {
+    bool accepted = false;
+    const QString text = QInputDialog::getText(
+        this, tr("Plot Annotation"), tr("Text:"), QLineEdit::Normal, {}, &accepted);
+    if (accepted && !text.isEmpty())
+      plotWidget_->addAnnotationAt(contextPlotPosition_, text);
+  });
+  connect(editAnnotationAction, &QAction::triggered,
+          plotWidget_, &PlotWidget::editSelectedAnnotation);
+  connect(deleteAnnotationAction, &QAction::triggered, this, [this] {
+    plotWidget_->removeAnnotation(plotWidget_->selectedAnnotation());
+  });
+  connect(dismissAction, &QAction::triggered, this, [this] {
+    showControls();
+    hide();
+  });
+  connect(plotWidget_, &PlotWidget::plotContextMenuRequested, this,
+          [this, newAnnotationAction, editAnnotationAction, deleteAnnotationAction](
+              const QPoint& globalPosition, const QPoint& plotPosition) {
+            contextPlotPosition_ = plotPosition;
+            newAnnotationAction->setEnabled(plotWidget_->isInPlot(plotPosition));
+            const bool selected = plotWidget_->selectedAnnotation() >= 0;
+            editAnnotationAction->setEnabled(selected);
+            deleteAnnotationAction->setEnabled(selected);
+            plotMenu_->popup(globalPosition);
+          });
 }
 
 MainWindow::~MainWindow() = default;
