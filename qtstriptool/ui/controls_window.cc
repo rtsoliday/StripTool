@@ -7,11 +7,13 @@
 #include <QColorDialog>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QDoubleValidator>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -21,6 +23,7 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 
@@ -45,6 +48,19 @@ QDoubleSpinBox* valueEditor(QWidget* parent) {
   editor->setRange(-1e100, 1e100);
   editor->setKeyboardTracking(false);
   return editor;
+}
+
+QLineEdit* limitEditor(QWidget* parent) {
+  auto* editor = new QLineEdit(parent);
+  auto* validator = new QDoubleValidator(editor);
+  validator->setLocale(QLocale::c());
+  validator->setNotation(QDoubleValidator::ScientificNotation);
+  editor->setValidator(validator);
+  return editor;
+}
+
+QString limitText(double value) {
+  return QString::number(value, 'g', 16);
 }
 
 }  // namespace
@@ -119,9 +135,10 @@ QWidget* ControlsWindow::createCurvePage() {
 
   auto* rows = new QWidget(page);
   auto* grid = new QGridLayout(rows);
+  grid->setAlignment(Qt::AlignTop);
   const QStringList headings{tr("#"), tr("Name"), tr("Color"), tr("Plot"),
                              tr("Scale"), tr("Precision"), tr("Minimum"),
-                             tr("Maximum"), QString(), QString()};
+                             tr("Maximum"), QString(), QString(), tr("Status")};
   for (int column = 0; column < headings.size(); ++column)
     grid->addWidget(new QLabel(headings[column], rows), 0, column);
   for (std::size_t i = 0; i < curveRows_.size(); ++i) {
@@ -141,14 +158,16 @@ QWidget* ControlsWindow::createCurvePage() {
     row.precision = new QSpinBox(rows);
     row.precision->setObjectName(QStringLiteral("curvePrecision") + suffix);
     row.precision->setRange(0, 20);
-    row.minimum = valueEditor(rows);
+    row.minimum = limitEditor(rows);
     row.minimum->setObjectName(QStringLiteral("curveMinimum") + suffix);
-    row.maximum = valueEditor(rows);
+    row.maximum = limitEditor(rows);
     row.maximum->setObjectName(QStringLiteral("curveMaximum") + suffix);
     row.modify = new QPushButton(tr("Modify"), rows);
     row.modify->setObjectName(QStringLiteral("curveModify") + suffix);
     row.remove = new QPushButton(tr("Remove"), rows);
     row.remove->setObjectName(QStringLiteral("curveRemove") + suffix);
+    row.status = new QLabel(tr("Inactive"), rows);
+    row.status->setObjectName(QStringLiteral("curveStatus") + suffix);
     grid->addWidget(row.name, int(i + 1), 1);
     grid->addWidget(row.color, int(i + 1), 2);
     grid->addWidget(row.plotted, int(i + 1), 3, Qt::AlignCenter);
@@ -158,10 +177,17 @@ QWidget* ControlsWindow::createCurvePage() {
     grid->addWidget(row.maximum, int(i + 1), 7);
     grid->addWidget(row.modify, int(i + 1), 8);
     grid->addWidget(row.remove, int(i + 1), 9);
+    grid->addWidget(row.status, int(i + 1), 10);
     connect(row.modify, &QPushButton::clicked, this, [this, i] { applyCurve(i); });
     connect(row.remove, &QPushButton::clicked, this, [this, i] { removeCurve(i); });
     connect(row.color, &QPushButton::clicked, this,
             [this, i] { chooseColor(model_->colors.curves[i], curveRows_[i].color); });
+    connect(row.precision, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this, i](int) { if (!loading_) curveRows_[i].precisionEdited = true; });
+    connect(row.minimum, &QLineEdit::textChanged, this,
+            [this, i] { if (!loading_) curveRows_[i].minimumEdited = true; });
+    connect(row.maximum, &QLineEdit::textChanged, this,
+            [this, i] { if (!loading_) curveRows_[i].maximumEdited = true; });
   }
   grid->setColumnStretch(1, 1);
   auto* scroll = new QScrollArea(page);
@@ -282,6 +308,20 @@ void ControlsWindow::connectEnteredPv() {
 void ControlsWindow::applyCurve(std::size_t index) {
   auto& curve = model_->curves[index];
   const auto& row = curveRows_[index];
+  bool minimumValid = true;
+  bool maximumValid = true;
+  const double minimum = row.minimumEdited
+                             ? QLocale::c().toDouble(row.minimum->text(), &minimumValid)
+                             : curve.minimum;
+  const double maximum = row.maximumEdited
+                             ? QLocale::c().toDouble(row.maximum->text(), &maximumValid)
+                             : curve.maximum;
+  if (!minimumValid || !maximumValid || !std::isfinite(minimum) ||
+      !std::isfinite(maximum)) {
+    QMessageBox::warning(this, tr("Invalid Curve Limit"),
+                         tr("Enter finite numeric minimum and maximum values."));
+    return;
+  }
   const std::string oldName = curve.name;
   const bool wasActive = curve.nameSet;
   const QString name = row.name->text().trimmed();
@@ -290,11 +330,14 @@ void ControlsWindow::applyCurve(std::size_t index) {
   curve.plotted = row.plotted->isChecked();
   curve.scale = static_cast<ScaleMode>(row.scale->currentIndex());
   curve.precision = row.precision->value();
-  curve.precisionSet = true;
-  curve.minimum = row.minimum->value();
-  curve.minimumSet = true;
-  curve.maximum = row.maximum->value();
-  curve.maximumSet = true;
+  if (row.precisionEdited) curve.precisionSet = true;
+  curve.minimum = minimum;
+  if (row.minimumEdited) curve.minimumSet = true;
+  curve.maximum = maximum;
+  if (row.maximumEdited) curve.maximumSet = true;
+  curveRows_[index].precisionEdited = false;
+  curveRows_[index].minimumEdited = false;
+  curveRows_[index].maximumEdited = false;
   emit modelChanged();
   if (wasActive != curve.nameSet || oldName != curve.name)
     emit acquisitionConfigurationChanged();
@@ -304,6 +347,7 @@ void ControlsWindow::removeCurve(std::size_t index) {
   auto defaults = makeDefaultModel();
   model_->curves[index] = defaults.curves[index];
   reloadFromModel();
+  setChannelMetadata(index, {});
   emit modelChanged();
   emit acquisitionConfigurationChanged();
 }
@@ -329,11 +373,17 @@ void ControlsWindow::reloadFromModel() {
     const auto& curve = model_->curves[i];
     auto& row = curveRows_[i];
     row.name->setText(curve.nameSet ? QString::fromStdString(curve.name) : QString());
+    row.name->setToolTip(QString::fromStdString(curve.comment));
     row.plotted->setChecked(curve.plotted);
     row.scale->setCurrentIndex(static_cast<int>(curve.scale));
     row.precision->setValue(curve.precision);
-    row.minimum->setValue(curve.minimum);
-    row.maximum->setValue(curve.maximum);
+    row.minimum->setText(limitText(curve.minimum));
+    row.maximum->setText(limitText(curve.maximum));
+    row.minimum->setCursorPosition(0);
+    row.maximum->setCursorPosition(0);
+    row.precisionEdited = false;
+    row.minimumEdited = false;
+    row.maximumEdited = false;
     updateColorButton(row.color, model_->colors.curves[i]);
   }
   timespan_->setValue(static_cast<int>(model_->timing.timespanSeconds));
@@ -348,6 +398,21 @@ void ControlsWindow::reloadFromModel() {
   updateColorButton(background_, model_->colors.background);
   updateColorButton(gridColor_, model_->colors.grid);
   loading_ = false;
+}
+
+void ControlsWindow::setChannelMetadata(std::size_t curve, const ChannelMetadata& metadata) {
+  if (curve >= curveRows_.size()) return;
+  QString state;
+  switch (metadata.connection) {
+    case ConnectionState::Connected: state = tr("Live"); break;
+    case ConnectionState::Connecting: state = tr("Connecting"); break;
+    case ConnectionState::Stale: state = tr("Stale"); break;
+    case ConnectionState::Error: state = tr("Error"); break;
+    case ConnectionState::Disconnected: state = tr("Offline"); break;
+  }
+  if (!model_->curves[curve].nameSet) state = tr("Inactive");
+  curveRows_[curve].status->setText(state);
+  curveRows_[curve].status->setToolTip(QString::fromStdString(metadata.statusMessage));
 }
 
 }  // namespace striptool

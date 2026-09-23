@@ -40,12 +40,29 @@ int main(int argc, char** argv) {
   const auto configuration = striptool::findStartupConfiguration(
       explicitName.toStdString(), QDir::currentPath().toStdString(),
       qEnvironmentVariable("STRIP_FILE_SEARCH_PATH").toStdString());
+  bool loaded = false;
   if (!configuration.empty()) {
     const auto result = striptool::readConfigurationFile(configuration, model);
-    if (!result.success) {
+    loaded = result.success;
+    if (!loaded) {
       QTextStream(stderr) << "qtstriptool: "
                           << QString::fromStdString(result.diagnostics.front().message)
-                          << "; using prior defaults\n";
+                          << (explicitName.isEmpty() ? "; using defaults\n"
+                                                     : "; trying StripTool.stp\n");
+    }
+  }
+  if (!loaded && !explicitName.isEmpty()) {
+    const auto fallback = std::filesystem::path(QDir::currentPath().toStdString()) /
+                          "StripTool.stp";
+    std::error_code checkError;
+    const bool sameFile = !configuration.empty() &&
+        std::filesystem::absolute(configuration).lexically_normal() == fallback;
+    if (!sameFile && std::filesystem::is_regular_file(fallback, checkError)) {
+      const auto result = striptool::readConfigurationFile(fallback, model);
+      if (!result.success)
+        QTextStream(stderr) << "qtstriptool: "
+                            << QString::fromStdString(result.diagnostics.front().message)
+                            << "; using defaults\n";
     }
   }
   striptool::MainWindow window(std::move(model));

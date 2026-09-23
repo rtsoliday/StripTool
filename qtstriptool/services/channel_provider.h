@@ -26,6 +26,7 @@ signals:
                          const QString& message);
   void metadataChanged(striptool::ChannelId id,
                        const striptool::ChannelMetadata& metadata);
+  void descriptionReceived(striptool::ChannelId id, const QString& description);
   void sampleReceived(striptool::ChannelId id, const striptool::Sample& sample);
 };
 

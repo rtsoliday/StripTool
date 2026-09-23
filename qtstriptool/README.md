@@ -13,7 +13,8 @@ kept separate from configuration parsing and acquisition.
 
 The acquisition layer provides an EPICS Channel Access provider, an isolated
 local `CPU_Usage` provider, independent sample and display timers, bounded
-ring buffers, stale/reconnect state, and toolkit-neutral min/max decimation.
+ring buffers, stale/reconnect state, `.DESC` lookup for curve comments, and
+toolkit-neutral min/max decimation that preserves disconnected gaps.
 Normal tests use a deterministic fake provider. To exercise a live IOC, run:
 
 ```sh
@@ -40,9 +41,9 @@ range dialog targets a cancellable provider interface. The default
 `NoHistoryProvider` reports that no archive is configured; a site-supported
 archive can be added behind that interface without coupling it to the GUI.
 
-Run `make test-visual` to create the deterministic fixture rendering at
-`qtstriptool/O.<platform>-qt<version>/test-artifacts/plot-baseline.png` for
-human comparison with the legacy screenshot checklist.
+Run `make test-visual` to create deterministic graph, main-window, and controls
+renderings in `qtstriptool/O.<platform>-qt<version>/test-artifacts/` for human
+comparison with the legacy screenshot checklist.
 
 Build and test it from the repository root:
 

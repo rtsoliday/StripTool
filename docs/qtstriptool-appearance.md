@@ -70,3 +70,13 @@ Review at least:
 
 Record accepted differences with the release candidate rather than replacing
 the deterministic fixture merely to make a comparison pass.
+
+## Local visual review, 2026-09-23
+
+The macOS arm64 Qt 6 fixture renders readable Y-axis ticks and units, time
+labels, a date, a graph toolbar, and the ten-row controls. The graph was
+compared with the available Linux Motif `SHOT-005-graph.png`: both show colored
+scales, a dashed grid, a white plotting area, and time context. The traces and
+platforms differ, so this is a layout check rather than the required
+same-data parity capture. The remaining checklist states and print output
+still need side-by-side review.

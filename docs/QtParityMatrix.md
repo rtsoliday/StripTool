@@ -1,7 +1,8 @@
 # Qt StripTool parity and release gates
 
-This matrix is maintained alongside the detailed behavioral inventory in
-`striptool-feature-matrix.csv`. “Automated” means the repository contains a
+This matrix tracks current evidence for the behavioral inventory in
+`striptool-feature-matrix.csv`. The CSV's initial status labels are historical;
+use this matrix for the current gate record. “Automated” means the repository contains a
 repeatable test; “manual” means results must be recorded for each release
 candidate. Platform entries describe what has actually been run, not merely
 what the build files intend to support.
@@ -26,7 +27,7 @@ what the build files intend to support.
 | Platform | Qt 5.15 | Qt 6 | Motif comparison | Status |
 |---|---|---|---|---|
 | Linux x86_64 | Build and tests available locally | Run when dependencies are installed | Builds locally | Qt 5 verified on 2026-09-17 |
-| macOS | Required | Required | If dependencies remain available | Awaiting CI/host |
+| macOS arm64 | Full non-IOC suite and visual render passed locally on 2026-09-23 | Full non-IOC suite, visual render, and local soft IOC CA test passed on 2026-09-23 | Compared available legacy single-curve screenshot; full side-by-side pending | Local build/test verified; site IOC, reconnect, and soak gates pending |
 | Windows MSVC | Optional Qt 5 | Required | Not applicable | Awaiting CI/host |
 
 Use `make test-qt-versions` to run every locally installed Qt major version.

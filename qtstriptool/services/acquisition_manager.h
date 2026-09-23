@@ -26,6 +26,8 @@ public:
   const SampleBuffer* buffer(ChannelId id) const;
   ChannelMetadata metadata(ChannelId id) const;
   void sampleNow();
+  void clearSamples();
+  void setBufferCapacity(std::size_t capacity);
   void retryDisconnected() { provider_->retryDisconnected(); }
 
 signals:
@@ -38,6 +40,8 @@ private:
     explicit ChannelState(std::size_t capacity) : buffer(capacity) {}
     SampleBuffer buffer;
     std::optional<Sample> latest;
+    std::string description;
+    std::chrono::steady_clock::time_point lastReceived{};
     ChannelMetadata metadata;
   };
 

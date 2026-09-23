@@ -9,8 +9,10 @@ The Qt application is currently an **alpha**. It supports live Channel Access,
 ten-curve controls, compatible `.stp` load/save, graph interaction,
 annotations, text/CSV and image export, and Qt printing. It is not yet the
 default replacement: a production APS archive provider has not been selected,
-the mandatory parity and soak gates remain open, and macOS, Windows, and Qt 6
-have not been verified for this release. Keep both executable names distinct
+the mandatory parity and soak gates remain open, and Windows has not been
+verified for this release. Local macOS arm64 builds and non-IOC tests pass with
+Qt 5.15 and Qt 6; this does not complete the cross-platform gate. Keep both
+executable names distinct
 while those gates are open.
 
 ## Repository layout

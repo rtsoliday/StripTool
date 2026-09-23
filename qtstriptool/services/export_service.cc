@@ -59,10 +59,12 @@ bool ExportService::writeText(std::ostream& output, const StripToolModel& model,
   output << std::setprecision(17);
   for (std::size_t curve = 0; curve < samples.size(); ++curve) {
     if (!model.curves[curve].nameSet) continue;
-    for (const auto& sample : samples[curve])
+    for (const auto& sample : samples[curve]) {
+      if (!sample.plotable) continue;
       output << timestamp(sample.timestamp) << ' ' << model.curves[curve].name
              << ' ' << sample.value << ' ' << sample.status << ' '
              << sample.severity << '\n';
+    }
   }
   return bool(output);
 }
@@ -73,10 +75,12 @@ bool ExportService::writeCsv(std::ostream& output, const StripToolModel& model,
   output << std::setprecision(17);
   for (std::size_t curve = 0; curve < samples.size(); ++curve) {
     if (!model.curves[curve].nameSet) continue;
-    for (const auto& sample : samples[curve])
+    for (const auto& sample : samples[curve]) {
+      if (!sample.plotable) continue;
       output << csvQuote(timestamp(sample.timestamp)) << ','
              << csvQuote(model.curves[curve].name) << ',' << sample.value << ','
              << sample.status << ',' << sample.severity << '\n';
+    }
   }
   return bool(output);
 }

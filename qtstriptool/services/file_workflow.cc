@@ -1,6 +1,8 @@
 #include "services/file_workflow.h"
 
+#include <QSaveFile>
 #include <algorithm>
+#include <sstream>
 #include <utility>
 
 namespace striptool {
@@ -19,7 +21,24 @@ ConfigResult FileWorkflow::open(const std::filesystem::path& path,
 
 bool FileWorkflow::save(const std::filesystem::path& path, StripToolModel& model,
                         std::string* error) {
-  if (!writeConfigurationFile(path, model, error)) return false;
+  std::ostringstream content;
+  if (!writeConfiguration(content, model, error)) return false;
+#ifdef _WIN32
+  const QString name = QString::fromStdWString(path.wstring());
+#else
+  const QString name = QString::fromStdString(path.string());
+#endif
+  QSaveFile output(name);
+  if (!output.open(QIODevice::WriteOnly)) {
+    if (error) *error = output.errorString().toStdString();
+    return false;
+  }
+  const std::string serialized = content.str();
+  if (output.write(serialized.data(), static_cast<qint64>(serialized.size())) !=
+          static_cast<qint64>(serialized.size()) || !output.commit()) {
+    if (error) *error = output.errorString().toStdString();
+    return false;
+  }
   model.filename = path.string();
   model.title = path.filename().string();
   return true;

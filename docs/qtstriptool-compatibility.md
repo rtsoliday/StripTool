@@ -9,7 +9,7 @@ in `QtParityMatrix.md`.
 ## Current release status: alpha
 
 The current code meets the planned alpha milestone: live Channel Access,
-complete ten-curve controls, and `.stp` load/save are implemented. It also
+ten-curve connection and plotting controls, and `.stp` load/save are implemented. It also
 contains annotations, text/CSV and image exports, Qt printing, and a cancellable
 history-provider interface. Those additional features do not make the release
 beta because production archive history and cross-platform build evidence are
@@ -49,8 +49,9 @@ bugs, or exact pixels.
 - **Configuration groups:** Qt open/save operates on the complete model. The
   legacy dialog's partial Timing/Colors/Graph/Curve group load and save is not
   present.
-- **Description record:** the Qt CA provider does not perform the legacy
-  separate description-record lookup to populate a curve comment.
+- **Curve metadata editing:** units and comments are read from `.stp` files,
+  and Channel Access supplies units and `.DESC` comments when unset, but the
+  controls window has no direct units or comment editor yet.
 - **Resources and defaults:** arbitrary X resources, `STRIP_SITE_DEFAULTS`,
   `$HOME/.StripToolrc`, and exact site fallback resources are not interpreted.
   Relevant settings belong in `.stp` files or future documented Qt settings.
@@ -62,8 +63,14 @@ bugs, or exact pixels.
 - **Appearance:** Qt widgets, fonts, metrics, DPI scaling, dialogs, and
   accessibility behavior are intentionally native. Exact Motif styling and
   geometry are not reproduced.
-- **Platform evidence:** Linux x86_64 with Qt 5 is verified locally. Qt 6 was
-  unavailable for the recorded run; macOS and Windows builds remain unverified.
+- **Platform evidence:** Linux x86_64 with Qt 5 was verified on 2026-09-17.
+  macOS arm64 builds and non-IOC tests passed locally with Qt 5.15 and Qt 6 on
+  2026-09-23. A Qt 6 Channel Access test passed against a local soft IOC.
+  Windows remains unverified; site IOC, reconnect, and soak gates are open.
+- **Sample count below 7200:** Qt accepts explicit counts down to 1 so a value
+  entered in its controls survives save and reload. Legacy Motif clamps an
+  explicit count to 7200 even though it can derive a smaller count when the
+  field is omitted.
 - **Safer parsing:** Qt rejects curve index 10, more than ten old-format
   channels, malformed known attributes, unsupported versions, and invalid
   model values transactionally. Precision is constrained to 0 through 20.

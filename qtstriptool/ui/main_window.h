@@ -47,6 +47,7 @@ private:
   std::unique_ptr<AcquisitionManager> cpuAcquisition_;
   std::array<quint64, kMaximumCurves> channelIds_{};
   std::array<bool, kMaximumCurves> localChannels_{};
+  std::array<std::string, kMaximumCurves> acquiredNames_{};
   QHash<quint64, std::size_t> historyRequests_;
   bool acquisitionRunning_ = false;
 };

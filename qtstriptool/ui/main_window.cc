@@ -20,14 +20,22 @@
 #include <QPainter>
 #include <QSettings>
 #include <QStatusBar>
+#include <QToolBar>
 #include <QUrl>
 #include <QtPrintSupport/QPrintDialog>
 #include <QtPrintSupport/QPrintPreviewDialog>
 #include <QtPrintSupport/QPrinter>
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <utility>
 namespace striptool {
+namespace {
+std::chrono::milliseconds timerInterval(double seconds) {
+  return std::chrono::milliseconds(static_cast<int>(std::clamp(
+      seconds * 1000.0, 10.0, double(std::numeric_limits<int>::max()))));
+}
+}
 MainWindow::MainWindow(QWidget* parent) : MainWindow(makeDefaultModel(), parent) {}
 
 MainWindow::MainWindow(StripToolModel model, QWidget* parent)
@@ -89,6 +97,11 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   auto* replotAction = viewMenu->addAction(tr("Re&plot"));
   replotAction->setObjectName(QStringLiteral("replotAction"));
   auto* historyAction = viewMenu->addAction(tr("&Historical Range…"));
+  viewMenu->addSeparator();
+  auto* clearAction = viewMenu->addAction(tr("&Clear Data"));
+  clearAction->setObjectName(QStringLiteral("clearDataAction"));
+  auto* retryAction = viewMenu->addAction(tr("&Retry Connections"));
+  retryAction->setObjectName(QStringLiteral("retryConnectionsAction"));
   historyAction->setObjectName(QStringLiteral("historyAction"));
   auto* windowMenu = menuBar()->addMenu(tr("&Window"));
   windowMenu->setObjectName(QStringLiteral("windowMenu"));
@@ -104,6 +117,16 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   plotWidget_->setObjectName(QStringLiteral("plotArea"));
   plotWidget_->setModel(model_);
   setCentralWidget(plotWidget_);
+  auto* toolbar = addToolBar(tr("Graph"));
+  toolbar->setObjectName(QStringLiteral("graphToolbar"));
+  toolbar->addAction(panLeftAction);
+  toolbar->addAction(panRightAction);
+  toolbar->addAction(zoomInAction);
+  toolbar->addAction(zoomOutAction);
+  toolbar->addAction(autoScaleAction);
+  toolbar->addAction(resetAction);
+  toolbar->addAction(autoScrollAction);
+  toolbar->addAction(pauseAction);
   controlsWindow_ = std::make_unique<ControlsWindow>(&model_);
   historyProvider_ = std::make_unique<NoHistoryProvider>();
   updateRecentFiles();
@@ -167,6 +190,8 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   });
   connect(pauseAction, &QAction::toggled, plotWidget_, &PlotWidget::setPaused);
   connect(autoScrollAction, &QAction::toggled, plotWidget_, &PlotWidget::setAutoScroll);
+  connect(plotWidget_, &PlotWidget::autoScrollChanged, autoScrollAction,
+          &QAction::setChecked);
   connect(panLeftAction, &QAction::triggered, this,
           [this] { plotWidget_->pan(-0.25); });
   connect(panRightAction, &QAction::triggered, this,
@@ -180,9 +205,27 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   connect(resetAction, &QAction::triggered, plotWidget_, &PlotWidget::resetView);
   connect(replotAction, &QAction::triggered, plotWidget_, &PlotWidget::replot);
   connect(historyAction, &QAction::triggered, this, &MainWindow::requestHistory);
+  connect(clearAction, &QAction::triggered, this, [this] {
+    plotWidget_->clearSamples();
+    if (channelAcquisition_) channelAcquisition_->clearSamples();
+    if (cpuAcquisition_) cpuAcquisition_->clearSamples();
+  });
+  connect(retryAction, &QAction::triggered, this, [this] {
+    if (channelAcquisition_) channelAcquisition_->retryDisconnected();
+  });
   connect(showControlsAction, &QAction::triggered, this, &MainWindow::showControls);
   connect(controlsWindow_.get(), &ControlsWindow::modelChanged, this, [this] {
+    const bool timespanChanged = plotWidget_->model().timing.timespanSeconds !=
+                                 model_.timing.timespanSeconds;
+    for (std::size_t i = 0; i < model_.curves.size(); ++i) {
+      const auto& old = plotWidget_->model().curves[i];
+      const auto& next = model_.curves[i];
+      if (old.nameSet != next.nameSet || old.name != next.name)
+        plotWidget_->clearCurveSamples(i);
+    }
     plotWidget_->setModel(model_);
+    if (timespanChanged && plotWidget_->autoScroll() && !plotWidget_->paused())
+      plotWidget_->resetView();
     setWindowTitle(model_.filename.empty()
                        ? applicationName()
                        : QString::fromStdString(model_.title) + QStringLiteral(" — ") +
@@ -209,6 +252,9 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
                       .arg(curve + 1)
                       .arg(value, 0, 'g', 8));
           });
+  connect(plotWidget_, &PlotWidget::annotationsChanged, this, [this] {
+    model_.annotations = plotWidget_->model().annotations;
+  });
   statusBar()->showMessage(model_.filename.empty()
                                ? tr("Ready")
                                : tr("Loaded %1").arg(QString::fromStdString(model_.filename)));
@@ -246,7 +292,13 @@ void MainWindow::showControls() {
 }
 
 void MainWindow::applyModel() {
+  for (const auto id : historyRequests_.keys()) historyProvider_->cancel(id);
+  historyRequests_.clear();
+  plotWidget_->clearSamples();
+  if (channelAcquisition_) channelAcquisition_->clearSamples();
+  if (cpuAcquisition_) cpuAcquisition_->clearSamples();
   plotWidget_->setModel(model_);
+  plotWidget_->resetView();
   controlsWindow_->reloadFromModel();
   setWindowTitle(model_.filename.empty()
                      ? applicationName()
@@ -285,8 +337,15 @@ bool MainWindow::saveConfiguration(const QString& path, QString* error) {
 
 bool MainWindow::exportData(const QString& path, bool csv, QString* error) const {
   CurveSamples samples;
-  for (std::size_t i = 0; i < samples.size(); ++i)
-    samples[i] = plotWidget_->curveSamples(i);
+  const auto range = plotWidget_->visibleTimeRange();
+  for (std::size_t i = 0; i < samples.size(); ++i) {
+    const auto& source = plotWidget_->curveSamples(i);
+    const auto first = std::lower_bound(source.begin(), source.end(), range.start,
+        [](const Sample& sample, const auto& time) { return sample.timestamp < time; });
+    const auto last = std::upper_bound(first, source.end(), range.end,
+        [](const auto& time, const Sample& sample) { return time < sample.timestamp; });
+    samples[i].assign(first, last);
+  }
   std::string detail;
   const bool ok = csv ? ExportService::writeCsvFile(path.toStdString(), model_, samples, &detail)
                       : ExportService::writeTextFile(path.toStdString(), model_, samples, &detail);
@@ -322,6 +381,11 @@ void MainWindow::updateRecentFiles(const QString& path) {
 }
 
 void MainWindow::requestHistory() {
+  if (dynamic_cast<NoHistoryProvider*>(historyProvider_.get())) {
+    QMessageBox::information(this, tr("History Unavailable"),
+                             tr("No archive history provider is configured."));
+    return;
+  }
   HistoryDialog dialog(this);
   dialog.setRange(plotWidget_->visibleTimeRange());
   if (dialog.exec() != QDialog::Accepted) return;
@@ -330,6 +394,9 @@ void MainWindow::requestHistory() {
     QMessageBox::warning(this, tr("Invalid Range"), tr("The From time must precede the To time."));
     return;
   }
+  for (const auto id : historyRequests_.keys()) historyProvider_->cancel(id);
+  historyRequests_.clear();
+  plotWidget_->setVisibleTimeRange(range);
   for (std::size_t i = 0; i < model_.curves.size(); ++i) {
     if (!model_.curves[i].nameSet) continue;
     const auto id = historyProvider_->request(QString::fromStdString(model_.curves[i].name), range);
@@ -344,14 +411,61 @@ void MainWindow::startAcquisition() {
   cpuUsage_ = std::make_unique<CpuUsageProvider>();
   channelAcquisition_ = std::make_unique<AcquisitionManager>(channelAccess_.get());
   cpuAcquisition_ = std::make_unique<AcquisitionManager>(cpuUsage_.get());
-  const auto sampleInterval = std::chrono::milliseconds(
-      std::max(10, int(model_.timing.sampleIntervalSeconds * 1000.0)));
-  const auto refreshInterval = std::chrono::milliseconds(
-      std::max(10, int(model_.timing.refreshIntervalSeconds * 1000.0)));
+  const auto sampleInterval = timerInterval(model_.timing.sampleIntervalSeconds);
+  const auto refreshInterval = timerInterval(model_.timing.refreshIntervalSeconds);
   channelAcquisition_->setSampleInterval(sampleInterval);
   cpuAcquisition_->setSampleInterval(sampleInterval);
   channelAcquisition_->setRefreshInterval(refreshInterval);
   cpuAcquisition_->setRefreshInterval(refreshInterval);
+
+  const auto updateMetadata = [this](bool local, ChannelId id,
+                                      const ChannelMetadata& metadata) {
+    for (std::size_t i = 0; i < channelIds_.size(); ++i) {
+      if (channelIds_[i] != id || localChannels_[i] != local) continue;
+      controlsWindow_->setChannelMetadata(i, metadata);
+      if (metadata.connection != ConnectionState::Connected ||
+          (metadata.units.empty() && !metadata.displayMinimum &&
+           !metadata.displayMaximum)) break;
+      auto& curve = model_.curves[i];
+      bool changed = false;
+      if (!curve.commentSet && !metadata.description.empty() &&
+          curve.comment != metadata.description) {
+        curve.comment = metadata.description;
+        changed = true;
+      }
+      if (!curve.unitsSet && !metadata.units.empty() && curve.units != metadata.units) {
+        curve.units = metadata.units;
+        changed = true;
+      }
+      if (!curve.precisionSet && curve.precision != metadata.precision) {
+        curve.precision = metadata.precision;
+        changed = true;
+      }
+      if (!curve.minimumSet && metadata.displayMinimum &&
+          curve.minimum != *metadata.displayMinimum) {
+        curve.minimum = *metadata.displayMinimum;
+        changed = true;
+      }
+      if (!curve.maximumSet && metadata.displayMaximum &&
+          curve.maximum != *metadata.displayMaximum) {
+        curve.maximum = *metadata.displayMaximum;
+        changed = true;
+      }
+      if (changed) {
+        plotWidget_->setModel(model_);
+        controlsWindow_->reloadFromModel();
+      }
+      break;
+    }
+  };
+  connect(channelAcquisition_.get(), &AcquisitionManager::channelMetadataChanged,
+          this, [updateMetadata](ChannelId id, const ChannelMetadata& metadata) {
+            updateMetadata(false, id, metadata);
+          });
+  connect(cpuAcquisition_.get(), &AcquisitionManager::channelMetadataChanged,
+          this, [updateMetadata](ChannelId id, const ChannelMetadata& metadata) {
+            updateMetadata(true, id, metadata);
+          });
 
   for (std::size_t i = 0; i < model_.curves.size(); ++i) {
     if (!model_.curves[i].nameSet) continue;
@@ -361,6 +475,8 @@ void MainWindow::startAcquisition() {
         QString::fromStdString(model_.curves[i].name),
         static_cast<std::size_t>(model_.timing.numberOfSamples));
     localChannels_[i] = local;
+    acquiredNames_[i] = model_.curves[i].name;
+    controlsWindow_->setChannelMetadata(i, acquisition->metadata(channelIds_[i]));
   }
   const auto refresh = [this] {
     for (std::size_t i = 0; i < channelIds_.size(); ++i) {
@@ -370,6 +486,7 @@ void MainWindow::startAcquisition() {
       if (const auto* buffer = acquisition->buffer(channelIds_[i]))
         plotWidget_->setCurveSamples(i, buffer->samples());
     }
+    plotWidget_->advanceToNow();
   };
   connect(channelAcquisition_.get(), &AcquisitionManager::displayRefreshRequested,
           this, refresh);
@@ -378,18 +495,50 @@ void MainWindow::startAcquisition() {
 }
 
 void MainWindow::stopAcquisition() {
+  for (std::size_t i = 0; i < channelIds_.size(); ++i)
+    if (channelIds_[i]) controlsWindow_->setChannelMetadata(i, {});
   channelAcquisition_.reset();
   cpuAcquisition_.reset();
   channelAccess_.reset();
   cpuUsage_.reset();
   channelIds_.fill(0);
   localChannels_.fill(false);
+  acquiredNames_.fill(std::string{});
   acquisitionRunning_ = false;
 }
 
 void MainWindow::restartAcquisition() {
   if (!acquisitionRunning_) return;
-  stopAcquisition();
-  startAcquisition();
+  const auto sampleInterval = timerInterval(model_.timing.sampleIntervalSeconds);
+  const auto refreshInterval = timerInterval(model_.timing.refreshIntervalSeconds);
+  channelAcquisition_->setSampleInterval(sampleInterval);
+  cpuAcquisition_->setSampleInterval(sampleInterval);
+  channelAcquisition_->setRefreshInterval(refreshInterval);
+  cpuAcquisition_->setRefreshInterval(refreshInterval);
+  channelAcquisition_->setBufferCapacity(model_.timing.numberOfSamples);
+  cpuAcquisition_->setBufferCapacity(model_.timing.numberOfSamples);
+  for (std::size_t i = 0; i < acquiredNames_.size(); ++i) {
+    const std::string name = model_.curves[i].nameSet ? model_.curves[i].name : "";
+    if (acquiredNames_[i] == name) continue;
+    if (channelIds_[i]) {
+      auto* oldAcquisition = localChannels_[i] ? cpuAcquisition_.get()
+                                                : channelAcquisition_.get();
+      oldAcquisition->removeChannel(channelIds_[i]);
+      channelIds_[i] = 0;
+    }
+    plotWidget_->clearCurveSamples(i);
+    acquiredNames_[i] = name;
+    if (name.empty()) {
+      controlsWindow_->setChannelMetadata(i, {});
+      continue;
+    }
+    const bool local = name == "CPU_Usage";
+    auto* acquisition = local ? cpuAcquisition_.get() : channelAcquisition_.get();
+    channelIds_[i] = acquisition->addChannel(
+        QString::fromStdString(name),
+        static_cast<std::size_t>(model_.timing.numberOfSamples));
+    localChannels_[i] = local;
+    controlsWindow_->setChannelMetadata(i, acquisition->metadata(channelIds_[i]));
+  }
 }
 }

@@ -122,9 +122,9 @@ ConfigResult parseLegacy(const std::vector<std::string>& lines,
     }
   }
   if (!recognized) return fail(1, "not a recognized StripTool configuration", true);
-  candidate.timing.numberOfSamples = static_cast<int>(
+  candidate.timing.numberOfSamples = static_cast<int>(std::clamp(
       std::ceil(candidate.timing.timespanSeconds /
-                candidate.timing.sampleIntervalSeconds));
+                candidate.timing.sampleIntervalSeconds), 1.0, 65536.0));
   return {true, true, {}};
 }
 
@@ -151,7 +151,7 @@ ConfigResult parseCurrent(const std::vector<std::string>& lines,
         int parsed = 0;
         valid = parseInteger(value, parsed);
         if (valid) {
-          candidate.timing.numberOfSamples = std::clamp(parsed, 7200, 65536);
+          candidate.timing.numberOfSamples = std::clamp(parsed, 1, 65536);
           numberOfSamplesSet = true;
         }
       } else if (parts[2] == "SampleInterval") {
@@ -253,9 +253,7 @@ ConfigResult parseCurrent(const std::vector<std::string>& lines,
   if (!numberOfSamplesSet) {
     const double samples = std::ceil(candidate.timing.timespanSeconds /
                                      candidate.timing.sampleIntervalSeconds);
-    if (samples > std::numeric_limits<int>::max())
-      return fail(0, "derived sample count is too large");
-    candidate.timing.numberOfSamples = static_cast<int>(samples);
+    candidate.timing.numberOfSamples = static_cast<int>(std::clamp(samples, 1.0, 65536.0));
   }
   return {true, false, {}};
 }
@@ -386,12 +384,19 @@ bool writeConfiguration(std::ostream& output, const StripToolModel& model,
 
 bool writeConfigurationFile(const std::filesystem::path& path,
                             const StripToolModel& model, std::string* error) {
+  std::ostringstream serialized;
+  if (!writeConfiguration(serialized, model, error)) return false;
   std::ofstream output(path);
   if (!output) {
     if (error) *error = "unable to open " + path.string();
     return false;
   }
-  return writeConfiguration(output, model, error);
+  output << serialized.str();
+  if (!output) {
+    if (error) *error = "unable to write " + path.string();
+    return false;
+  }
+  return true;
 }
 
 ConfigResult loadConfigurationLayers(
