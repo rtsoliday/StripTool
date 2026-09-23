@@ -1043,6 +1043,54 @@ private slots:
     QVERIFY(plot.valueRange(0).maximum > originalValues.maximum);
     QVERIFY(plot.autoScroll());
   }
+  void removingCurveRemapsAnnotationSelection() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "first";
+    model.curves[0].nameSet = true;
+    model.curves[1].name = "second";
+    model.curves[1].nameSet = true;
+    const auto time = std::chrono::system_clock::from_time_t(1000);
+    model.annotations = {{time, 1.0, "first note", 0},
+                         {time, 2.0, "second note", 1}};
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    plot.selectAnnotation(1);
+    auto changed = model;
+    changed.curves[0].nameSet = false;
+    plot.setModel(changed);
+    QCOMPARE(plot.model().annotations.size(), std::size_t{1});
+    QCOMPARE(plot.selectedAnnotation(), 0);
+    QCOMPARE(plot.model().annotations[0].text, std::string("second note"));
+    plot.setModel(model);
+    plot.selectAnnotation(0);
+    plot.setModel(changed);
+    QCOMPARE(plot.selectedAnnotation(), -1);
+  }
+  void middleDragStopsAtPlotEdge() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "edge";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0;
+    model.curves[0].maximum = 10;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(100)});
+    plot.show();
+    QVERIFY(plot.addAnnotationAt(QPoint(700, 200), QStringLiteral("edge")) >= 0);
+    const auto originalTime = plot.model().annotations[0].time;
+    const auto originalValue = plot.model().annotations[0].value;
+    QTest::mousePress(&plot, Qt::MiddleButton, Qt::NoModifier, QPoint(690, 204));
+    moveWhileDragging(&plot, QPoint(720, 204), Qt::MiddleButton);
+    QCOMPARE(plot.model().annotations[0].time, originalTime);
+    QCOMPARE(plot.model().annotations[0].value, originalValue);
+    moveWhileDragging(&plot, QPoint(670, 204), Qt::MiddleButton);
+    QVERIFY(plot.model().annotations[0].time < originalTime);
+    QTest::mouseRelease(&plot, Qt::MiddleButton, Qt::NoModifier, QPoint(670, 204));
+  }
   void plotKeepsCrossingSegmentsAndDoesNotRewindOnLateSamples() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "test:pv";

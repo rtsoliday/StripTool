@@ -101,6 +101,7 @@ private:
   QPoint dragStart_;
   TimeRange dragRange_;
   Annotation dragAnnotation_;
+  QRectF dragAnnotationRect_;
   QPoint cursorPosition_{-1, -1};
   int selectedAnnotation_ = -1;
   int selectedCurve_ = -1;

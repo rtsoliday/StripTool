@@ -55,6 +55,20 @@ void PlotWidget::setModel(const StripToolModel& model) {
         (!next.nameSet || old.name != next.name);
   }
   model_ = model;
+  const int previousSelection = selectedAnnotation_;
+  int nextSelection = previousSelection;
+  int removedBeforeSelection = 0;
+  for (std::size_t i = 0; i < model_.annotations.size(); ++i) {
+    const auto& annotation = model_.annotations[i];
+    const bool removed = annotation.curveIndex &&
+                         *annotation.curveIndex < kMaximumCurves &&
+                         replacedCurves[*annotation.curveIndex];
+    if (removed && static_cast<int>(i) == previousSelection)
+      nextSelection = -1;
+    else if (removed && static_cast<int>(i) < previousSelection)
+      ++removedBeforeSelection;
+  }
+  if (nextSelection >= 0) nextSelection -= removedBeforeSelection;
   const auto count = model_.annotations.size();
   model_.annotations.erase(std::remove_if(model_.annotations.begin(),
                                           model_.annotations.end(),
@@ -65,12 +79,13 @@ void PlotWidget::setModel(const StripToolModel& model) {
       }), model_.annotations.end());
   const bool annotationsRemoved = model_.annotations.size() != count;
   if (annotationsRemoved) emit annotationsChanged();
-  if (annotationsRemoved ||
-      selectedAnnotation_ >= static_cast<int>(model_.annotations.size())) {
-    selectedAnnotation_ = -1;
-    if (dragMode_ == DragMode::Annotation) dragMode_ = DragMode::None;
-    emit annotationSelectionChanged(-1);
+  if (nextSelection >= static_cast<int>(model_.annotations.size())) nextSelection = -1;
+  if (nextSelection != previousSelection) {
+    selectedAnnotation_ = nextSelection;
+    emit annotationSelectionChanged(nextSelection);
   }
+  if (dragMode_ == DragMode::Annotation && nextSelection < 0)
+    dragMode_ = DragMode::None;
   if (selectedCurve_ >= 0 &&
       (!model_.curves[static_cast<std::size_t>(selectedCurve_)].nameSet ||
        !model_.curves[static_cast<std::size_t>(selectedCurve_)].plotted))
@@ -660,15 +675,17 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
   const QRectF area = plotRect();
   if (area.width() > 0) {
     if (dragMode_ == DragMode::Annotation && selectedAnnotation_ >= 0) {
-      const qreal originalFraction = double(milliseconds(dragAnnotation_.time) -
-                                            milliseconds(visibleTimeRange_.start)) /
-                                     std::max<qint64>(1, milliseconds(visibleTimeRange_.end) -
-                                                            milliseconds(visibleTimeRange_.start));
-      const QPoint target(qRound(area.left() + originalFraction * area.width() +
-                                 event->pos().x() - dragStart_.x()),
-                          event->pos().y());
+      const qreal targetX = std::clamp(dragAnnotationRect_.left() +
+                                          event->pos().x() - dragStart_.x(),
+                                      area.left(), area.right() - dragAnnotationRect_.width());
+      const qreal targetY = std::clamp(dragAnnotationRect_.top() +
+                                          event->pos().y() - dragStart_.y(),
+                                      area.top(), area.bottom() - dragAnnotationRect_.height());
       auto& annotation = model_.annotations[static_cast<std::size_t>(selectedAnnotation_)];
-      annotation.time = timeAt(target);
+      if (targetX != dragAnnotationRect_.left())
+        annotation.time = timeAt(QPoint(qRound(targetX), qRound(targetY)));
+      else
+        annotation.time = dragAnnotation_.time;
       if (dragAnnotation_.value) {
         const auto curves = plottedCurves();
         if (!curves.empty()) {
@@ -681,7 +698,7 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
           const double initial = plotValue(*dragAnnotation_.value,
                                            model_.curves[index].scale);
           const double moved = initial -
-              (event->pos().y() - dragStart_.y()) / area.height() *
+              (targetY - dragAnnotationRect_.top()) / area.height() *
                   (range.maximum - range.minimum);
           const double value = model_.curves[index].scale == ScaleMode::Log10
                                    ? std::pow(10.0, moved) : moved;
@@ -751,6 +768,7 @@ void PlotWidget::mousePressEvent(QMouseEvent* event) {
       dragMode_ = DragMode::Annotation;
       dragStart_ = event->pos();
       dragAnnotation_ = model_.annotations[static_cast<std::size_t>(touched)];
+      dragAnnotationRect_ = annotationRect(static_cast<std::size_t>(touched));
     }
   } else if (event->button() == Qt::LeftButton) {
     selectAnnotation(-1);

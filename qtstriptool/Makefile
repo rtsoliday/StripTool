@@ -178,6 +178,7 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            removingCurvePreservesOtherPendingEdits \
            legendSelectionChangesCursorCurve plotMouseButtonsSelectMovePanAndShowCommands \
            middleDragKeepsLiveViewStableUntilRelease \
+           removingCurveRemapsAnnotationSelection middleDragStopsAtPlotEdge \
            plotKeepsCrossingSegmentsAndDoesNotRewindOnLateSamples \
            toolbarRightClickUsesFinePanAndZoomSteps
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
