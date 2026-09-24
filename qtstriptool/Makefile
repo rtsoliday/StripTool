@@ -226,8 +226,12 @@ test-report: all $(TEST_PROGRAM)
 	@cat $(OBJ_DIR)/test-artifacts/smoke.txt
 
 test-ioc: $(IOC_TEST_PROGRAM)
+	QT_QPA_PLATFORM=offscreen \
+	  QTSTRIPTOOL_TEST_IOC_DB="$(CURDIR)/tests/reconnect.db" \
+	  $(IOC_TEST_PROGRAM) automaticallyReconnectsAfterIocRestart
 	QT_QPA_PLATFORM=offscreen QTSTRIPTOOL_TEST_PV="$(TEST_PV)" \
-	  QTSTRIPTOOL_TEST_DESC="$(TEST_DESC)" $(IOC_TEST_PROGRAM)
+	  QTSTRIPTOOL_TEST_DESC="$(TEST_DESC)" $(IOC_TEST_PROGRAM) \
+	  receivesMetadataAndSampleFromIoc shutsDownWithAnActiveSubscription
 
 test-visual: $(TEST_PROGRAM)
 	@mkdir -p $(OBJ_DIR)/test-artifacts

@@ -23,8 +23,8 @@ MODEL-003,Model,Use toolkit-neutral colors and geometry,Preview,StripConfig.h,Co
 CA-001,Acquisition,Connect and disconnect Channel Access PVs,Preview,StripCA.c,IOC integration test observes transitions,Not started,
 CA-002,Acquisition,Receive value units precision and display limits,Replacement,StripCA.c:info_callback,Metadata integration test passes,Not started,
 CA-003,Acquisition,Request description into curve comment,Replacement,StripCA.c:requestDescRecord,Description integration test passes,Not started,
-CA-004,Acquisition,Represent disconnect and reconnect state,Replacement,StripCA.c:connect_callback,IOC restart test recovers without stale subscription,Not started,
-CA-005,Acquisition,Retry disconnected channels,Replacement,StripCA.c:StripDAQ_retry_connections,Retry action has deterministic test,Not started,
+CA-004,Acquisition,Represent disconnect and reconnect state,Replacement,StripCA.c:connect_callback,IOC restart test recovers without stale subscription,Implemented,
+CA-005,Acquisition,Retry disconnected channels,Intentional omission,StripCA.c:StripDAQ_retry_connections,Channel Access persistent searches reconnect automatically,Omitted,
 CA-006,Acquisition,Provide local CPU_Usage curve,Replacement,StripTool.c:request_connect,Local provider samples without CA channel,Not started,
 CA-007,Acquisition,Support CDEV data source,Site decision,StripCDEV.cc and Makefile,Operational need and support decision recorded,Decision needed,
 DATA-001,Data,Keep sample and refresh cadences independent,Preview,Strip.c and StripDataSource.c,Fake-clock tests demonstrate independent schedules,Not started,
@@ -67,4 +67,3 @@ PERF-001,Performance,Maintain acceptable idle CPU use,Replacement,Legacy compari
 PERF-002,Performance,Handle ten curves at minimum supported sample interval,Replacement,StripDefines.h limits,Sustained benchmark meets agreed loss and CPU thresholds,Not started,
 PERF-003,Performance,Remain memory-stable in long runs,Replacement,StripDataSource bounded design,Soak test stays within agreed bound,Not started,
 PERF-004,Performance,Render large historical ranges responsively,Replacement,StripDataSource render path,Benchmark meets agreed latency threshold,Not started,
-

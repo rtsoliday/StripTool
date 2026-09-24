@@ -75,7 +75,6 @@ public:
     emit connectionChanged(id, striptool::ConnectionState::Disconnected,
                            QStringLiteral("Disconnected"));
   }
-  void retryDisconnected() override { ++retryCount; }
   void publishConnection(striptool::ChannelId id, striptool::ConnectionState state) {
     emit connectionChanged(id, state, QStringLiteral("test"));
   }
@@ -90,7 +89,6 @@ public:
     emit sampleReceived(id, sample);
   }
   QHash<striptool::ChannelId, QString> names;
-  int retryCount = 0;
 private:
   striptool::ChannelId nextId = 1;
 };
@@ -155,6 +153,7 @@ private slots:
     QVERIFY(window.findChild<QAction*>(QStringLiteral("printPreviewAction")));
     QVERIFY(window.findChild<QAction*>(QStringLiteral("historyAction")));
     QVERIFY(window.findChild<QAction*>(QStringLiteral("helpAction")));
+    QVERIFY(!window.findChild<QAction*>(QStringLiteral("retryConnectionsAction")));
     auto* autoScale = window.findChild<QAction*>(QStringLiteral("autoScaleAction"));
     QVERIFY(autoScale->isCheckable());
     QVERIFY(autoScale->isChecked());
@@ -1676,7 +1675,6 @@ private slots:
     QVERIFY(window.findChild<QAction*>(QStringLiteral("editAnnotationAction"))->isEnabled());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("deleteAnnotationAction"))->isEnabled());
     QVERIFY(menu->actions().contains(window.findChild<QAction*>(QStringLiteral("printAction"))));
-    QVERIFY(menu->actions().contains(window.findChild<QAction*>(QStringLiteral("retryConnectionsAction"))));
     menu->hide();
     QContextMenuEvent keyboardMenu(QContextMenuEvent::Keyboard, QPoint(500, 300),
                                    plot->mapToGlobal(QPoint(500, 300)));

@@ -26,7 +26,6 @@ public:
   void checkStaleNow();
   void clearSamples();
   void setBufferCapacity(std::size_t capacity);
-  void retryDisconnected() { provider_->retryDisconnected(); }
 
 signals:
   void displayRefreshRequested();

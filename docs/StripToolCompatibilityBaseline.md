@@ -209,8 +209,8 @@ when the active archive provider is selected.
 - Sampling cadence and graph refresh cadence are independently configurable.
 - Data is stored in bounded ring buffers and associated with timestamps and a
   status value.
-- Connection loss is represented in curve state, and a retry operation is
-  available.
+- Connection loss is represented in curve state, and Channel Access
+  automatically reconnects when the IOC returns.
 - `CPU_Usage` is a special local curve and does not create a CA channel.
 - Live and archived data can be joined over a requested time range when a
   history implementation is compiled in.
@@ -237,7 +237,7 @@ Replacement-level behavior includes:
 - Fixed from/to time-range selection.
 - Creation, selection, editing, movement, and deletion of annotations.
 - Graph and controls windows that can be shown, hidden, or raised.
-- Clear data, retry connections, dismiss, and quit workflows.
+- Clear data, dismiss, and quit workflows.
 
 Exact Motif event routing and X11 drawing primitives are not compatibility
 requirements. The same user outcomes are.

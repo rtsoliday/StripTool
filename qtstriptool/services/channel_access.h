@@ -17,7 +17,6 @@ public:
 
   ChannelId connectChannel(const QString& name) override;
   void disconnectChannel(ChannelId id) override;
-  void retryDisconnected() override;
 
 private:
   struct State;

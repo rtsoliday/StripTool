@@ -41,8 +41,6 @@ void CpuUsageProvider::disconnectChannel(ChannelId id) {
                          QStringLiteral("Disconnected"));
 }
 
-void CpuUsageProvider::retryDisconnected() {}
-
 void CpuUsageProvider::setSampleInterval(std::chrono::milliseconds interval) {
   timer_.setInterval(static_cast<int>(interval.count()));
 }

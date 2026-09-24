@@ -60,7 +60,8 @@ make test-qtstriptool-config
 make test-qtstriptool-ui
 make test-qtstriptool-performance
 make test-qtstriptool-visual
-make test-qtstriptool-ioc TEST_PV=some:readable:numeric:pv
+make test-qtstriptool-ioc             # Self-contained IOC restart/reconnect test
+make test-qtstriptool-ioc TEST_PV=some:readable:numeric:pv  # Also test a site PV
 make test-qt-versions             # Test each locally available Qt major
 make clean
 make distclean

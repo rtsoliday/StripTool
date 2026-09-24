@@ -152,8 +152,6 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   viewMenu->addSeparator();
   auto* clearAction = viewMenu->addAction(tr("&Clear Data"));
   clearAction->setObjectName(QStringLiteral("clearDataAction"));
-  auto* retryAction = viewMenu->addAction(tr("&Retry Connections"));
-  retryAction->setObjectName(QStringLiteral("retryConnectionsAction"));
   historyAction->setObjectName(QStringLiteral("historyAction"));
   auto* windowMenu = menuBar()->addMenu(tr("&Window"));
   windowMenu->setObjectName(QStringLiteral("windowMenu"));
@@ -333,9 +331,6 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     if (channelAcquisition_) channelAcquisition_->clearSamples();
     if (cpuAcquisition_) cpuAcquisition_->clearSamples();
   });
-  connect(retryAction, &QAction::triggered, this, [this] {
-    if (channelAcquisition_) channelAcquisition_->retryDisconnected();
-  });
   connect(showControlsAction, &QAction::triggered, this, &MainWindow::showControls);
   connect(controlsWindow_.get(), &ControlsWindow::modelChanged, this, [this] {
     const bool timespanChanged = plotWidget_->model().timing.timespanSeconds !=
@@ -413,7 +408,6 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   plotMenu_->addAction(snapshotAction);
   plotMenu_->addAction(textAction);
   plotMenu_->addAction(csvAction);
-  plotMenu_->addAction(retryAction);
   plotMenu_->addSeparator();
   auto* dismissAction = plotMenu_->addAction(tr("Dismiss Graph"));
   dismissAction->setObjectName(QStringLiteral("dismissGraphAction"));

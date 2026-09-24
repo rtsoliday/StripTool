@@ -18,7 +18,6 @@ public:
 
   virtual ChannelId connectChannel(const QString& name) = 0;
   virtual void disconnectChannel(ChannelId id) = 0;
-  virtual void retryDisconnected() = 0;
 
 signals:
   void connectionChanged(striptool::ChannelId id,

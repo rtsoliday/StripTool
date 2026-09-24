@@ -84,17 +84,6 @@ void ChannelAccessProvider::disconnectChannel(ChannelId id) {
                          QStringLiteral("Disconnected"));
 }
 
-void ChannelAccessProvider::retryDisconnected() {
-  if (!contextReady_) return;
-  for (State* state : active_) {
-    if (state->channel && ca_state(state->channel) != cs_conn) {
-      queueConnection(state->id, ConnectionState::Connecting,
-                      QStringLiteral("Retrying connection"));
-    }
-  }
-  ca_flush_io();
-}
-
 void ChannelAccessProvider::connectionCallback(connection_handler_args args) {
   auto* state = static_cast<State*>(ca_puser(args.chid));
   if (!state || !state->active.load()) return;
