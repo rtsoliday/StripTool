@@ -16,9 +16,9 @@ BUILD_FILES = Makefile $(RULES_DIR)Makefile.rules $(RULES_DIR)Makefile.build
 PKG_CONFIG ?= pkg-config
 PYTHON ?= $(if $(filter Windows,$(OS)),python,python3)
 
-ifeq ($(RULES_PROFILE),striptool)
-# Match the APS MEDM build toolchain on Linux.  When invoked from the RHEL 8
-# build shell, this uses the same GCC major version as the installed EPICS
+ifneq ($(filter striptool qtalh,$(RULES_PROFILE)),)
+# Use the APS GCC 11.3 toolchain on Linux.  When invoked from the RHEL 8 build
+# shell, this uses the same GCC major version as the installed EPICS
 # libraries while retaining the shell's RHEL 8 glibc baseline.  Statically
 # linking the C++ runtime lets the result run without this private compiler
 # installation on the target host.
@@ -35,6 +35,9 @@ RANLIB = $(CUSTOM_GCC_PATH)/bin/gcc-ranlib
 LDFLAGS += -static-libstdc++
 endif
 endif
+endif
+
+ifeq ($(RULES_PROFILE),striptool)
 
 OBJ_DIR ?= O.$(OS)-$(ARCH)
 ifeq ($(OS),Windows)
