@@ -116,7 +116,6 @@ void AcquisitionManager::setStaleAfter(std::chrono::milliseconds interval) {
 }
 
 void AcquisitionManager::checkStaleNow() {
-  const auto now = std::chrono::system_clock::now();
   for (auto it = channels_.begin(); it != channels_.end(); ++it) {
     auto& state = *it.value();
     if (state.lastReceived == std::chrono::steady_clock::time_point{} ||
@@ -126,7 +125,6 @@ void AcquisitionManager::checkStaleNow() {
       if (state.metadata.connection == ConnectionState::Stale) continue;
       state.metadata.connection = ConnectionState::Stale;
       state.metadata.statusMessage = "No recent samples";
-      if (!state.buffer.empty()) state.buffer.append({now, 0.0, 0, 0, false});
       emit channelMetadataChanged(it.key(), state.metadata);
     }
   }

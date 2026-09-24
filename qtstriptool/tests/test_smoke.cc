@@ -25,6 +25,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QPrintPreviewDialog>
@@ -35,6 +36,7 @@
 #include <QStyle>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <QUrlQuery>
 #include <QTest>
 #include <QToolButton>
 #include <cmath>
@@ -91,6 +93,34 @@ public:
   int retryCount = 0;
 private:
   striptool::ChannelId nextId = 1;
+};
+
+class RecordingHistoryProvider final : public striptool::HistoryProvider {
+public:
+  using HistoryProvider::HistoryProvider;
+  striptool::HistoryRequestId request(const QString& channel,
+                                      striptool::TimeRange range) override {
+    const auto id = nextId++;
+    requests.push_back({id, channel, range});
+    return id;
+  }
+  void cancel(striptool::HistoryRequestId id) override { cancelled.push_back(id); }
+  void succeed(striptool::HistoryRequestId id, const QString& channel,
+               std::vector<striptool::Sample> samples) {
+    emit resultReady(id, channel, std::move(samples));
+  }
+  void fail(striptool::HistoryRequestId id) {
+    emit requestFailed(id, QStringLiteral("deliberate test failure"));
+  }
+  struct Request {
+    striptool::HistoryRequestId id;
+    QString channel;
+    striptool::TimeRange range;
+  };
+  std::vector<Request> requests;
+  std::vector<striptool::HistoryRequestId> cancelled;
+private:
+  striptool::HistoryRequestId nextId = 1;
 };
 }
 
@@ -382,6 +412,43 @@ private slots:
     QVERIFY(window.model().curves[0].minimumSet);
     QCOMPARE(window.model().curves[0].minimum, 10.0);
   }
+  void addingPvSilentlyBackfillsFiveMinutesFromArchiver() {
+    striptool::MainWindow window;
+    auto provider = std::make_unique<RecordingHistoryProvider>();
+    auto* recording = provider.get();
+    window.setHistoryProvider(std::move(provider));
+    window.startAcquisition();
+    auto* controls = window.controlsWindow();
+    controls->findChild<QLineEdit*>(QStringLiteral("pvEntry"))
+        ->setText(QStringLiteral("test:automatic-history"));
+    const auto before = std::chrono::system_clock::now();
+    controls->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
+    const auto after = std::chrono::system_clock::now();
+    QCOMPARE(recording->requests.size(), std::size_t{1});
+    const auto request = recording->requests.front();
+    QCOMPARE(request.channel, QStringLiteral("test:automatic-history"));
+    QCOMPARE(request.range.end - request.range.start, std::chrono::minutes(5));
+    QVERIFY(request.range.end >= before && request.range.end <= after);
+
+    const auto archived = request.range.end - std::chrono::minutes(1);
+    recording->succeed(request.id, request.channel,
+                       {{archived, 42.0, 3, 2}});
+    QCOMPARE(window.plotWidget()->curveSamples(0).size(), std::size_t{1});
+    QCOMPARE(window.plotWidget()->curveSamples(0).front().timestamp, archived);
+    QCOMPARE(window.plotWidget()->curveSamples(0).front().value, 42.0);
+
+    controls->findChild<QLineEdit*>(QStringLiteral("pvEntry"))
+        ->setText(QStringLiteral("test:automatic-failure"));
+    controls->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
+    QCOMPARE(recording->requests.size(), std::size_t{2});
+    recording->fail(recording->requests.back().id);
+    QVERIFY(window.findChildren<QMessageBox*>().isEmpty());
+
+    controls->findChild<QLineEdit*>(QStringLiteral("pvEntry"))
+        ->setText(QStringLiteral("CPU_Usage"));
+    controls->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
+    QCOMPARE(recording->requests.size(), std::size_t{2});
+  }
   void resetViewUsesProviderLimitsWithoutManualEdits() {
     striptool::MainWindow window;
     window.startAcquisition();
@@ -587,6 +654,55 @@ private slots:
         results.at(0).at(2));
     QCOMPARE(samples.size(), std::size_t{1});
     QCOMPARE(samples.front().value, 2.0);
+  }
+  void archiverHistoryProviderRetrievesNativeJson() {
+    QCOMPARE(striptool::ArchiverHistoryProvider::defaultRetrievalRoot(),
+             QStringLiteral("http://asddtn03.aps4.anl.gov:17668/retrieval"));
+    const QByteArray response = R"([{"meta":{"name":"test:archive"},"data":[{"secs":1001,"nanos":0,"val":2.5},{"secs":1000,"nanos":123456789,"val":1.25,"status":4,"severity":2},{"secs":1002,"nanos":0,"val":[1,2]},{"secs":1003,"nanos":1000000000,"val":3.5}]}])";
+    QString error;
+    const auto samples = striptool::parseArchiverJson(response, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(samples.size(), std::size_t{2});
+    QCOMPARE(samples[0].value, 1.25);
+    QCOMPARE(samples[0].status, std::uint16_t{4});
+    QCOMPARE(samples[0].severity, std::uint16_t{2});
+    QCOMPARE(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                 samples[0].timestamp.time_since_epoch()).count(),
+             std::int64_t{1000123456789});
+    QCOMPARE(samples[1].timestamp,
+             std::chrono::system_clock::time_point{std::chrono::seconds(1001)});
+    QCOMPARE(samples[1].status, std::uint16_t{0});
+    QCOMPARE(samples[1].severity, std::uint16_t{0});
+    const auto invalid = striptool::parseArchiverJson(QByteArrayLiteral("{}"), &error);
+    QVERIFY(invalid.empty());
+    QVERIFY(!error.isEmpty());
+
+    qputenv("QTSTRIPTOOL_ARCHIVER_URL", QByteArrayLiteral("http://example.invalid/archive/"));
+    QCOMPARE(striptool::ArchiverHistoryProvider::configuredRetrievalRoot(),
+             QStringLiteral("http://example.invalid/archive/"));
+    qunsetenv("QTSTRIPTOOL_ARCHIVER_URL");
+
+    const auto start = std::chrono::system_clock::time_point{
+        std::chrono::milliseconds(946684800123)};
+    const auto url = striptool::ArchiverHistoryProvider::requestUrl(
+        QStringLiteral("http://archive.example/retrieval/"),
+        QStringLiteral("test:pv name"),
+        {start, start + std::chrono::seconds(10001)});
+    QCOMPARE(url.path(), QStringLiteral("/retrieval/data/getData.json"));
+    const QUrlQuery query(url);
+    QCOMPARE(query.queryItemValue(QStringLiteral("pv")),
+             QStringLiteral("lastSample_2(test:pv name)"));
+    QCOMPARE(query.queryItemValue(QStringLiteral("from")),
+             QStringLiteral("2000-01-01T00:00:00.123Z"));
+    QCOMPARE(query.queryItemValue(QStringLiteral("to")),
+             QStringLiteral("2000-01-01T02:46:41.123Z"));
+    QCOMPARE(query.queryItemValue(QStringLiteral("donotchunk")),
+             QStringLiteral("true"));
+    QCOMPARE(striptool::ArchiverHistoryProvider::requestUrl(
+                 QStringLiteral("http://archive.example/retrieval/data/getData.json"),
+                 QStringLiteral("test:pv"),
+                 {start, start + std::chrono::seconds(1)}).path(),
+             QStringLiteral("/retrieval/data/getData.json"));
   }
   void activeHistoryRequestCanBeDestroyedSafely() {
     auto provider = std::make_unique<striptool::TestHistoryProvider>();
@@ -1088,7 +1204,7 @@ private slots:
     QVERIFY(refreshes.count() >= 2);
     QCOMPARE(acquisition.buffer(id)->size(), std::size_t{64});
   }
-  void staleDataIsExplicit() {
+  void staleStatusKeepsUnchangedValuePlotable() {
     FakeChannelProvider provider;
     striptool::AcquisitionManager acquisition(&provider);
     acquisition.setStaleAfter(std::chrono::milliseconds(0));
@@ -1100,8 +1216,9 @@ private slots:
                            &striptool::AcquisitionManager::channelMetadataChanged);
     acquisition.checkStaleNow();
     QCOMPARE(acquisition.metadata(id).connection, striptool::ConnectionState::Stale);
-    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{2});
-    QVERIFY(!acquisition.buffer(id)->latest()->plotable);
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{1});
+    QVERIFY(acquisition.buffer(id)->latest()->plotable);
+    QCOMPARE(acquisition.buffer(id)->latest()->value, 1.0);
     QVERIFY(metadataSpy.count() >= 1);
   }
   void disconnectedChannelDoesNotRepeatOldSamples() {

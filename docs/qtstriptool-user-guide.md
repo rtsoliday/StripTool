@@ -89,11 +89,27 @@ an annotation to edit its text, or double click empty plot space to add one.
 Delete or Backspace removes the selected annotation. Annotations are runtime
 graph state and are not saved in `.stp` files.
 
-**View > Historical Range** asks the configured history provider for the
-selected range and joins returned samples with live data. The distributed
-build intentionally uses `NoHistoryProvider`, so it reports that no archive is
-configured. Live buffering continues to work; an APS archive endpoint and
-provider must be supplied before production history is available.
+**View > Historical Range** retrieves the selected range from the EPICS
+Archiver Appliance and joins returned samples with live data. The default
+retrieval root is `http://asddtn03.aps4.anl.gov:17668/retrieval`. Set
+`QTSTRIPTOOL_ARCHIVER_URL` to another retrieval root, or directly to its
+`data/getData.json` endpoint, before starting qtstriptool to override it.
+Requests use automatic `lastSample` reduction to keep long ranges responsive.
+Retrieval is asynchronous and implemented directly with Qt Network; no Python
+runtime or external conversion command is required. Archived scalar numeric
+values retain their archive timestamps, status, and severity. `CPU_Usage` is a
+local live-only channel and is not sent to the Archiver.
+
+Channel Access values are held as step lines until another monitor update or an
+actual disconnect/error is received. A quiet PV may be marked **Stale** in the
+Controls window, but silence alone does not end its plotted line because CA
+monitors are not required to repeat unchanged values.
+
+When a Channel Access PV is added, qtstriptool also attempts a background
+Archiver request for the preceding five minutes. If the Archiver is unavailable
+or has no usable data, this automatic backfill fails silently and live plotting
+continues normally. Errors from an explicitly selected **Historical Range** are
+still reported.
 
 ## Open, save, export, and print
 

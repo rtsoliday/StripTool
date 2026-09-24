@@ -146,7 +146,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              logDecimationKeepsNonPositiveGap \
              acquisitionTracksReconnectMetadataAndTimestamps \
              acquisitionShutdownDisconnectsActiveChannels \
-             samplingAndRefreshCadencesRemainIndependent staleDataIsExplicit \
+             samplingAndRefreshCadencesRemainIndependent staleStatusKeepsUnchangedValuePlotable \
              disconnectedChannelDoesNotRepeatOldSamples \
              disconnectedIntervalsSurviveDecimation \
              denseGapsRetainDataWithoutJoiningDisconnectedSegments \
@@ -155,6 +155,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              visibleRangeIncludesCrossingSegments \
              noHistoryProviderReportsFailureAndCancellation \
              testHistoryProviderReturnsSelectedOwnedSamples \
+             archiverHistoryProviderRetrievesNativeJson \
              activeHistoryRequestCanBeDestroyedSafely exportsTextAndCsvData
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \
                preservesUnknownFieldsAcrossRoundTrip \
@@ -176,6 +177,7 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            stepTraceStopsAtPresentTime \
            localChannelMetadataReachesControlsAndGraph \
            connectButtonKeepsUntouchedLimitsAutomatic \
+           addingPvSilentlyBackfillsFiveMinutesFromArchiver \
            resetViewUsesProviderLimitsWithoutManualEdits \
            newCurveInheritsGlobalConfiguredLimitMode \
            addingCurveKeepsExistingAcquisitionHistory \

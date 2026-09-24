@@ -40,9 +40,12 @@ bugs, or exact pixels.
 
 ## Known differences
 
-- **Archive history:** no production APS archive backend or endpoint is
-  selected. The shipped no-history provider reports this explicitly. Legacy
-  CAR/AAPI/LANL implementations have not been ported.
+- **Archive history:** historical range requests use the EPICS Archiver
+  Appliance retrieval service, defaulting to
+  `http://asddtn03.aps4.anl.gov:17668/retrieval`. The endpoint can be
+  overridden with `QTSTRIPTOOL_ARCHIVER_URL`. Legacy CAR/AAPI/LANL providers
+  have not been ported. The native provider currently accepts scalar numeric
+  samples; archived strings and waveforms are ignored.
 - **CDEV:** the Qt build supports Channel Access and the local `CPU_Usage`
   provider; it has no CDEV provider.
 - **SDDS:** plain text and CSV are supported; optional legacy SDDS export is

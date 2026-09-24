@@ -3,17 +3,26 @@
 #include "core/model.h"
 #include "core/sample_buffer.h"
 
+#include <QByteArray>
 #include <QObject>
 #include <QHash>
+#include <QPointer>
 #include <QSet>
 #include <QString>
+#include <QUrl>
 #include <vector>
+
+class QNetworkAccessManager;
+class QNetworkReply;
 
 Q_DECLARE_METATYPE(std::vector<striptool::Sample>)
 
 namespace striptool {
 
 using HistoryRequestId = quint64;
+
+std::vector<Sample> parseArchiverJson(const QByteArray& content,
+                                      QString* error = nullptr);
 
 class HistoryProvider : public QObject {
   Q_OBJECT
@@ -40,6 +49,27 @@ public:
 private:
   HistoryRequestId nextId_ = 1;
   QSet<HistoryRequestId> pending_;
+};
+
+class ArchiverHistoryProvider final : public HistoryProvider {
+  Q_OBJECT
+public:
+  static QString defaultRetrievalRoot();
+  static QString configuredRetrievalRoot();
+  static QUrl requestUrl(const QString& retrievalRoot, const QString& channel,
+                         TimeRange range);
+
+  explicit ArchiverHistoryProvider(QString retrievalRoot = {},
+                                   QObject* parent = nullptr);
+  HistoryRequestId request(const QString& channel, TimeRange range) override;
+  void cancel(HistoryRequestId id) override;
+  QString retrievalRoot() const { return retrievalRoot_; }
+
+private:
+  QNetworkAccessManager* network_ = nullptr;
+  QString retrievalRoot_;
+  HistoryRequestId nextId_ = 1;
+  QHash<HistoryRequestId, QPointer<QNetworkReply>> pending_;
 };
 
 // Deterministic provider for UI/service tests and offline demonstrations.

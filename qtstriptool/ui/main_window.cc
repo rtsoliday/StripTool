@@ -208,7 +208,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   toolbar->addAction(autoScrollAction);
   toolbar->addAction(pauseAction);
   controlsWindow_ = std::make_unique<ControlsWindow>(&model_);
-  historyProvider_ = std::make_unique<NoHistoryProvider>();
+  setHistoryProvider(std::make_unique<ArchiverHistoryProvider>());
   updateRecentFiles();
   const auto chooseOpen = [this] {
     const QString path = QFileDialog::getOpenFileName(
@@ -374,17 +374,6 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   statusBar()->showMessage(model_.filename.empty()
                                ? tr("Ready")
                                : tr("Loaded %1").arg(QString::fromStdString(model_.filename)));
-  connect(historyProvider_.get(), &HistoryProvider::resultReady, this,
-          [this](HistoryRequestId id, const QString&, std::vector<Sample> samples) {
-            if (!historyRequests_.contains(id)) return;
-            plotWidget_->joinHistoricalSamples(historyRequests_.take(id), samples);
-            statusBar()->showMessage(tr("Historical samples loaded"), 5000);
-          });
-  connect(historyProvider_.get(), &HistoryProvider::requestFailed, this,
-          [this](HistoryRequestId id, const QString& message) {
-            historyRequests_.remove(id);
-            QMessageBox::information(this, tr("History Unavailable"), message);
-          });
   connect(aboutAction, &QAction::triggered, this, [this] {
     QMessageBox::about(this, tr("About Qt StripTool"), versionText());
   });
@@ -452,6 +441,52 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
 
 MainWindow::~MainWindow() = default;
 
+void MainWindow::setHistoryProvider(std::unique_ptr<HistoryProvider> provider) {
+  cancelHistoryRequests();
+  historyProvider_ = std::move(provider);
+  if (!historyProvider_) historyProvider_ = std::make_unique<NoHistoryProvider>();
+  connect(historyProvider_.get(), &HistoryProvider::resultReady, this,
+          [this](HistoryRequestId id, const QString&, std::vector<Sample> samples) {
+            const bool automatic = automaticHistoryRequests_.remove(id);
+            if (!historyRequests_.contains(id)) return;
+            plotWidget_->joinHistoricalSamples(historyRequests_.take(id), samples);
+            if (!automatic)
+              statusBar()->showMessage(tr("Historical samples loaded"), 5000);
+          });
+  connect(historyProvider_.get(), &HistoryProvider::requestFailed, this,
+          [this](HistoryRequestId id, const QString& message) {
+            const bool automatic = automaticHistoryRequests_.remove(id);
+            if (!historyRequests_.remove(id) || automatic) return;
+            QMessageBox::information(this, tr("History Unavailable"), message);
+          });
+}
+
+void MainWindow::cancelHistoryRequests(std::optional<std::size_t> curve) {
+  if (!historyProvider_) {
+    historyRequests_.clear();
+    automaticHistoryRequests_.clear();
+    return;
+  }
+  const auto requests = historyRequests_;
+  for (auto it = requests.cbegin(); it != requests.cend(); ++it) {
+    if (curve && it.value() != *curve) continue;
+    historyRequests_.remove(it.key());
+    automaticHistoryRequests_.remove(it.key());
+    historyProvider_->cancel(it.key());
+  }
+}
+
+void MainWindow::requestRecentHistory(std::size_t curve,
+                                      const std::string& channel) {
+  if (!historyProvider_ || curve >= kMaximumCurves || channel.empty() ||
+      channel == "CPU_Usage") return;
+  const auto end = std::chrono::system_clock::now();
+  const auto id = historyProvider_->request(
+      QString::fromStdString(channel), {end - std::chrono::minutes(5), end});
+  historyRequests_.insert(id, curve);
+  automaticHistoryRequests_.insert(id);
+}
+
 void MainWindow::showControls() {
   controlsWindow_->show();
   controlsWindow_->raise();
@@ -459,8 +494,7 @@ void MainWindow::showControls() {
 }
 
 void MainWindow::applyModel() {
-  for (const auto id : historyRequests_.keys()) historyProvider_->cancel(id);
-  historyRequests_.clear();
+  cancelHistoryRequests();
   plotWidget_->clearSamples();
   if (channelAcquisition_) channelAcquisition_->clearSamples();
   if (cpuAcquisition_) cpuAcquisition_->clearSamples();
@@ -549,11 +583,6 @@ void MainWindow::updateRecentFiles(const QString& path) {
 }
 
 void MainWindow::requestHistory() {
-  if (dynamic_cast<NoHistoryProvider*>(historyProvider_.get())) {
-    QMessageBox::information(this, tr("History Unavailable"),
-                             tr("No archive history provider is configured."));
-    return;
-  }
   HistoryDialog dialog(this);
   dialog.setRange(plotWidget_->visibleTimeRange());
   if (dialog.exec() != QDialog::Accepted) return;
@@ -562,14 +591,15 @@ void MainWindow::requestHistory() {
     QMessageBox::warning(this, tr("Invalid Range"), tr("The From time must precede the To time."));
     return;
   }
-  for (const auto id : historyRequests_.keys()) historyProvider_->cancel(id);
-  historyRequests_.clear();
+  cancelHistoryRequests();
   plotWidget_->setVisibleTimeRange(range);
   for (std::size_t i = 0; i < model_.curves.size(); ++i) {
-    if (!model_.curves[i].nameSet) continue;
+    if (!model_.curves[i].nameSet || model_.curves[i].name == "CPU_Usage") continue;
     const auto id = historyProvider_->request(QString::fromStdString(model_.curves[i].name), range);
     historyRequests_.insert(id, i);
   }
+  if (!historyRequests_.isEmpty())
+    statusBar()->showMessage(tr("Retrieving historical samples…"));
 }
 
 void MainWindow::startAcquisition() {
@@ -658,6 +688,7 @@ void MainWindow::startAcquisition() {
     localChannels_[i] = local;
     acquiredNames_[i] = model_.curves[i].name;
     controlsWindow_->setChannelMetadata(i, acquisition->metadata(channelIds_[i]));
+    if (!local) requestRecentHistory(i, acquiredNames_[i]);
   }
   const auto refresh = [this] {
     for (std::size_t i = 0; i < channelIds_.size(); ++i) {
@@ -700,6 +731,7 @@ void MainWindow::restartAcquisition() {
   for (std::size_t i = 0; i < acquiredNames_.size(); ++i) {
     const std::string name = model_.curves[i].nameSet ? model_.curves[i].name : "";
     if (acquiredNames_[i] == name) continue;
+    cancelHistoryRequests(i);
     if (channelIds_[i]) {
       auto* oldAcquisition = localChannels_[i] ? cpuAcquisition_.get()
                                                 : channelAcquisition_.get();
@@ -719,6 +751,7 @@ void MainWindow::restartAcquisition() {
         static_cast<std::size_t>(model_.timing.numberOfSamples));
     localChannels_[i] = local;
     controlsWindow_->setChannelMetadata(i, acquisition->metadata(channelIds_[i]));
+    if (!local) requestRecentHistory(i, name);
   }
 }
 }
