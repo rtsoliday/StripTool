@@ -967,6 +967,58 @@ private slots:
     QVERIFY(plot.removeAnnotation(0));
     QCOMPARE(plot.selectedAnnotation(), -1);
   }
+  void mouseWheelZoomKeepsPointerTimestampFixed() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "wheel:test";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0.0;
+    model.curves[0].maximum = 10.0;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(100)});
+
+    int left = -1;
+    int right = -1;
+    for (int x = 0; x < plot.width(); ++x) {
+      if (!plot.isInPlot(QPoint(x, plot.height() / 2))) continue;
+      if (left < 0) left = x;
+      right = x;
+    }
+    QVERIFY(left >= 0);
+    QVERIFY(right > left);
+    const QPoint position(left + (right - left) / 4, plot.height() / 2);
+    const double fraction = double(position.x() - left) / (right - left);
+    const auto anchorBefore = plot.visibleTimeRange().start +
+        std::chrono::duration_cast<std::chrono::system_clock::duration>(
+            std::chrono::duration<double>(100.0 * fraction));
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QWheelEvent wheel(QPointF(position), QPointF(plot.mapToGlobal(position)),
+                      QPoint(), QPoint(0, 120), Qt::NoButton, Qt::NoModifier,
+                      Qt::NoScrollPhase, false);
+#else
+    QWheelEvent wheel(QPointF(position), QPointF(plot.mapToGlobal(position)),
+                      QPoint(), QPoint(0, 120), Qt::NoButton, Qt::NoModifier,
+                      Qt::NoScrollPhase, false);
+#endif
+    QApplication::sendEvent(&plot, &wheel);
+
+    const auto zoomed = plot.visibleTimeRange();
+    const double zoomedSeconds = std::chrono::duration<double>(
+        zoomed.end - zoomed.start).count();
+    QVERIFY(std::abs(zoomedSeconds - 80.0) < 1e-6);
+    const auto anchorAfter = zoomed.start +
+        std::chrono::duration_cast<std::chrono::system_clock::duration>(
+            std::chrono::duration<double>(zoomedSeconds * fraction));
+    const double anchorShift = std::abs(std::chrono::duration<double>(
+        anchorAfter - anchorBefore).count());
+    QVERIFY2(anchorShift < 0.001,
+             "Mouse-wheel zoom moved the timestamp under the pointer");
+  }
   void narrowYAxisTicksRemainDistinct() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "S-DCCT:CurrentM";

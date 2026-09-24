@@ -272,16 +272,32 @@ void PlotWidget::pan(double fractionOfWindow) {
 }
 
 void PlotWidget::zoom(double factor) {
-  if (!(factor > 0.0)) return;
-  const auto center = visibleTimeRange_.start +
-                      (visibleTimeRange_.end - visibleTimeRange_.start) / 2;
-  const auto half = std::chrono::duration_cast<std::chrono::system_clock::duration>(
-      std::chrono::duration<double>(
-          std::chrono::duration<double>(visibleTimeRange_.end -
-                                        visibleTimeRange_.start).count() *
-          factor / 2.0));
-  if (half <= std::chrono::milliseconds(1)) return;
-  visibleTimeRange_ = {center - half, center + half};
+  zoomAt(factor, plotRect().center());
+}
+
+void PlotWidget::zoomAt(double factor, const QPointF& position) {
+  if (!(factor > 0.0) || !std::isfinite(factor)) return;
+  const QRectF area = plotRect();
+  if (area.width() <= 0.0) return;
+  const double fraction = std::clamp(
+      (position.x() - area.left()) / area.width(), 0.0, 1.0);
+  const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
+  const auto scaledDuration = std::chrono::duration_cast<
+      std::chrono::system_clock::duration>(
+          std::chrono::duration<double>(
+              std::chrono::duration<double>(duration).count() * factor));
+  if (scaledDuration <= std::chrono::milliseconds(2)) return;
+  const auto anchorOffset = std::chrono::duration_cast<
+      std::chrono::system_clock::duration>(
+          std::chrono::duration<double>(
+              std::chrono::duration<double>(duration).count() * fraction));
+  const auto scaledAnchorOffset = std::chrono::duration_cast<
+      std::chrono::system_clock::duration>(
+          std::chrono::duration<double>(
+              std::chrono::duration<double>(scaledDuration).count() * fraction));
+  const auto anchor = visibleTimeRange_.start + anchorOffset;
+  visibleTimeRange_ = {anchor - scaledAnchorOffset,
+                       anchor - scaledAnchorOffset + scaledDuration};
   setAutoScroll(false);
   updateAutoRange();
   update();
@@ -949,7 +965,15 @@ void PlotWidget::wheelEvent(QWheelEvent* event) {
     event->ignore();
     return;
   }
-  zoom(verticalDelta > 0 ? 0.8 : 1.25);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+  const QPointF position = event->position();
+#else
+  const QPointF position = event->posF();
+#endif
+  if (plotRect().contains(position))
+    zoomAt(verticalDelta > 0 ? 0.8 : 1.25, position);
+  else
+    zoom(verticalDelta > 0 ? 0.8 : 1.25);
   event->accept();
 }
 

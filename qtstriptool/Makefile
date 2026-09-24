@@ -162,6 +162,7 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            returnInCurveFieldsAppliesModify \
+           mouseWheelZoomKeepsPointerTimestampFixed \
            narrowYAxisTicksRemainDistinct \
            mainAndControlWindowsShareOneModel historyDialogRoundTripsRange \
            mainWindowFileExportAndSnapshotEntryPointsWork iconResourceIsEmbedded \
