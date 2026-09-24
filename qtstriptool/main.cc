@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QTextStream>
+#include <QTimer>
 #include <utility>
 int main(int argc, char** argv) {
   // Establish consistent metrics across desktops. QApplication processes any
@@ -73,5 +74,10 @@ int main(int argc, char** argv) {
   window.startAcquisition();
   window.show();
   if (explicitName.isEmpty()) window.showControls();
+  bool validExitDelay = false;
+  const int exitDelay = qEnvironmentVariableIntValue(
+      "QTSTRIPTOOL_TEST_EXIT_AFTER_MS", &validExitDelay);
+  if (validExitDelay && exitDelay > 0)
+    QTimer::singleShot(exitDelay, &application, &QCoreApplication::quit);
   return application.exec();
 }
