@@ -11,9 +11,9 @@ in `QtParityMatrix.md`.
 The current code meets the planned alpha milestone: live Channel Access,
 ten-curve connection and plotting controls, and `.stp` load/save are implemented. It also
 contains annotations, text/CSV and image exports, Qt printing, and a cancellable
-history-provider interface. Those additional features do not make the release
-beta because production archive history and cross-platform build evidence are
-still missing.
+EPICS Archiver Appliance provider. Those additional features do not make the
+release beta because operational archive and cross-platform evidence are still
+incomplete.
 
 The legacy executable remains `StripTool`; the Qt executable remains
 `qtstriptool`. The Qt program must not replace or alias `StripTool` at this
@@ -96,9 +96,9 @@ accept it before declaring replacement compatibility.
 1. **Developer preview** — configuration parsing, simulated data, and a basic
    plot. Completed.
 2. **Alpha** — live CA, complete controls, and load/save. **Current stage.**
-3. **Beta** — a selected history backend, annotations, exports, printing, and
-   clean supported cross-platform builds. The existing feature implementations
-   must be coupled with real archive and platform evidence.
+3. **Beta** — operational archive validation, annotations, exports, printing,
+   and clean supported cross-platform builds. The existing feature
+   implementations must be coupled with real archive and platform evidence.
 4. **Compatibility release** — every mandatory automated parity test passes;
    the same configuration and IOC/archive data pass recorded side-by-side,
    output, reconnect, visual, and soak review; site-specific differences are
@@ -118,8 +118,8 @@ forward assumptions from a previous host.
 
 Before compatibility or default-switch approval:
 
-1. Select, implement, configure, and load-test the supported APS archive
-   provider; document ownership, authentication, endpoints, and failure modes.
+1. Configure and load-test the Archiver Appliance provider for the supported
+   APS deployment; document ownership, endpoints, and failure modes.
 2. Run all automated suites on every supported Qt/OS/compiler combination and
    the IOC test against a representative numeric PV.
 3. Complete the side-by-side procedure in `QtParityMatrix.md` with the site's

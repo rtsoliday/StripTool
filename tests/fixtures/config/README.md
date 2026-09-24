@@ -1,8 +1,8 @@
 # StripTool Configuration Fixtures
 
 These files preserve representative inputs for the legacy compatibility
-contract. They are inputs for the Qt parser tests planned in Step 4; they are
-not site configurations and intentionally use synthetic PV names.
+contract. They are used by the Qt parser tests; they are not site
+configurations and intentionally use synthetic PV names.
 
 - `canonical-1.2.stp`: every current-format attribute, all ten curve slots,
   both scale modes, comments, colors, and plotted states.
@@ -17,4 +17,3 @@ not site configurations and intentionally use synthetic PV names.
 
 Expected parser rules and intentional safety differences are documented in
 `docs/StripToolCompatibilityBaseline.md`.
-

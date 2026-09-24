@@ -19,7 +19,7 @@ what the build files intend to support.
 | Controls | `StripDialog.c` | Shared-model Qt controls | Automated | `make test-qtstriptool-ui` |
 | File/output | Motif dialogs and wide dump rows | Workflow/export services and long dump rows | Automated basics; format parity open | config, core, and UI targets; see known differences |
 | History lifecycle | `StripHistory.h` | Cancellable provider interface | Automated | no-history and deterministic providers |
-| APS archive backend | Site-selected legacy backend | Not selected | Site decision | Backend and endpoint must be supplied |
+| APS archive backend | Site-selected legacy backend | Native Archiver Appliance JSON provider | Automated basics; operational validation open | Parser, URL, asynchronous retrieval, cancellation, and automatic backfill tests |
 | Printing | X11/shell print path | Qt PrintSupport | Build/UI action automated; output manual | Print to PDF and inspect |
 | SDDS output | Optional compile path | Not enabled | Site decision | Confirm operational requirement |
 
@@ -49,28 +49,5 @@ be updated after a clean build and the full non-IOC test suite pass.
    duration, and any accepted difference in this document or the release
    report.
 
-## Performance gates
-
-The automated performance target runs ten curves with 10,000 samples each,
-renders the resulting large range, and exercises repeated window startup and
-shutdown. The deliberately broad ten-second limits detect severe regressions
-without making ordinary shared CI hosts flaky:
-
-```sh
-make test-qtstriptool-performance
-```
-
-Release candidates additionally require a manual soak because wall-clock and
-resident-memory expectations depend on deployment hardware:
-
-| Scenario | Measurement | Acceptance record |
-|---|---|---|
-| Idle, no configured curves | CPU over 10 minutes | Compare with Motif; record host and result |
-| Ten curves at 10 ms sampling | CPU, lost updates, repaint latency for 30 minutes | Threshold agreed by site owner |
-| Long duration | Resident memory over 24 hours | No sustained unbounded growth |
-| Large archive range | Request and first-paint latency | Threshold agreed for selected backend |
-| Startup/shutdown | Median of 20 runs | Compare against previous Qt release |
-
-The current no-history provider cannot satisfy the archive latency gate. That
-gate becomes applicable once the site selects and configures its supported APS
-archive backend.
+Performance and soak procedures are maintained in
+[`qtstriptool-performance.md`](qtstriptool-performance.md).

@@ -7,13 +7,10 @@ This repository builds two EPICS trend applications side by side:
 
 The Qt application is currently an **alpha**. It supports live Channel Access,
 ten-curve controls, compatible `.stp` load/save, graph interaction,
-annotations, text/CSV and image export, and Qt printing. It is not yet the
-default replacement: a production APS archive provider has not been selected,
-the mandatory parity and soak gates remain open, and Windows has not been
-verified for this release. Local macOS arm64 builds and non-IOC tests pass with
-Qt 5.15 and Qt 6; this does not complete the cross-platform gate. Keep both
-executable names distinct
-while those gates are open.
+annotations, Archiver Appliance history, text/CSV and image export, and Qt
+printing. It is not yet the default replacement: operational archive,
+cross-platform, parity, and soak validation remain open. Keep both executable
+names distinct while those gates are open.
 
 ## Repository layout
 
@@ -136,4 +133,3 @@ for launch-script and desktop-entry migration with an explicit rollback path.
 - [Performance and soak testing](docs/qtstriptool-performance.md)
 - [Parity matrix](docs/QtParityMatrix.md)
 - [Legacy compatibility baseline](docs/StripToolCompatibilityBaseline.md)
-- [Migration implementation plan](UpdatePlan.md)

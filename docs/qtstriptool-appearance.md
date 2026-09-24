@@ -56,9 +56,9 @@ make test-qtstriptool-visual
 
 The command prints the generated PNG path below the Qt object directory. It
 checks that the fixture renders; it does not approve appearance automatically.
-Follow `StripToolScreenshotChecklist.md` for the legacy reference capture and
-compare both variants using the same data, ranges, colors, scale modes, grid
-modes, line width, and window dimensions.
+Compare both variants using the same data, ranges, colors, scale modes, grid
+modes, line width, and window dimensions. The existing legacy reference is
+`screenshots/legacy/linux-x86_64-2026-09-17/SHOT-005-graph.png`.
 
 Review at least:
 

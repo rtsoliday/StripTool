@@ -1,6 +1,6 @@
 # StripTool Compatibility Baseline
 
-This document defines the legacy behavior against which `qtstriptool` will be
+This document defines the legacy behavior against which `qtstriptool` is
 implemented and reviewed. It is based on the Motif source at version 2.5.18.0.
 The accompanying feature matrix assigns each behavior to a release gate, and
 the files under `tests/fixtures/config/` preserve representative configuration
@@ -103,8 +103,8 @@ diagnostic:
   so a negative precision can survive. Qt should enforce the intended 0 to 20
   range.
 
-These differences must appear in the eventual known-differences document and
-have negative tests.
+These differences are recorded in the known-differences document and covered
+by negative tests.
 
 ## Defaults
 
@@ -271,7 +271,7 @@ validation, cancellation, and model updates must remain equivalent.
 | Snapshot | Captures graph output | Replace with Qt image export |
 | Print | Printer/device environment and platform commands | Replace with Qt PrintSupport; confirm site requirements |
 | Help | Opens configured URL through legacy browser helper | Use Qt desktop URL handling |
-| History | Compile-time selectable NULL, test, AR/Archive Record, CAR/AAPI, or LANL code paths | Provider interface; current backend is a site decision |
+| History | Compile-time selectable NULL, test, AR/Archive Record, CAR/AAPI, or LANL code paths | Native Archiver Appliance provider |
 | CDEV | Alternate compile-time data source | Site decision |
 
 ## Baseline Evidence
@@ -296,14 +296,3 @@ Primary source evidence:
   contract and implementations.
 - `striptool/Annotation.c` and `striptool/Annotation.h`: annotation behavior.
 - `striptool/Makefile`: build-time feature selection.
-
-## Baseline Completion Criteria
-
-Step 1 is complete when:
-
-- Every observed feature has a row in the feature matrix.
-- Required, optional, obsolete, and site-decision scopes are explicit.
-- Current and old-format configuration fixtures are checked in.
-- Startup defaults, file precedence, and environment variables are recorded.
-- Parser defects are distinguished from required compatibility.
-- A repeatable screenshot checklist exists for later Motif/Qt comparison.

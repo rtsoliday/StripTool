@@ -46,10 +46,11 @@ settings, and measurement tools.
    least 24 hours. Sample resident memory and buffer sizes periodically. There
    must be no sustained unbounded growth; investigate step changes and retain
    logs.
-4. **Large history:** after a production archive provider is selected, request
-   the agreed large range for all ten curves. Record request completion,
+4. **Large history:** using the configured operational Archiver Appliance,
+   request the agreed large range for all ten curves. Record request completion,
    cancellation, first paint, pan/zoom latency, memory peak, and the live/history
-   join. This gate cannot pass with `NoHistoryProvider`.
+   join. Validate against the configured operational Archiver Appliance rather
+   than the test provider.
 5. **Startup/shutdown:** measure at least 20 clean launches and exits, including
    a configuration with ten active subscriptions. Report median and worst case
    and verify that CA subscriptions and history requests are released cleanly.
