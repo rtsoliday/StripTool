@@ -668,7 +668,10 @@ private slots:
     QCOMPARE(samples[0].severity, std::uint16_t{2});
     QCOMPARE(std::chrono::duration_cast<std::chrono::nanoseconds>(
                  samples[0].timestamp.time_since_epoch()).count(),
-             std::int64_t{1000123456789});
+             std::chrono::duration_cast<std::chrono::nanoseconds>(
+                 std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                     std::chrono::seconds(1000) +
+                     std::chrono::nanoseconds(123456789))).count());
     QCOMPARE(samples[1].timestamp,
              std::chrono::system_clock::time_point{std::chrono::seconds(1001)});
     QCOMPARE(samples[1].status, std::uint16_t{0});

@@ -8,9 +8,11 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimeZone>
 #include <QUrl>
 #include <QUrlQuery>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace striptool {
@@ -52,7 +54,8 @@ std::vector<Sample> parseArchiverJson(const QByteArray& content, QString* error)
       if (!std::isfinite(number) || nanos < 0 || nanos >= 1000000000) continue;
       Sample sample;
       sample.timestamp = std::chrono::system_clock::time_point{
-          std::chrono::seconds(secs) + std::chrono::nanoseconds(nanos)};
+          std::chrono::duration_cast<std::chrono::system_clock::duration>(
+              std::chrono::seconds(secs) + std::chrono::nanoseconds(nanos))};
       sample.value = number;
       sample.status = static_cast<std::uint16_t>(std::clamp(
           item.value(QStringLiteral("status")).toInt(), 0, 65535));
@@ -127,12 +130,14 @@ QUrl ArchiverHistoryProvider::requestUrl(const QString& retrievalRoot,
   query.addQueryItem(QStringLiteral("from"),
                      QDateTime::fromMSecsSinceEpoch(
                          std::chrono::duration_cast<std::chrono::milliseconds>(
-                             range.start.time_since_epoch()).count(), Qt::UTC)
+                             range.start.time_since_epoch()).count(), QTimeZone::utc())
+                         .toUTC()
                          .toString(Qt::ISODateWithMs));
   query.addQueryItem(QStringLiteral("to"),
                      QDateTime::fromMSecsSinceEpoch(
                          std::chrono::duration_cast<std::chrono::milliseconds>(
-                             range.end.time_since_epoch()).count(), Qt::UTC)
+                             range.end.time_since_epoch()).count(), QTimeZone::utc())
+                         .toUTC()
                          .toString(Qt::ISODateWithMs));
   query.addQueryItem(QStringLiteral("donotchunk"), QStringLiteral("true"));
   url.setQuery(query);
