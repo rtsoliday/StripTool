@@ -23,6 +23,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QToolButton>
@@ -138,6 +139,8 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   zoomOutYAction->setObjectName(QStringLiteral("zoomOutYAction"));
   auto* autoScaleAction = viewMenu->addAction(tr("Auto &Scale"));
   autoScaleAction->setObjectName(QStringLiteral("autoScaleAction"));
+  autoScaleAction->setCheckable(true);
+  autoScaleAction->setChecked(true);
   auto* resetAction = viewMenu->addAction(tr("&Reset View"));
   resetAction->setObjectName(QStringLiteral("resetAction"));
   auto* replotAction = viewMenu->addAction(tr("Re&plot"));
@@ -285,8 +288,16 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
           [this] { plotWidget_->zoomY(0.5); });
   connect(zoomOutYAction, &QAction::triggered, this,
           [this] { plotWidget_->zoomY(2.0); });
-  connect(autoScaleAction, &QAction::triggered, this,
-          [this] { plotWidget_->autoScale(); });
+  connect(autoScaleAction, &QAction::toggled, this,
+          [this](bool enabled) {
+            if (enabled) plotWidget_->autoScale();
+            else plotWidget_->resetVerticalView();
+          });
+  connect(plotWidget_, &PlotWidget::autoScaleChanged, this,
+          [autoScaleAction](bool enabled) {
+            const QSignalBlocker blocker(autoScaleAction);
+            autoScaleAction->setChecked(enabled);
+          });
   connect(resetAction, &QAction::triggered, this, [this] {
     plotWidget_->resetVerticalView();
     plotWidget_->resetView();
@@ -553,8 +564,7 @@ void MainWindow::startAcquisition() {
   cpuAcquisition_ = std::make_unique<AcquisitionManager>(cpuUsage_.get());
   const auto sampleInterval = timerInterval(model_.timing.sampleIntervalSeconds);
   const auto refreshInterval = timerInterval(model_.timing.refreshIntervalSeconds);
-  channelAcquisition_->setSampleInterval(sampleInterval);
-  cpuAcquisition_->setSampleInterval(sampleInterval);
+  cpuUsage_->setSampleInterval(sampleInterval);
   channelAcquisition_->setRefreshInterval(refreshInterval);
   cpuAcquisition_->setRefreshInterval(refreshInterval);
 
@@ -651,8 +661,7 @@ void MainWindow::restartAcquisition() {
   if (!acquisitionRunning_) return;
   const auto sampleInterval = timerInterval(model_.timing.sampleIntervalSeconds);
   const auto refreshInterval = timerInterval(model_.timing.refreshIntervalSeconds);
-  channelAcquisition_->setSampleInterval(sampleInterval);
-  cpuAcquisition_->setSampleInterval(sampleInterval);
+  cpuUsage_->setSampleInterval(sampleInterval);
   channelAcquisition_->setRefreshInterval(refreshInterval);
   cpuAcquisition_->setRefreshInterval(refreshInterval);
   channelAcquisition_->setBufferCapacity(model_.timing.numberOfSamples);

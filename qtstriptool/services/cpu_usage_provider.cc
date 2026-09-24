@@ -43,6 +43,14 @@ void CpuUsageProvider::disconnectChannel(ChannelId id) {
 
 void CpuUsageProvider::retryDisconnected() {}
 
+void CpuUsageProvider::setSampleInterval(std::chrono::milliseconds interval) {
+  timer_.setInterval(static_cast<int>(interval.count()));
+}
+
+std::chrono::milliseconds CpuUsageProvider::sampleInterval() const {
+  return std::chrono::milliseconds(timer_.interval());
+}
+
 void CpuUsageProvider::sampleNow() {
   const auto cpu = std::clock();
   const auto wall = std::chrono::steady_clock::now();

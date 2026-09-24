@@ -216,8 +216,10 @@ when the active archive provider is selected.
   history implementation is compiled in.
 
 The Qt implementation must marshal EPICS callbacks safely to its GUI thread,
-retain independent sample/refresh timing, and make connection and stale-data
-states visible and testable.
+record every delivered monitor update with its workstation delivery timestamp
+and alarm metadata, refresh the display independently, and make connection and
+stale-data states visible and testable. The legacy sample interval remains applicable to
+the local `CPU_Usage` source rather than resampling Channel Access values.
 
 ## Graph and Interaction Behavior
 

@@ -24,7 +24,9 @@ private slots:
     QTRY_VERIFY_WITH_TIMEOUT(samples.count() >= 1, 10000);
     QCOMPARE(qvariant_cast<striptool::ChannelId>(samples.last().at(0)), id);
     const auto sample = qvariant_cast<striptool::Sample>(samples.last().at(1));
-    QVERIFY(sample.timestamp.time_since_epoch().count() > 0);
+    const auto now = std::chrono::system_clock::now();
+    QVERIFY(sample.timestamp <= now);
+    QVERIFY(sample.timestamp >= now - std::chrono::seconds(10));
     const QString expectedDescription = qEnvironmentVariable("QTSTRIPTOOL_TEST_DESC");
     if (!expectedDescription.isEmpty()) {
       QTRY_VERIFY_WITH_TIMEOUT(descriptions.count() >= 1, 10000);

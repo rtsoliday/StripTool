@@ -11,10 +11,14 @@ writes Motif-readable 1.2 files; retains unknown attributes; and provides
 layered-default and legacy file-search helpers. Plotting is intentionally
 kept separate from configuration parsing and acquisition.
 
-The acquisition layer provides an EPICS Channel Access provider, an isolated
-local `CPU_Usage` provider, independent sample and display timers, bounded
-ring buffers, stale/reconnect state, `.DESC` lookup for curve comments, and
-toolkit-neutral min/max decimation that preserves disconnected gaps.
+The acquisition layer records every EPICS Channel Access monitor update with
+its value, status, severity, and workstation delivery time. Using the same
+clock as the live graph keeps curves from different IOCs aligned even when IOC
+clocks differ. Display refresh is independent of acquisition. The isolated
+local `CPU_Usage` provider retains a periodic sample timer. Both paths use
+bounded ring buffers, stale/reconnect
+state, `.DESC` lookup for curve comments, and toolkit-neutral min/max
+decimation that preserves transitions, spikes, and disconnected gaps.
 Normal tests use a deterministic fake provider. To exercise a live IOC, run:
 
 ```sh
@@ -22,8 +26,8 @@ make test-ioc TEST_PV=some:readable:numeric:pv
 ```
 
 `ui/plot_widget.*` implements the graph directly with `QPainter`. It supports
-multiple colored linear and logarithmic curves, a selectable Y axis, time labels, grid
-modes, decimated live updates, auto-scroll and fixed ranges, pan and zoom,
+multiple colored linear and logarithmic step traces, a selectable Y axis, time
+labels, grid modes, decimated live updates, auto-scroll and fixed ranges, pan and zoom,
 reset/replot/auto-scale operations, cursor readout, annotations, and joining
 historical samples with live data. Plot transforms and range selection remain
 in `core/plot_data.*` so they can be tested without a display.

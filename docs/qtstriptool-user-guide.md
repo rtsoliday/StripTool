@@ -48,14 +48,23 @@ The Controls window opens at startup and is available later through
 2. Set Plot, Linear or Log 10 scale, precision, minimum, maximum, and color.
 3. Select **Modify**, or press Return in that row's Name, Minimum, or Maximum
    field, to apply row edits. **Remove** frees the row and stops its acquisition.
-4. Use the Timing tab to set history length, bounded sample count, sampling
-   interval, and independent display-refresh interval.
+4. Use the Timing tab to set history length, bounded sample count, the local
+   `CPU_Usage` sampling interval, and the independent display-refresh interval.
 5. Use Appearance for graph colors, grid density, colored Y axes, and line
    width.
 
+Y-axis scaling is graph-wide. **Auto Scale** fits every plotted curve to its
+visible data, including curves added while that mode is active. **Reset View**
+returns every curve to the Minimum and Maximum shown in Controls; curves added
+afterward also use their configured or provider-supplied limits.
+
 `CPU_Usage` is a local pseudo-curve and does not open a Channel Access
-subscription. For logarithmic curves, choose positive limits; non-positive
-samples cannot be plotted on a base-10 scale.
+subscription. Channel Access curves record monitor updates as they arrive,
+using workstation delivery time together with the IOC value and alarm
+metadata; the sampling interval does not resample them. This common clock
+keeps curves aligned when IOC clocks differ. Traces use step lines on both
+linear and logarithmic axes. For logarithmic curves, choose positive limits; non-positive
+samples create a gap and cannot be plotted on a base-10 scale.
 
 ## Work with the graph
 

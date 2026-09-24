@@ -96,7 +96,6 @@ void PlotWidget::setModel(const StripToolModel& model) {
         old.maximumSet != next.maximumSet ||
         (old.minimumSet && old.minimum != next.minimum) ||
         (old.maximumSet && old.maximum != next.maximum)) {
-      autoScaleOverrides_[i] = false;
       verticalRanges_[i].reset();
     }
     replacedCurves[i] = old.nameSet &&
@@ -154,8 +153,12 @@ void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples)
   if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
     if (!hadSamples) resetView();
     else if (!samples_[curve].empty()) {
-      visibleTimeRange_.end = std::max(visibleTimeRange_.end,
-                                       samples_[curve].back().timestamp);
+      const auto now = std::chrono::system_clock::now();
+      if (visibleTimeRange_.end > now)
+        visibleTimeRange_.end = now;
+      else if (samples_[curve].back().timestamp <= now)
+        visibleTimeRange_.end = std::max(visibleTimeRange_.end,
+                                         samples_[curve].back().timestamp);
       visibleTimeRange_.start = visibleTimeRange_.end -
           std::chrono::seconds(model_.timing.timespanSeconds);
     }
@@ -181,7 +184,11 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
     data.erase(data.begin(), data.end() - static_cast<std::ptrdiff_t>(maximum));
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], data);
   if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
-    visibleTimeRange_.end = std::max(visibleTimeRange_.end, sample.timestamp);
+    const auto now = std::chrono::system_clock::now();
+    if (visibleTimeRange_.end > now)
+      visibleTimeRange_.end = now;
+    else if (sample.timestamp <= now)
+      visibleTimeRange_.end = std::max(visibleTimeRange_.end, sample.timestamp);
     visibleTimeRange_.start = visibleTimeRange_.end -
         std::chrono::seconds(model_.timing.timespanSeconds);
   }
@@ -196,7 +203,6 @@ void PlotWidget::clearCurveSamples(std::size_t curve) {
   samples_[curve].clear();
   automaticRanges_[curve].reset();
   verticalRanges_[curve].reset();
-  autoScaleOverrides_[curve] = false;
   update();
 }
 
@@ -305,6 +311,10 @@ void PlotWidget::zoomAt(double factor, const QPointF& position) {
 
 void PlotWidget::panY(double fractionOfRange) {
   if (!std::isfinite(fractionOfRange)) return;
+  if (autoScaleEnabled_) {
+    autoScaleEnabled_ = false;
+    emit autoScaleChanged(false);
+  }
   for (const auto index : plottedCurves()) {
     const ValueRange range = valueRange(index);
     if (!range.isValid()) continue;
@@ -318,6 +328,10 @@ void PlotWidget::panY(double fractionOfRange) {
 
 void PlotWidget::zoomY(double factor) {
   if (!std::isfinite(factor) || factor <= 0.0) return;
+  if (autoScaleEnabled_) {
+    autoScaleEnabled_ = false;
+    emit autoScaleChanged(false);
+  }
   for (const auto index : plottedCurves()) {
     const ValueRange range = valueRange(index);
     if (!range.isValid()) continue;
@@ -331,21 +345,20 @@ void PlotWidget::zoomY(double factor) {
 }
 
 void PlotWidget::resetVerticalView() {
-  verticalRanges_.fill(std::nullopt);
-  autoScaleOverrides_.fill(false);
-  updateAutoRange();
+  const bool changed = autoScaleEnabled_;
+  autoScaleEnabled_ = false;
+  for (std::size_t i = 0; i < kMaximumCurves; ++i) {
+    verticalRanges_[i].reset();
+    automaticRanges_[i].reset();
+  }
+  if (changed) emit autoScaleChanged(false);
   update();
 }
 
 void PlotWidget::resetView() {
-  auto latest = std::chrono::system_clock::now();
-  for (const auto& curve : samples_) {
-    if (!curve.empty() && curve.back().timestamp > latest) {
-      latest = curve.back().timestamp;
-    }
-  }
-  visibleTimeRange_.end = latest;
-  visibleTimeRange_.start = latest - std::chrono::seconds(model_.timing.timespanSeconds);
+  visibleTimeRange_.end = std::chrono::system_clock::now();
+  visibleTimeRange_.start = visibleTimeRange_.end -
+      std::chrono::seconds(model_.timing.timespanSeconds);
   const bool changed = !autoScroll_;
   autoScroll_ = true;
   if (changed) emit autoScrollChanged(true);
@@ -355,28 +368,19 @@ void PlotWidget::resetView() {
 
 void PlotWidget::advanceToNow() {
   if (!autoScroll_ || paused_ || dragMode_ != DragMode::None) return;
-  visibleTimeRange_.end = std::max(visibleTimeRange_.end,
-                                   std::chrono::system_clock::now());
-  for (const auto& curve : samples_)
-    if (!curve.empty())
-      visibleTimeRange_.end = std::max(visibleTimeRange_.end,
-                                       curve.back().timestamp);
+  visibleTimeRange_.end = std::chrono::system_clock::now();
   visibleTimeRange_.start = visibleTimeRange_.end -
       std::chrono::seconds(model_.timing.timespanSeconds);
   updateAutoRange();
   update();
 }
 
-void PlotWidget::autoScale(std::optional<std::size_t> curve) {
-  const auto apply = [this](std::size_t index) {
-    verticalRanges_[index].reset();
-    automaticRanges_[index] = visibleSampleValueRange(
-        samples_[index], visibleTimeRange_.start, visibleTimeRange_.end,
-        model_.curves[index].scale);
-    autoScaleOverrides_[index] = true;
-  };
-  if (curve && *curve < kMaximumCurves) apply(*curve);
-  else for (std::size_t i = 0; i < kMaximumCurves; ++i) apply(i);
+void PlotWidget::autoScale() {
+  const bool changed = !autoScaleEnabled_;
+  autoScaleEnabled_ = true;
+  verticalRanges_.fill(std::nullopt);
+  updateAutoRange();
+  if (changed) emit autoScaleChanged(true);
   update();
 }
 
@@ -545,20 +549,10 @@ int PlotWidget::annotationAt(const QPoint& position) const {
 
 void PlotWidget::updateAutoRange() {
   for (std::size_t i = 0; i < kMaximumCurves; ++i) {
-    if (autoScaleOverrides_[i]) {
+    if (autoScaleEnabled_) {
       automaticRanges_[i] = visibleSampleValueRange(
           samples_[i], visibleTimeRange_.start, visibleTimeRange_.end,
           model_.curves[i].scale);
-    } else if (!model_.curves[i].minimumSet || !model_.curves[i].maximumSet) {
-      auto range = visibleSampleValueRange(
-          samples_[i], visibleTimeRange_.start, visibleTimeRange_.end,
-          model_.curves[i].scale);
-      if (range) {
-        const auto& config = model_.curves[i];
-        if (config.minimumSet) range->minimum = plotValue(config.minimum, config.scale);
-        if (config.maximumSet) range->maximum = plotValue(config.maximum, config.scale);
-      }
-      automaticRanges_[i] = range && range->isValid() ? range : std::nullopt;
     } else {
       automaticRanges_[i].reset();
     }
@@ -726,24 +720,51 @@ void PlotWidget::paintEvent(QPaintEvent*) {
       painter.restore();
     }
 
+    const auto traceEnd = std::min(visibleTimeRange_.end,
+                                   std::chrono::system_clock::now());
     auto selected = selectSamples(samples_[curveIndex], visibleTimeRange_.start,
-                                  visibleTimeRange_.end,
+                                  traceEnd,
                                   std::max(2, int(area.width()) * 2), config.scale);
     const auto& source = samples_[curveIndex];
     const auto first = std::lower_bound(source.begin(), source.end(),
                                         visibleTimeRange_.start,
         [](const Sample& sample, const auto& time) { return sample.timestamp < time; });
-    const auto last = std::upper_bound(first, source.end(), visibleTimeRange_.end,
-        [](const auto& time, const Sample& sample) { return time < sample.timestamp; });
-    if (first != source.begin()) selected.insert(selected.begin(), *std::prev(first));
-    if (last != source.end()) selected.push_back(*last);
+    if (traceEnd >= visibleTimeRange_.start && first != source.begin())
+      selected.insert(selected.begin(), *std::prev(first));
     QPainterPath path;
     bool started = false;
     for (const auto& sample : selected) {
       const auto point = mapSample(sample, range, config.scale);
-      if (!point) { started = false; continue; }
+      if (!point) {
+        if (started) {
+          const qint64 sampleTime = milliseconds(sample.timestamp);
+          const qint64 rangeStart = milliseconds(visibleTimeRange_.start);
+          const qint64 rangeEnd = milliseconds(visibleTimeRange_.end);
+          if (rangeEnd > rangeStart) {
+            const qreal x = area.left() + area.width() *
+                double(sampleTime - rangeStart) / double(rangeEnd - rangeStart);
+            path.lineTo(x, path.currentPosition().y());
+          }
+        }
+        started = false;
+        continue;
+      }
       if (!started) { path.moveTo(*point); started = true; }
-      else path.lineTo(*point);
+      else {
+        // Channel values are piecewise constant between monitor updates.
+        path.lineTo(point->x(), path.currentPosition().y());
+        path.lineTo(*point);
+      }
+    }
+    if (started && !selected.empty() && selected.back().plotable) {
+      const qint64 rangeStart = milliseconds(visibleTimeRange_.start);
+      const qint64 rangeEnd = milliseconds(visibleTimeRange_.end);
+      const qint64 heldEnd = milliseconds(traceEnd);
+      if (rangeEnd > rangeStart) {
+        const qreal x = area.left() + area.width() *
+            double(heldEnd - rangeStart) / double(rangeEnd - rangeStart);
+        path.lineTo(x, path.currentPosition().y());
+      }
     }
     painter.setPen(QPen(curveColor, std::max(1, model_.graph.lineWidth)));
     painter.save();

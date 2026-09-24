@@ -27,8 +27,9 @@ stage.
   limits, precision, plot state, and linear/log scale.
 - Uses the legacy bare-filename search order through
   `STRIP_FILE_SEARCH_PATH`, including the `StripTool.stp` fallback.
-- Provides bounded timestamped buffers, separate sampling and display refresh,
-  reconnect state, Channel Access metadata, and local `CPU_Usage` acquisition.
+- Records Channel Access monitor updates with workstation timestamps and alarm
+  metadata in bounded buffers, independently refreshes the display, preserves
+  reconnect gaps, and periodically samples the local `CPU_Usage` curve.
 - Provides the normal live plot operations, multiple colored axes,
   annotations, controls, full configuration open/save, text/CSV export,
   snapshots, and native print/preview.

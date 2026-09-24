@@ -1,8 +1,8 @@
 #include "services/channel_access.h"
 
 #include <db_access.h>
-#include <epicsTime.h>
 #include <QMetaObject>
+#include <chrono>
 #include <cmath>
 #include <utility>
 
@@ -103,7 +103,7 @@ void ChannelAccessProvider::connectionCallback(connection_handler_args args) {
                                   QStringLiteral("Connected"));
     if (!state->subscription) {
       ca_get_callback(DBR_CTRL_DOUBLE, state->channel, controlCallback, state);
-      ca_create_subscription(DBR_TIME_DOUBLE, 1, state->channel,
+      ca_create_subscription(DBR_STS_DOUBLE, 1, state->channel,
                              DBE_VALUE | DBE_ALARM, valueCallback, state,
                              &state->subscription);
       ca_flush_io();
@@ -151,14 +151,8 @@ void ChannelAccessProvider::valueCallback(event_handler_args args) {
                                   QString::fromLatin1(ca_message(args.status)));
     return;
   }
-  const auto* value = static_cast<const dbr_time_double*>(args.dbr);
-  timespec timestamp{};
-  epicsTimeToTimespec(&timestamp, &value->stamp);
+  const auto* value = static_cast<const dbr_sts_double*>(args.dbr);
   Sample sample;
-  sample.timestamp = std::chrono::time_point_cast<
-      std::chrono::system_clock::duration>(
-      std::chrono::system_clock::from_time_t(timestamp.tv_sec) +
-      std::chrono::nanoseconds(timestamp.tv_nsec));
   sample.value = value->value;
   sample.status = value->status;
   sample.severity = value->severity;
@@ -194,6 +188,9 @@ void ChannelAccessProvider::queueMetadata(ChannelId id, ChannelMetadata metadata
 }
 
 void ChannelAccessProvider::queueSample(ChannelId id, Sample sample) {
+  // Timestamp at the CA callback boundary. This uses the same workstation
+  // clock as the live display and excludes callback-to-GUI queue latency.
+  sample.timestamp = std::chrono::system_clock::now();
   QMetaObject::invokeMethod(this, [this, id, sample] {
     if (active_.contains(id)) emit sampleReceived(id, sample);
   }, Qt::QueuedConnection);

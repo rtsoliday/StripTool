@@ -16,6 +16,8 @@ public:
   ChannelId connectChannel(const QString& name) override;
   void disconnectChannel(ChannelId id) override;
   void retryDisconnected() override;
+  void setSampleInterval(std::chrono::milliseconds interval);
+  std::chrono::milliseconds sampleInterval() const;
   void sampleNow();
 
 private:

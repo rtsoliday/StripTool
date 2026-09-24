@@ -1,6 +1,8 @@
 #include "services/acquisition_manager.h"
 
 #include <QDateTime>
+#include <algorithm>
+#include <cstdint>
 
 namespace striptool {
 
@@ -13,7 +15,7 @@ AcquisitionManager::AcquisitionManager(ChannelProvider* provider, QObject* paren
   connect(provider_, &ChannelProvider::sampleReceived, this,
           [this](ChannelId id, const Sample& sample) {
             if (auto state = channels_.value(id)) {
-              state->latest = sample;
+              state->buffer.append(sample);
               state->lastReceived = std::chrono::steady_clock::now();
               state->metadata.lastUpdate = sample.timestamp;
               if (state->metadata.connection == ConnectionState::Stale) {
@@ -38,7 +40,6 @@ AcquisitionManager::AcquisitionManager(ChannelProvider* provider, QObject* paren
               if (connection == ConnectionState::Disconnected ||
                   connection == ConnectionState::Connecting ||
                   connection == ConnectionState::Error)
-                state->latest.reset();
               emit channelMetadataChanged(id, state->metadata);
             }
           });
@@ -65,7 +66,9 @@ AcquisitionManager::AcquisitionManager(ChannelProvider* provider, QObject* paren
               emit channelMetadataChanged(id, state->metadata);
             }
           });
-  connect(&sampleTimer_, &QTimer::timeout, this, &AcquisitionManager::sampleNow);
+  staleTimer_.setInterval(1000);
+  connect(&staleTimer_, &QTimer::timeout, this, &AcquisitionManager::checkStaleNow);
+  staleTimer_.start();
   connect(&refreshTimer_, &QTimer::timeout, this,
           &AcquisitionManager::displayRefreshRequested);
 }
@@ -88,16 +91,8 @@ void AcquisitionManager::removeChannel(ChannelId id) {
   channels_.remove(id);
 }
 
-void AcquisitionManager::setSampleInterval(std::chrono::milliseconds interval) {
-  sampleTimer_.start(static_cast<int>(interval.count()));
-}
-
 void AcquisitionManager::setRefreshInterval(std::chrono::milliseconds interval) {
   refreshTimer_.start(static_cast<int>(interval.count()));
-}
-
-std::chrono::milliseconds AcquisitionManager::sampleInterval() const {
-  return std::chrono::milliseconds(sampleTimer_.interval());
 }
 
 std::chrono::milliseconds AcquisitionManager::refreshInterval() const {
@@ -114,23 +109,26 @@ ChannelMetadata AcquisitionManager::metadata(ChannelId id) const {
   return state ? state->metadata : ChannelMetadata{};
 }
 
-void AcquisitionManager::sampleNow() {
+void AcquisitionManager::setStaleAfter(std::chrono::milliseconds interval) {
+  staleAfter_ = interval;
+  staleTimer_.setInterval(static_cast<int>(std::clamp<std::int64_t>(
+      interval.count(), 1, 1000)));
+}
+
+void AcquisitionManager::checkStaleNow() {
   const auto now = std::chrono::system_clock::now();
   for (auto it = channels_.begin(); it != channels_.end(); ++it) {
     auto& state = *it.value();
-    if (!state.latest || (state.metadata.connection != ConnectionState::Connected &&
-                          state.metadata.connection != ConnectionState::Stale)) continue;
+    if (state.lastReceived == std::chrono::steady_clock::time_point{} ||
+        (state.metadata.connection != ConnectionState::Connected &&
+         state.metadata.connection != ConnectionState::Stale)) continue;
     if (std::chrono::steady_clock::now() - state.lastReceived > staleAfter_) {
       if (state.metadata.connection == ConnectionState::Stale) continue;
       state.metadata.connection = ConnectionState::Stale;
       state.metadata.statusMessage = "No recent samples";
       if (!state.buffer.empty()) state.buffer.append({now, 0.0, 0, 0, false});
       emit channelMetadataChanged(it.key(), state.metadata);
-      continue;
     }
-    Sample sample = *state.latest;
-    sample.timestamp = now;
-    state.buffer.append(sample);
   }
 }
 

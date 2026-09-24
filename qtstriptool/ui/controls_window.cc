@@ -220,7 +220,7 @@ QWidget* ControlsWindow::createTimingPage() {
   refreshInterval_->setRange(0.1, 1e9);
   form->addRow(tr("History length (seconds):"), timespan_);
   form->addRow(tr("Sample count:"), sampleCount_);
-  form->addRow(tr("Sample interval (seconds):"), sampleInterval_);
+  form->addRow(tr("CPU sample interval (seconds):"), sampleInterval_);
   form->addRow(tr("Refresh interval (seconds):"), refreshInterval_);
   auto updateTiming = [this] {
     if (loading_) return;

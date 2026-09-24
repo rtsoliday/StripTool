@@ -121,12 +121,36 @@ std::vector<Sample> decimateSamples(const std::vector<Sample>& samples,
     return result;
   }
 
+  if (maximumPoints < 6) {
+    auto minimum = std::min_element(samples.begin() + 1, samples.end() - 1,
+        [](const Sample& left, const Sample& right) {
+          return left.value < right.value;
+        });
+    auto maximum = std::max_element(samples.begin() + 1, samples.end() - 1,
+        [](const Sample& left, const Sample& right) {
+          return left.value < right.value;
+        });
+    std::vector<std::size_t> selected{0,
+        static_cast<std::size_t>(minimum - samples.begin()),
+        static_cast<std::size_t>(maximum - samples.begin()),
+        samples.size() - 1};
+    std::sort(selected.begin(), selected.end());
+    selected.erase(std::unique(selected.begin(), selected.end()), selected.end());
+    while (selected.size() > maximumPoints) selected.erase(selected.begin() + 1);
+    std::vector<Sample> result;
+    result.reserve(selected.size());
+    for (const std::size_t index : selected) result.push_back(samples[index]);
+    return result;
+  }
+
   std::vector<Sample> result;
   result.reserve(maximumPoints);
-  result.push_back(samples.front());
   const std::size_t interiorSlots = maximumPoints - 2;
-  const std::size_t bucketCount = std::max<std::size_t>(1, interiorSlots / 2);
+  // Step traces need the update after an extremum as well as the extremum
+  // itself; otherwise an isolated spike can be held across a whole bucket.
+  const std::size_t bucketCount = std::max<std::size_t>(1, interiorSlots / 4);
   const std::size_t interior = samples.size() - 2;
+  std::vector<std::size_t> selected{0};
   for (std::size_t bucket = 0; bucket < bucketCount; ++bucket) {
     const std::size_t first = 1 + bucket * interior / bucketCount;
     const std::size_t last = 1 + (bucket + 1) * interior / bucketCount;
@@ -136,17 +160,21 @@ std::vector<Sample> decimateSamples(const std::vector<Sample>& samples,
       if (it->value < minimum->value) minimum = it;
       if (it->value > maximum->value) maximum = it;
     }
-    if (minimum < maximum) {
-      if (result.size() < maximumPoints - 1) result.push_back(*minimum);
-      if (result.size() < maximumPoints - 1) result.push_back(*maximum);
-    } else if (maximum < minimum) {
-      if (result.size() < maximumPoints - 1) result.push_back(*maximum);
-      if (result.size() < maximumPoints - 1) result.push_back(*minimum);
-    } else {
-      if (result.size() < maximumPoints - 1) result.push_back(*minimum);
-    }
+    const std::size_t minimumIndex =
+        static_cast<std::size_t>(minimum - samples.begin());
+    const std::size_t maximumIndex =
+        static_cast<std::size_t>(maximum - samples.begin());
+    selected.push_back(minimumIndex);
+    selected.push_back(maximumIndex);
+    if (minimumIndex + 1 < samples.size() - 1)
+      selected.push_back(minimumIndex + 1);
+    if (maximumIndex + 1 < samples.size() - 1)
+      selected.push_back(maximumIndex + 1);
   }
-  result.push_back(samples.back());
+  selected.push_back(samples.size() - 1);
+  std::sort(selected.begin(), selected.end());
+  selected.erase(std::unique(selected.begin(), selected.end()), selected.end());
+  for (const std::size_t index : selected) result.push_back(samples[index]);
   return result;
 }
 

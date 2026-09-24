@@ -32,8 +32,9 @@ settings, and measurement tools.
 
 1. **Idle:** start with no curves for ten minutes. Record average/peak CPU,
    resident memory, wakeups if available, and graph refresh behavior.
-2. **High rate:** configure ten representative PVs at the supported minimum
-   10 ms sampling interval and an agreed refresh interval for 30 minutes.
+2. **High rate:** configure ten representative high-update-rate PVs and an
+   agreed refresh interval for 30 minutes. Channel Access monitor updates are
+   recorded as received; the sample interval applies only to `CPU_Usage`.
    Record CPU, memory, callback/sample loss, repaint latency, UI responsiveness,
    and disconnect/reconnect behavior.
 3. **Long duration:** run the representative operational configuration for at
@@ -58,8 +59,8 @@ clean shutdown, and no unbounded memory trend.
 
 ## Interpreting results
 
-Sampling and display refresh are independent: increasing repaint frequency can
-raise GUI cost without changing the Channel Access sampling period. Buffer
+Acquisition and display refresh are independent: increasing repaint frequency
+can raise GUI cost without changing Channel Access monitor delivery. Buffer
 capacity, time span, visible density, antialiasing, desktop scaling, and archive
 result size also affect measurements. Preserve those inputs with each result.
 

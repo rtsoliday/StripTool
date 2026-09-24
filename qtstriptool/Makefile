@@ -141,7 +141,9 @@ $(IOC_TEST_PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(RESOURCE_OBJECT) $(OBJ_DIR)
 
 CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              sampleBufferWrapsAndHonorsMemoryLimit \
-             decimationPreservesChronologyAndExtrema logDecimationKeepsNonPositiveGap \
+             decimationPreservesChronologyAndExtrema \
+             denseDecimationRetainsStepTransitionsAndSpikes \
+             logDecimationKeepsNonPositiveGap \
              acquisitionTracksReconnectMetadataAndTimestamps \
              acquisitionShutdownDisconnectsActiveChannels \
              samplingAndRefreshCadencesRemainIndependent staleDataIsExplicit \
@@ -167,14 +169,18 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            mainAndControlWindowsShareOneModel historyDialogRoundTripsRange \
            mainWindowFileExportAndSnapshotEntryPointsWork iconResourceIsEmbedded \
            plotWidgetSupportsViewAndAnnotationOperations \
+           liveAndHistoricalTracesRenderAsStepsWithoutCrossingGaps \
+           stepTraceStopsAtPresentTime \
            localChannelMetadataReachesControlsAndGraph \
            connectButtonKeepsUntouchedLimitsAutomatic \
+           resetViewUsesProviderLimitsWithoutManualEdits \
+           newCurveInheritsGlobalConfiguredLimitMode \
            addingCurveKeepsExistingAcquisitionHistory \
            openingConfigurationClearsPreviousAcquisitionData \
            mainWindowExportsOnlyVisibleSamples \
            plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits \
            autoScaleTracksVisibleTrace automaticMetadataDoesNotCancelRequestedAutoScale \
-           automaticRangeUsesVisibleTraceAndManualBound \
+           globalAutoScaleIgnoresIndividualConfiguredBounds \
            curveLimitEditorsPreserveScientificValues liveScrollAdvancesWhenSamplesStop \
            liveRefreshDoesNotRewindTheTimeWindow \
            appendedSampleUpdatesLiveAutomaticRangeImmediately \

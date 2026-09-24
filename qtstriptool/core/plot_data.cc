@@ -75,21 +75,13 @@ std::optional<ValueRange> visibleSampleValueRange(
   for (auto it = first; it != last; ++it)
     if (it->plotable) include(plotValue(it->value, scale));
 
-  const auto includeCrossing = [&](const Sample& before, const Sample& after,
-                                   std::chrono::system_clock::time_point boundary) {
-    if (!before.plotable || !after.plotable ||
-        before.timestamp >= boundary || after.timestamp <= boundary) return;
-    const double low = plotValue(before.value, scale);
-    const double high = plotValue(after.value, scale);
-    if (!std::isfinite(low) || !std::isfinite(high)) return;
-    const double fraction = std::chrono::duration<double>(boundary - before.timestamp).count() /
-                            std::chrono::duration<double>(after.timestamp - before.timestamp).count();
-    include(low + (high - low) * fraction);
-  };
-  if (first != samples.begin() && first != samples.end())
-    includeCrossing(*std::prev(first), *first, start);
-  if (last != samples.begin() && last != samples.end())
-    includeCrossing(*std::prev(last), *last, end);
+  // Samples are held until the next monitor update. If the visible window
+  // begins between updates, include the value active at its left edge. An
+  // invalid sample ends that held segment and therefore must not be crossed.
+  if (first != samples.begin()) {
+    const auto before = std::prev(first);
+    if (before->plotable) include(plotValue(before->value, scale));
+  }
 
   if (!std::isfinite(range.minimum)) return std::nullopt;
   if (range.minimum == range.maximum) {

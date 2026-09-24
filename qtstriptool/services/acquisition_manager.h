@@ -18,14 +18,12 @@ public:
 
   ChannelId addChannel(const QString& name, std::size_t sampleCapacity = 7200);
   void removeChannel(ChannelId id);
-  void setSampleInterval(std::chrono::milliseconds interval);
   void setRefreshInterval(std::chrono::milliseconds interval);
-  void setStaleAfter(std::chrono::milliseconds interval) { staleAfter_ = interval; }
-  std::chrono::milliseconds sampleInterval() const;
+  void setStaleAfter(std::chrono::milliseconds interval);
   std::chrono::milliseconds refreshInterval() const;
   const SampleBuffer* buffer(ChannelId id) const;
   ChannelMetadata metadata(ChannelId id) const;
-  void sampleNow();
+  void checkStaleNow();
   void clearSamples();
   void setBufferCapacity(std::size_t capacity);
   void retryDisconnected() { provider_->retryDisconnected(); }
@@ -39,7 +37,6 @@ private:
   struct ChannelState {
     explicit ChannelState(std::size_t capacity) : buffer(capacity) {}
     SampleBuffer buffer;
-    std::optional<Sample> latest;
     std::string description;
     std::chrono::steady_clock::time_point lastReceived{};
     ChannelMetadata metadata;
@@ -47,7 +44,7 @@ private:
 
   ChannelProvider* provider_;
   QHash<ChannelId, std::shared_ptr<ChannelState>> channels_;
-  QTimer sampleTimer_;
+  QTimer staleTimer_;
   QTimer refreshTimer_;
   std::chrono::milliseconds staleAfter_{5000};
 };

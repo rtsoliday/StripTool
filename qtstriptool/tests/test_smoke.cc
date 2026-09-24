@@ -123,6 +123,9 @@ private slots:
     QVERIFY(window.findChild<QAction*>(QStringLiteral("printPreviewAction")));
     QVERIFY(window.findChild<QAction*>(QStringLiteral("historyAction")));
     QVERIFY(window.findChild<QAction*>(QStringLiteral("helpAction")));
+    auto* autoScale = window.findChild<QAction*>(QStringLiteral("autoScaleAction"));
+    QVERIFY(autoScale->isCheckable());
+    QVERIFY(autoScale->isChecked());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("pauseAction"))->isCheckable());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("graphOpenAction"))->isEnabled());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("exportCsvAction"))->isEnabled());
@@ -351,6 +354,95 @@ private slots:
     controls->findChild<QPushButton*>(QStringLiteral("curveModify0"))->click();
     QVERIFY(window.model().curves[0].minimumSet);
     QCOMPARE(window.model().curves[0].minimum, 10.0);
+  }
+  void resetViewUsesProviderLimitsWithoutManualEdits() {
+    striptool::MainWindow window;
+    window.startAcquisition();
+    auto* controls = window.controlsWindow();
+    controls->findChild<QLineEdit*>(QStringLiteral("pvEntry"))
+        ->setText(QStringLiteral("CPU_Usage"));
+    controls->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
+    QTRY_COMPARE(window.model().curves[0].minimum, 0.0);
+    QTRY_COMPARE(window.model().curves[0].maximum, 100.0);
+    QVERIFY(!window.model().curves[0].minimumSet);
+    QVERIFY(!window.model().curves[0].maximumSet);
+
+    const auto now = std::chrono::system_clock::now();
+    window.plotWidget()->setCurveSamples(0, {
+        {now - std::chrono::seconds(1), 45.0, 0, 0},
+        {now, 55.0, 0, 0}});
+    window.plotWidget()->autoScale();
+    QVERIFY(window.plotWidget()->valueRange(0).minimum > 0.0);
+    QVERIFY(window.plotWidget()->valueRange(0).maximum < 100.0);
+
+    auto* autoScaleAction =
+        window.findChild<QAction*>(QStringLiteral("autoScaleAction"));
+    QVERIFY(autoScaleAction->isChecked());
+    window.findChild<QAction*>(QStringLiteral("resetAction"))->trigger();
+    QVERIFY(!autoScaleAction->isChecked());
+    QCOMPARE(window.plotWidget()->valueRange(0).minimum, 0.0);
+    QCOMPARE(window.plotWidget()->valueRange(0).maximum, 100.0);
+    autoScaleAction->trigger();
+    QVERIFY(autoScaleAction->isChecked());
+    QVERIFY(window.plotWidget()->valueRange(0).minimum > 0.0);
+    QVERIFY(window.plotWidget()->valueRange(0).maximum < 100.0);
+    autoScaleAction->trigger();
+    QVERIFY(!autoScaleAction->isChecked());
+    QCOMPARE(window.plotWidget()->valueRange(0).minimum, 0.0);
+    QCOMPARE(window.plotWidget()->valueRange(0).maximum, 100.0);
+
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "first:pv";
+    model.curves[0].nameSet = true;
+    model.curves[1].name = "second:pv";
+    model.curves[1].nameSet = true;
+    model.curves[1].minimum = -20.0;
+    model.curves[1].maximum = 20.0;
+    striptool::PlotWidget secondCurvePlot;
+    secondCurvePlot.setModel(model);
+    secondCurvePlot.setCurveSamples(1, {
+        {now - std::chrono::seconds(1), 4.0, 0, 0},
+        {now, 6.0, 0, 0}});
+    secondCurvePlot.autoScale();
+    QVERIFY(secondCurvePlot.valueRange(1).minimum > -20.0);
+    QVERIFY(secondCurvePlot.valueRange(1).maximum < 20.0);
+    secondCurvePlot.resetVerticalView();
+    QCOMPARE(secondCurvePlot.valueRange(1).minimum, -20.0);
+    QCOMPARE(secondCurvePlot.valueRange(1).maximum, 20.0);
+  }
+  void newCurveInheritsGlobalConfiguredLimitMode() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "first:pv";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0.0;
+    model.curves[0].maximum = 100.0;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto now = std::chrono::system_clock::now();
+    plot.setCurveSamples(0, {{now, 50.0, 0, 0}});
+    plot.autoScale();
+    QVERIFY(plot.valueRange(0).minimum > 0.0);
+    QVERIFY(plot.valueRange(0).maximum < 100.0);
+    plot.resetVerticalView();
+    QCOMPARE(plot.valueRange(0).minimum, 0.0);
+    QCOMPARE(plot.valueRange(0).maximum, 100.0);
+
+    model.curves[1].name = "second:pv";
+    model.curves[1].nameSet = true;
+    model.curves[1].minimum = -20.0;
+    model.curves[1].maximum = 20.0;
+    plot.setModel(model);
+    plot.setCurveSamples(1, {{now, 5.0, 0, 0}});
+    QCOMPARE(plot.valueRange(0).minimum, 0.0);
+    QCOMPARE(plot.valueRange(0).maximum, 100.0);
+    QCOMPARE(plot.valueRange(1).minimum, -20.0);
+    QCOMPARE(plot.valueRange(1).maximum, 20.0);
+
+    plot.autoScale();
+    QVERIFY(plot.valueRange(0).minimum > 0.0);
+    QVERIFY(plot.valueRange(0).maximum < 100.0);
+    QVERIFY(plot.valueRange(1).minimum > -20.0);
+    QVERIFY(plot.valueRange(1).maximum < 20.0);
   }
   void addingCurveKeepsExistingAcquisitionHistory() {
     auto model = striptool::makeDefaultModel();
@@ -716,6 +808,8 @@ private slots:
     QVERIFY(std::is_sorted(reduced.begin(), reduced.end(), [](const auto& a, const auto& b) {
       return a.timestamp < b.timestamp;
     }));
+    for (std::size_t budget = 1; budget <= 24; ++budget)
+      QVERIFY(striptool::decimateSamples(samples, budget).size() <= budget);
   }
   void disconnectedIntervalsSurviveDecimation() {
     const auto base = std::chrono::system_clock::time_point{};
@@ -732,6 +826,34 @@ private slots:
     const auto range = striptool::sampleValueRange(samples, striptool::ScaleMode::Linear);
     QVERIFY(range.has_value());
     QVERIFY(range->maximum < 1e9);
+  }
+  void denseDecimationRetainsStepTransitionsAndSpikes() {
+    const auto base = std::chrono::system_clock::time_point{};
+    std::vector<striptool::Sample> samples;
+    for (int i = 0; i < 1000; ++i) {
+      double value = 10.0;
+      if (i == 401) value = 250.0;
+      if (i >= 650) value = 40.0;
+      samples.push_back({base + std::chrono::milliseconds(i), value, 0, 0});
+    }
+    const auto reduced = striptool::decimateSamples(samples, 24);
+    QVERIFY(reduced.size() <= std::size_t{24});
+    QVERIFY(std::any_of(reduced.begin(), reduced.end(), [](const auto& sample) {
+      return sample.value == 250.0;
+    }));
+    const auto spike = std::find_if(reduced.begin(), reduced.end(), [](const auto& sample) {
+      return sample.value == 250.0;
+    });
+    QVERIFY(spike != reduced.end());
+    QVERIFY(std::next(spike) != reduced.end());
+    QCOMPARE(std::next(spike)->timestamp, base + std::chrono::milliseconds(402));
+    QCOMPARE(std::next(spike)->value, 10.0);
+    QVERIFY(std::any_of(reduced.begin(), reduced.end(), [](const auto& sample) {
+      return sample.value == 40.0;
+    }));
+    QVERIFY(std::is_sorted(reduced.begin(), reduced.end(), [](const auto& a, const auto& b) {
+      return a.timestamp < b.timestamp;
+    }));
   }
   void denseGapsRetainDataWithoutJoiningDisconnectedSegments() {
     const auto base = std::chrono::system_clock::time_point{};
@@ -789,9 +911,7 @@ private slots:
   void acquisitionTracksReconnectMetadataAndTimestamps() {
     FakeChannelProvider provider;
     striptool::AcquisitionManager acquisition(&provider);
-    acquisition.setSampleInterval(std::chrono::milliseconds(125));
     acquisition.setRefreshInterval(std::chrono::milliseconds(400));
-    QCOMPARE(acquisition.sampleInterval(), std::chrono::milliseconds(125));
     QCOMPARE(acquisition.refreshInterval(), std::chrono::milliseconds(400));
     acquisition.setStaleAfter(std::chrono::milliseconds(10));
     const auto id = acquisition.addChannel(QStringLiteral("test:pv"), 2);
@@ -813,15 +933,14 @@ private slots:
 
     const auto now = std::chrono::system_clock::now();
     provider.publishSample(id, {now, 1.5, 2, 1});
-    const auto sampledAfter = std::chrono::system_clock::now();
-    acquisition.sampleNow();
-    QVERIFY(acquisition.buffer(id)->latest()->timestamp >= sampledAfter);
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{1});
+    QCOMPARE(acquisition.buffer(id)->latest()->timestamp, now);
+    QCOMPARE(acquisition.buffer(id)->latest()->value, 1.5);
+    QCOMPARE(acquisition.buffer(id)->latest()->status, std::uint16_t{2});
     QCOMPARE(acquisition.buffer(id)->latest()->severity, std::uint16_t{1});
     QCOMPARE(acquisition.metadata(id).lastUpdate.value(), now);
     provider.publishSample(id, {now + std::chrono::seconds(1), 2.5, 0, 0});
-    acquisition.sampleNow();
     provider.publishSample(id, {now + std::chrono::seconds(2), 3.5, 0, 0});
-    acquisition.sampleNow();
     QCOMPARE(acquisition.buffer(id)->size(), std::size_t{2});
     QCOMPARE(acquisition.buffer(id)->samples().front().value, 2.5);
     acquisition.setBufferCapacity(1);
@@ -846,18 +965,25 @@ private slots:
   void samplingAndRefreshCadencesRemainIndependent() {
     FakeChannelProvider provider;
     striptool::AcquisitionManager acquisition(&provider);
-    acquisition.setSampleInterval(std::chrono::milliseconds(10));
     acquisition.setRefreshInterval(std::chrono::milliseconds(45));
-    const auto id = acquisition.addChannel(QStringLiteral("timing:test"), 100);
+    const auto id = acquisition.addChannel(QStringLiteral("timing:test"), 64);
     provider.publishConnection(id, striptool::ConnectionState::Connected);
-    provider.publishSample(id, {std::chrono::system_clock::now(), 5.0, 0, 0});
     QSignalSpy refreshes(&acquisition,
                          &striptool::AcquisitionManager::displayRefreshRequested);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    for (int i = 0; i < 1000; ++i)
+      provider.publishSample(id, {base + std::chrono::microseconds(i), double(i),
+                                  static_cast<std::uint16_t>(i % 7),
+                                  static_cast<std::uint16_t>(i % 4)});
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{64});
+    QCOMPARE(acquisition.buffer(id)->samples().front().value, 936.0);
+    QCOMPARE(acquisition.buffer(id)->latest()->timestamp,
+             base + std::chrono::microseconds(999));
+    QCOMPARE(acquisition.buffer(id)->latest()->status, std::uint16_t{5});
+    QCOMPARE(acquisition.buffer(id)->latest()->severity, std::uint16_t{3});
     QTest::qWait(115);
-    QVERIFY(acquisition.buffer(id));
-    QVERIFY(acquisition.buffer(id)->size() >= std::size_t{7});
     QVERIFY(refreshes.count() >= 2);
-    QVERIFY(acquisition.buffer(id)->size() > static_cast<std::size_t>(refreshes.count()));
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{64});
   }
   void staleDataIsExplicit() {
     FakeChannelProvider provider;
@@ -869,9 +995,10 @@ private slots:
                                 1.0, 0, 0});
     QSignalSpy metadataSpy(&acquisition,
                            &striptool::AcquisitionManager::channelMetadataChanged);
-    acquisition.sampleNow();
+    acquisition.checkStaleNow();
     QCOMPARE(acquisition.metadata(id).connection, striptool::ConnectionState::Stale);
-    QVERIFY(acquisition.buffer(id)->empty());
+    QCOMPARE(acquisition.buffer(id)->size(), std::size_t{2});
+    QVERIFY(!acquisition.buffer(id)->latest()->plotable);
     QVERIFY(metadataSpy.count() >= 1);
   }
   void disconnectedChannelDoesNotRepeatOldSamples() {
@@ -880,15 +1007,12 @@ private slots:
     const auto id = acquisition.addChannel(QStringLiteral("test:disconnect"));
     provider.publishConnection(id, striptool::ConnectionState::Connected);
     provider.publishSample(id, {std::chrono::system_clock::now(), 42.0, 0, 0});
-    acquisition.sampleNow();
     QCOMPARE(acquisition.buffer(id)->size(), std::size_t{1});
     provider.publishConnection(id, striptool::ConnectionState::Disconnected);
-    acquisition.sampleNow();
     QCOMPARE(acquisition.buffer(id)->size(), std::size_t{2});
     QVERIFY(!acquisition.buffer(id)->latest()->plotable);
     provider.publishConnection(id, striptool::ConnectionState::Connected);
     provider.publishSample(id, {std::chrono::system_clock::now(), 43.0, 0, 0});
-    acquisition.sampleNow();
     QCOMPARE(acquisition.buffer(id)->size(), std::size_t{3});
     QVERIFY(acquisition.buffer(id)->latest()->plotable);
     acquisition.clearSamples();
@@ -896,12 +1020,12 @@ private slots:
   }
   void cpuUsageIsASeparateLocalProvider() {
     striptool::CpuUsageProvider provider;
+    provider.setSampleInterval(std::chrono::milliseconds(125));
+    QCOMPARE(provider.sampleInterval(), std::chrono::milliseconds(125));
     const auto id = provider.connectChannel(QStringLiteral("CPU_Usage"));
     QSignalSpy samples(&provider, &striptool::ChannelProvider::sampleReceived);
-    QTest::qWait(2);
-    provider.sampleNow();
-    QCOMPARE(samples.count(), 1);
-    const auto sample = qvariant_cast<striptool::Sample>(samples.at(0).at(1));
+    QTRY_VERIFY_WITH_TIMEOUT(samples.count() >= 1, 500);
+    const auto sample = qvariant_cast<striptool::Sample>(samples.last().at(1));
     QVERIFY(sample.value >= 0.0 && sample.value <= 100.0);
     provider.disconnectChannel(id);
   }
@@ -949,6 +1073,7 @@ private slots:
     plot.setCurveSamples(1, {{base, 1, 0, 0},
                              {base + std::chrono::seconds(5), 10, 0, 0},
                              {base + std::chrono::seconds(10), 1000, 0, 0}});
+    plot.resetVerticalView();
     QCOMPARE(plot.valueRange(1).minimum, 0.0);
     QCOMPARE(plot.valueRange(1).maximum, 3.0);
     const auto original = plot.visibleTimeRange();
@@ -966,6 +1091,126 @@ private slots:
     QVERIFY(plot.updateAnnotation(0, {base, 6.0, "edited"}));
     QVERIFY(plot.removeAnnotation(0));
     QCOMPARE(plot.selectedAnnotation(), -1);
+  }
+  void liveAndHistoricalTracesRenderAsStepsWithoutCrossingGaps() {
+    auto model = striptool::makeDefaultModel();
+    model.colors.background = {65535, 65535, 65535, 65535};
+    model.colors.curves[0] = {0, 0, 65535, 65535};
+    model.graph.lineWidth = 3;
+    model.curves[0].name = "step:test";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0.0;
+    model.curves[0].maximum = 10.0;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.setCurveSamples(0, {{base, 2.0, 0, 0},
+                             {base + std::chrono::seconds(5), 8.0, 0, 0}});
+    plot.joinHistoricalSamples(0, {
+        {base - std::chrono::seconds(10), 7.0, 0, 0},
+        {base - std::chrono::seconds(5), 0.0, 0, 0, false}});
+    plot.setVisibleTimeRange({base - std::chrono::seconds(10),
+                              base + std::chrono::seconds(10)});
+    plot.resetVerticalView();
+    QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::white);
+    plot.render(&image);
+
+    const auto hasBlueNear = [&image](int centerX, int centerY) {
+      for (int y = centerY - 3; y <= centerY + 3; ++y)
+        for (int x = centerX - 3; x <= centerX + 3; ++x) {
+          const QColor pixel = image.pixelColor(x, y);
+          if (pixel.blue() > 150 && pixel.red() < 100) return true;
+        }
+      return false;
+    };
+    int left = -1;
+    int right = -1;
+    int top = -1;
+    int bottom = -1;
+    for (int x = 0; x < plot.width(); ++x)
+      if (plot.isInPlot(QPoint(x, plot.height() / 2))) {
+        if (left < 0) left = x;
+        right = x;
+      }
+    for (int y = 0; y < plot.height(); ++y)
+      if (plot.isInPlot(QPoint((left + right) / 2, y))) {
+        if (top < 0) top = y;
+        bottom = y;
+      }
+    const auto xAt = [left, right](double fraction) {
+      return int(std::lround(left + (right - left) * fraction));
+    };
+    const auto yAt = [top, bottom](double value) {
+      return int(std::lround(bottom - (bottom - top) * value / 10.0));
+    };
+    QVERIFY(!hasBlueNear(xAt(0.375), yAt(7.0))); // no step across the gap
+    QVERIFY(hasBlueNear(xAt(0.625), yAt(2.0)));  // held live value
+    QVERIFY(!hasBlueNear(xAt(0.625), yAt(5.0))); // not a diagonal interpolation
+
+    model.curves[0].scale = striptool::ScaleMode::Log10;
+    model.curves[0].minimum = 1.0;
+    model.curves[0].maximum = 100.0;
+    plot.clearSamples();
+    plot.setModel(model);
+    plot.joinHistoricalSamples(0, {{base, 10.0, 0, 0},
+                                    {base + std::chrono::seconds(5), 100.0, 0, 0}});
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(10)});
+    image.fill(Qt::white);
+    plot.render(&image);
+    QVERIFY(hasBlueNear(xAt(0.125), yAt(5.0)) ||
+            hasBlueNear(xAt(0.125), yAt(10.0)));
+  }
+  void stepTraceStopsAtPresentTime() {
+    auto model = striptool::makeDefaultModel();
+    model.colors.background = {65535, 65535, 65535, 65535};
+    model.colors.curves[0] = {0, 0, 65535, 65535};
+    model.graph.lineWidth = 3;
+    model.curves[0].name = "present:test";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = 0.0;
+    model.curves[0].maximum = 10.0;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    const auto now = std::chrono::system_clock::now();
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.setCurveSamples(0, {{now - std::chrono::seconds(10), 5.0, 0, 0}});
+    plot.setVisibleTimeRange({now - std::chrono::seconds(20),
+                              now + std::chrono::seconds(20)});
+    QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::white);
+    plot.render(&image);
+
+    int left = -1;
+    int right = -1;
+    int top = -1;
+    int bottom = -1;
+    for (int x = 0; x < plot.width(); ++x)
+      if (plot.isInPlot(QPoint(x, plot.height() / 2))) {
+        if (left < 0) left = x;
+        right = x;
+      }
+    for (int y = 0; y < plot.height(); ++y)
+      if (plot.isInPlot(QPoint((left + right) / 2, y))) {
+        if (top < 0) top = y;
+        bottom = y;
+      }
+    const int y = int(std::lround(bottom - (bottom - top) * 0.5));
+    const auto hasBlueNear = [&image, y](int centerX) {
+      for (int py = y - 3; py <= y + 3; ++py)
+        for (int px = centerX - 3; px <= centerX + 3; ++px) {
+          const QColor pixel = image.pixelColor(px, py);
+          if (pixel.blue() > 150 && pixel.red() < 100) return true;
+        }
+      return false;
+    };
+    QVERIFY(hasBlueNear(int(std::lround(left + (right - left) * 0.40))));
+    QVERIFY(!hasBlueNear(int(std::lround(left + (right - left) * 0.75))));
   }
   void mouseWheelZoomKeepsPointerTimestampFixed() {
     auto model = striptool::makeDefaultModel();
@@ -1059,8 +1304,8 @@ private slots:
         crossing, base, base + std::chrono::seconds(10),
         striptool::ScaleMode::Linear);
     QVERIFY(linear);
-    QCOMPARE(linear->minimum, 25.0);
-    QCOMPARE(linear->maximum, 75.0);
+    QCOMPARE(linear->minimum, -1.0);
+    QCOMPARE(linear->maximum, 1.0);
 
     auto disconnected = crossing;
     disconnected[0].plotable = false;
@@ -1075,8 +1320,8 @@ private slots:
         logarithmic, base, base + std::chrono::seconds(10),
         striptool::ScaleMode::Log10);
     QVERIFY(logRange);
-    QCOMPARE(logRange->minimum, 1.0);
-    QCOMPARE(logRange->maximum, 3.0);
+    QCOMPARE(logRange->minimum, -1.0);
+    QCOMPARE(logRange->maximum, 1.0);
 
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "crossing";
@@ -1085,8 +1330,8 @@ private slots:
     plot.setModel(model);
     plot.setCurveSamples(0, crossing);
     plot.setVisibleTimeRange({base, base + std::chrono::seconds(10)});
-    QCOMPARE(plot.valueRange(0).minimum, 25.0);
-    QCOMPARE(plot.valueRange(0).maximum, 75.0);
+    QCOMPARE(plot.valueRange(0).minimum, -1.0);
+    QCOMPARE(plot.valueRange(0).maximum, 1.0);
   }
   void legendSelectionChangesCursorCurve() {
     auto model = striptool::makeDefaultModel();
@@ -1207,8 +1452,9 @@ private slots:
     QVERIFY(plot.model().annotations[0].time > annotationTime);
     QTest::mouseRelease(&plot, Qt::MiddleButton, Qt::NoModifier,
                         start + QPoint(44, 4));
-    QCOMPARE(plot.visibleTimeRange().end, later);
-    QVERIFY(plot.valueRange(0).maximum > originalValues.maximum);
+    QVERIFY(plot.visibleTimeRange().end > original.end);
+    QVERIFY(plot.visibleTimeRange().end < later);
+    QCOMPARE(plot.valueRange(0).maximum, originalValues.maximum);
     QVERIFY(plot.autoScroll());
   }
   void removingCurveRemapsAnnotationSelection() {
@@ -1277,10 +1523,11 @@ private slots:
     plot.setCurveSamples(0, {{base - std::chrono::seconds(5), 0, 0, 0},
                              {base + std::chrono::seconds(15), 10, 0, 0}});
     plot.setVisibleTimeRange({base, base + std::chrono::seconds(10)});
+    plot.resetVerticalView();
     QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
     plot.render(&image);
     bool traceAtCenter = false;
-    for (int y = 200; y <= 280; ++y)
+    for (int y = 420; y <= 440; ++y)
       for (int x = 300; x <= 410; ++x) {
         const QColor pixel = image.pixelColor(x, y);
         if (pixel.blue() > 150 && pixel.red() < 100) traceAtCenter = true;
@@ -1377,7 +1624,7 @@ private slots:
     QCOMPARE(plot->valueRange(1).maximum, 3.0);
     plot->setVisibleTimeRange({base - std::chrono::seconds(1),
                                base + std::chrono::seconds(1)});
-    plot->autoScale(0);
+    plot->autoScale();
     QVERIFY(plot->valueRange(0).maximum < 60.0);
     window.findChild<QAction*>(QStringLiteral("resetAction"))->trigger();
     QCOMPARE(plot->valueRange(0).minimum, 0.0);
@@ -1416,12 +1663,12 @@ private slots:
     plot.setCurveSamples(0, {{base, 5.0, 0, 0},
                              {base + std::chrono::seconds(10), 1000.0, 0, 0}});
     plot.setVisibleTimeRange({base, base + std::chrono::seconds(5)});
-    plot.autoScale(0);
-    QCOMPARE(plot.valueRange(0).minimum, 5.0);
-    QCOMPARE(plot.valueRange(0).maximum, 502.5);
+    plot.autoScale();
+    QCOMPARE(plot.valueRange(0).minimum, 4.75);
+    QCOMPARE(plot.valueRange(0).maximum, 5.25);
     plot.setCurveSamples(0, {{base, 5.0, 0, 0},
                              {base + std::chrono::seconds(10), 2000.0, 0, 0}});
-    QCOMPARE(plot.valueRange(0).maximum, 1002.5);
+    QCOMPARE(plot.valueRange(0).maximum, 5.25);
   }
   void automaticMetadataDoesNotCancelRequestedAutoScale() {
     auto model = striptool::makeDefaultModel();
@@ -1435,14 +1682,14 @@ private slots:
     plot.setCurveSamples(0, {{base, 5.0, 0, 0},
                              {base + std::chrono::seconds(10), 10.0, 0, 0}});
     plot.setVisibleTimeRange({base, base + std::chrono::seconds(10)});
-    plot.autoScale(0);
+    plot.autoScale();
     QVERIFY(plot.valueRange(0).minimum > 0.0);
     model.curves[0].maximum = 100.0;
     plot.setModel(model);
     QVERIFY(plot.valueRange(0).minimum > 0.0);
     QVERIFY(plot.valueRange(0).maximum < 100.0);
   }
-  void automaticRangeUsesVisibleTraceAndManualBound() {
+  void globalAutoScaleIgnoresIndividualConfiguredBounds() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "visible:test";
     model.curves[0].nameSet = true;
@@ -1452,12 +1699,17 @@ private slots:
     plot.setCurveSamples(0, {{base, 5.0, 0, 0},
                              {base + std::chrono::seconds(10), 1000.0, 0, 0}});
     plot.setVisibleTimeRange({base, base + std::chrono::seconds(5)});
-    QCOMPARE(plot.valueRange(0).maximum, 502.5);
+    QCOMPARE(plot.valueRange(0).maximum, 5.25);
     model.curves[0].minimum = 4.0;
+    model.curves[0].maximum = 6.0;
     model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
     plot.setModel(model);
+    QCOMPARE(plot.valueRange(0).minimum, 4.75);
+    QCOMPARE(plot.valueRange(0).maximum, 5.25);
+    plot.resetVerticalView();
     QCOMPARE(plot.valueRange(0).minimum, 4.0);
-    QCOMPARE(plot.valueRange(0).maximum, 502.5);
+    QCOMPARE(plot.valueRange(0).maximum, 6.0);
   }
   void liveScrollAdvancesWhenSamplesStop() {
     auto model = striptool::makeDefaultModel();
@@ -1492,9 +1744,10 @@ private slots:
     QCOMPARE(plot.visibleTimeRange().end, liveEnd);
     const auto future = liveEnd + std::chrono::seconds(10);
     plot.setCurveSamples(0, {{old, 1.0, 0, 0}, {future, 2.0, 0, 0}});
-    QCOMPARE(plot.visibleTimeRange().end, future);
+    QVERIFY(plot.visibleTimeRange().end >= liveEnd);
+    QVERIFY(plot.visibleTimeRange().end < future);
     plot.advanceToNow();
-    QCOMPARE(plot.visibleTimeRange().end, future);
+    QVERIFY(plot.visibleTimeRange().end < future);
   }
   void appendedSampleUpdatesLiveAutomaticRangeImmediately() {
     auto model = striptool::makeDefaultModel();
@@ -1506,8 +1759,8 @@ private slots:
     plot.setCurveSamples(0, {{now, 1.0, 0, 0}});
     const auto future = plot.visibleTimeRange().end + std::chrono::seconds(10);
     plot.appendSample(0, {future, 100.0, 0, 0});
-    QCOMPARE(plot.visibleTimeRange().end, future);
-    QCOMPARE(plot.valueRange(0).maximum, 100.0);
+    QVERIFY(plot.visibleTimeRange().end < future);
+    QVERIFY(plot.valueRange(0).maximum < 100.0);
   }
   void panDraggedBackToStartRestoresOriginalRange() {
     auto model = striptool::makeDefaultModel();
@@ -1576,7 +1829,8 @@ private slots:
     plot.appendSample(0, {later, 3.0, 0, 0});
     QCOMPARE(plot.visibleTimeRange().end, beforeClick.end);
     QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, start);
-    QCOMPARE(plot.visibleTimeRange().end, later);
+    QVERIFY(plot.visibleTimeRange().end > beforeClick.end);
+    QVERIFY(plot.visibleTimeRange().end < later);
     QVERIFY(plot.autoScroll());
   }
   void dragReleaseAppliesItsFinalPosition() {

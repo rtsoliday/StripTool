@@ -28,6 +28,7 @@ public:
   void joinHistoricalSamples(std::size_t curve, const std::vector<Sample>& samples);
 
   bool autoScroll() const { return autoScroll_; }
+  bool autoScaleEnabled() const { return autoScaleEnabled_; }
   bool paused() const { return paused_; }
   TimeRange visibleTimeRange() const { return visibleTimeRange_; }
   ValueRange valueRange(std::size_t curve) const;
@@ -45,7 +46,7 @@ public:
   void resetVerticalView();
   void resetView();
   void advanceToNow();
-  void autoScale(std::optional<std::size_t> curve = std::nullopt);
+  void autoScale();
   void replot();
 
   int addAnnotation(Annotation annotation);
@@ -61,6 +62,7 @@ signals:
   void annotationSelectionChanged(int index);
   void annotationsChanged();
   void autoScrollChanged(bool enabled);
+  void autoScaleChanged(bool enabled);
   void plotContextMenuRequested(QPoint globalPosition, QPoint plotPosition);
 
 protected:
@@ -96,7 +98,7 @@ private:
   std::array<std::vector<Sample>, kMaximumCurves> samples_;
   std::array<std::optional<ValueRange>, kMaximumCurves> automaticRanges_;
   std::array<std::optional<ValueRange>, kMaximumCurves> verticalRanges_;
-  std::array<bool, kMaximumCurves> autoScaleOverrides_{};
+  bool autoScaleEnabled_ = true;
   TimeRange visibleTimeRange_;
   bool autoScroll_ = true;
   bool paused_ = false;

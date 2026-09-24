@@ -24,7 +24,8 @@ std::vector<Sample> selectSamples(
 std::optional<ValueRange> sampleValueRange(const std::vector<Sample>& samples,
                                            ScaleMode scale);
 
-// Include the values where line segments cross the edges of the visible window.
+// Include the value held at the left edge of the visible window. Samples use
+// step semantics: a value remains active until the next update.
 std::optional<ValueRange> visibleSampleValueRange(
     const std::vector<Sample>& samples,
     std::chrono::system_clock::time_point start,
