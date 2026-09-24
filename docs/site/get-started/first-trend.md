@@ -6,6 +6,11 @@ You need a built `qtstriptool` and a reachable EPICS Channel Access process vari
 
 Run `qtstriptool` without a configuration file. The graph and Controls windows open together. Later, use **Window > Show Controls** in the graph to reopen Controls.
 
+<figure class="doc-shot">
+  <img src="../assets/screenshots/controls-curves.png" alt="Controls window Curves tab showing the PV field, a connected CPU_Usage curve, plotting options, limits, and status" />
+  <figcaption>The Curves tab with the built-in CPU_Usage channel connected. Enter your site PV in the field at the top.</figcaption>
+</figure>
+
 ## Connect a curve
 
 1. Enter a PV name in the **PV** field and select **Connect**, or enter the name in an unused curve row.
@@ -17,6 +22,11 @@ If the PV is quiet, its last value can remain visible as a step line. A **Stale*
 ## Explore and save
 
 Use **View > Auto Scale** to fit visible data. Use **View > Reset View** to return to configured curve limits. The time axis shows relative minutes above local clock time. The rightmost relative label is zero.
+
+<figure class="doc-shot">
+  <img src="../assets/screenshots/graph-overview.png" alt="Graph window showing a blue step trace, value axis, legend, and navigation toolbar" />
+  <figcaption>An example graph session with illustrative CPU_Usage values. The toolbar along the bottom provides pan, zoom, auto-scale, auto-scroll, and pause.</figcaption>
+</figure>
 
 Choose **File > Save As** to write a `.stp` configuration. Open it later with `qtstriptool configuration.stp` or **File > Open**. The file holds supported configuration settings; runtime annotations and sampled data are not saved in it.
 

@@ -9,6 +9,11 @@ description: Plot an EPICS PV, configure curves, and find Qt StripTool operating
 
 <p class="doc-intro">Plot live process variables, inspect historical values, and carry your StripTool configurations into the Qt application.</p>
 
+<figure class="doc-shot">
+  <img src="./assets/screenshots/graph-overview.png" alt="Qt StripTool graph window with a blue step trace, time axis, legend, and navigation toolbar" />
+  <figcaption>The graph window with an illustrative CPU_Usage trace. The waveform is example data; the interface is captured from Qt StripTool.</figcaption>
+</figure>
+
 <div class="doc-paths">
   <a class="doc-path" href="./get-started/first-trend.html"><span class="path-number">01 / LEARN</span><strong>Plot your first PV →</strong><span>Start the application and connect a curve.</span></a>
   <a class="doc-path" href="./operate/graph.html"><span class="path-number">02 / OPERATE</span><strong>Explore the graph →</strong><span>Pan, zoom, read values, and annotate an event.</span></a>

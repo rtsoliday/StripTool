@@ -18,4 +18,9 @@ Vertical zoom uses logarithmic units for Log 10 curves. **Auto Scale** fits visi
 
 Right click the graph and choose **Annotate Here** to add a note at that time and value. Double click an annotation to edit it, or double click empty plot space to add one. Left click a box to select it; hold the middle button to move it. Delete or Backspace removes the selected annotation.
 
+<figure class="doc-shot">
+  <img src="../assets/screenshots/graph-annotation.png" alt="Graph window showing a selected Operator note annotation on an illustrative CPU_Usage step trace" />
+  <figcaption>An operator note on an illustrative trace. The dashed outline shows the selected annotation.</figcaption>
+</figure>
+
 Annotations are runtime graph state and are not saved in `.stp` files. Use [snapshot export](./files) if you need an image of the annotated plot.

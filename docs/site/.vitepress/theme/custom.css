@@ -92,6 +92,8 @@ body { font-size: 16px; }
 figure { margin: 28px 0; }
 figure img { border: 1px solid var(--vp-c-divider); border-radius: 6px; width: 100%; height: auto; }
 figcaption { margin-top: 10px; font-size: .875rem; color: var(--vp-c-text-2); line-height: 1.6; }
+.doc-shot--medium { max-width: 760px; }
+.doc-shot--compact { max-width: 500px; }
 @media (max-width: 600px) {
   .doc-paths { grid-template-columns: 1fr; }
   .vp-doc h1 { font-size: 2rem; }
