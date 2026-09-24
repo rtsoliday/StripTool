@@ -15,37 +15,45 @@ void SampleBuffer::setCapacity(std::size_t requestedSamples,
   const std::size_t memoryCapacity = memoryLimit / sizeof(Sample);
   const std::size_t newCapacity = std::max<std::size_t>(
       1, std::min(requestedSamples, std::max<std::size_t>(1, memoryCapacity)));
-  auto current = storage_.empty() ? std::vector<Sample>{} : samples();
+  auto current = samples();
   if (current.size() > newCapacity)
     current.erase(current.begin(), current.end() - static_cast<std::ptrdiff_t>(newCapacity));
-  storage_.assign(newCapacity, {});
-  size_ = current.size();
-  head_ = size_ % storage_.size();
-  std::copy(current.begin(), current.end(), storage_.begin());
+  capacity_ = newCapacity;
+  storage_ = std::move(current);
+  storage_.reserve(capacity_);
+  size_ = storage_.size();
+  head_ = size_ == capacity_ ? 0 : size_;
 }
 
 void SampleBuffer::append(Sample sample) {
+  if (storage_.size() < capacity_) {
+    storage_.push_back(sample);
+    size_ = storage_.size();
+    head_ = size_ == capacity_ ? 0 : size_;
+    return;
+  }
   storage_[head_] = sample;
-  head_ = (head_ + 1) % storage_.size();
-  size_ = std::min(size_ + 1, storage_.size());
+  head_ = (head_ + 1) % capacity_;
+  size_ = capacity_;
 }
 
 void SampleBuffer::clear() {
+  storage_.clear();
   head_ = 0;
   size_ = 0;
 }
 
 std::optional<Sample> SampleBuffer::latest() const {
   if (empty()) return std::nullopt;
-  return storage_[(head_ + storage_.size() - 1) % storage_.size()];
+  return storage_[(head_ + capacity_ - 1) % capacity_];
 }
 
 std::vector<Sample> SampleBuffer::samples() const {
   std::vector<Sample> result;
   result.reserve(size_);
-  const std::size_t begin = (head_ + storage_.size() - size_) % storage_.size();
+  const std::size_t begin = size_ < capacity_ ? 0 : head_;
   for (std::size_t i = 0; i < size_; ++i)
-    result.push_back(storage_[(begin + i) % storage_.size()]);
+    result.push_back(storage_[(begin + i) % size_]);
   return result;
 }
 

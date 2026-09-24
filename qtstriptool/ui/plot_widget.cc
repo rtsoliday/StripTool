@@ -566,10 +566,9 @@ QColor PlotWidget::color(const Rgba16& value) const {
 
 std::optional<QPointF> PlotWidget::mapSample(const Sample& sample,
                                             const ValueRange& range,
-                                            ScaleMode scale) const {
-  const QRectF area = plotRect();
-  const qint64 begin = milliseconds(visibleTimeRange_.start);
-  const qint64 end = milliseconds(visibleTimeRange_.end);
+                                            ScaleMode scale,
+                                            const QRectF& area,
+                                            qint64 begin, qint64 end) const {
   const qint64 time = milliseconds(sample.timestamp);
   const double value = plotValue(sample.value, scale);
   if (end <= begin || !sample.plotable || !range.isValid() || !std::isfinite(value))
@@ -581,7 +580,6 @@ std::optional<QPointF> PlotWidget::mapSample(const Sample& sample,
 
 void PlotWidget::paintEvent(QPaintEvent*) {
   QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing);
   painter.fillRect(rect(), color(model_.colors.background));
   const QRectF area = plotRect();
   const QColor foreground = color(model_.colors.foreground);
@@ -748,7 +746,7 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     QPainterPath path;
     bool started = false;
     for (const auto& sample : selected) {
-      const auto point = mapSample(sample, range, config.scale);
+      const auto point = mapSample(sample, range, config.scale, area, begin, end);
       if (!point) {
         if (started) {
           const qint64 sampleTime = milliseconds(sample.timestamp);

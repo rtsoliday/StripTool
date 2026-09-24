@@ -25,6 +25,11 @@ macOS, Windows, production archive latency, and a 24-hour run were not measured.
 
 ## Release-candidate procedure
 
+For a reproducible local side-by-side baseline, run
+`make benchmark-resource-usage`. The harness and workload are documented in
+`benchmarks/resource-usage/README.md`; it records raw CPU/RSS/PSS time series
+and JSON/Markdown summaries for four fast, three slow, and three constant PVs.
+
 Use the same release build, `.stp` file, CA environment, window size, desktop
 style, and host for comparisons. Record OS/kernel, CPU, memory, display/DPI,
 Qt and EPICS versions, compiler/options, IOC/archive sources, sample/refresh

@@ -90,7 +90,8 @@ private:
   QColor color(const Rgba16& value) const;
   std::optional<QPointF> mapSample(const Sample& sample,
                                   const ValueRange& range,
-                                  ScaleMode scale) const;
+                                  ScaleMode scale, const QRectF& area,
+                                  qint64 begin, qint64 end) const;
 
   StripToolModel model_ = makeDefaultModel();
   std::array<std::vector<Sample>, kMaximumCurves> liveSamples_;

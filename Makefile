@@ -6,7 +6,7 @@ include Makefile.rules
 .PHONY: all striptool qtstriptool test-qtstriptool test-qtstriptool-core \
         test-qtstriptool-config test-qtstriptool-ui test-qtstriptool-ioc \
         test-qtstriptool-visual test-qtstriptool-performance test-qt-versions \
-        test-ioc test-visual install install-qt-package package-qtstriptool \
+        test-ioc test-visual benchmark-resource-usage install install-qt-package package-qtstriptool \
         clean distclean \
         check-dependencies
 
@@ -79,6 +79,9 @@ test-qt-versions:
 test-ioc: test-qtstriptool-ioc
 
 test-visual: test-qtstriptool-visual
+
+benchmark-resource-usage: striptool qtstriptool
+	$(PYTHON) benchmarks/resource-usage/run_benchmark.py
 
 install: check-dependencies $(if $(HAVE_LEGACY),striptool) qtstriptool
 

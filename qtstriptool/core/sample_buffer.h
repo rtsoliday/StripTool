@@ -29,13 +29,14 @@ public:
   void clear();
 
   std::size_t size() const { return size_; }
-  std::size_t capacity() const { return storage_.size(); }
+  std::size_t capacity() const { return capacity_; }
   bool empty() const { return size_ == 0; }
   std::optional<Sample> latest() const;
   std::vector<Sample> samples() const;
 
 private:
   std::vector<Sample> storage_;
+  std::size_t capacity_ = 1;
   std::size_t head_ = 0;
   std::size_t size_ = 0;
 };
