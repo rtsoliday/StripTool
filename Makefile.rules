@@ -17,6 +17,25 @@ PKG_CONFIG ?= pkg-config
 PYTHON ?= $(if $(filter Windows,$(OS)),python,python3)
 
 ifeq ($(RULES_PROFILE),striptool)
+# Match the APS MEDM build toolchain on Linux.  When invoked from the RHEL 8
+# build shell, this uses the same GCC major version as the installed EPICS
+# libraries while retaining the shell's RHEL 8 glibc baseline.  Statically
+# linking the C++ runtime lets the result run without this private compiler
+# installation on the target host.
+ifeq ($(OS),Linux)
+CUSTOM_GCC_PATH ?= /usr/local/oag/3rdParty/gcc-11.3.0
+ifneq ($(and $(strip $(CUSTOM_GCC_PATH)),\
+              $(wildcard $(CUSTOM_GCC_PATH)/bin/gcc),\
+              $(wildcard $(CUSTOM_GCC_PATH)/bin/g++)),)
+CC = $(CUSTOM_GCC_PATH)/bin/gcc
+CCC = $(CUSTOM_GCC_PATH)/bin/g++
+CXX = $(CUSTOM_GCC_PATH)/bin/g++
+AR = $(CUSTOM_GCC_PATH)/bin/gcc-ar -rc
+RANLIB = $(CUSTOM_GCC_PATH)/bin/gcc-ranlib
+LDFLAGS += -static-libstdc++
+endif
+endif
+
 OBJ_DIR ?= O.$(OS)-$(ARCH)
 ifeq ($(OS),Windows)
 # GNU Make parses the colon in an absolute drive-letter path as target syntax.

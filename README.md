@@ -71,6 +71,17 @@ being skipped. A missing Qt or EPICS Base is an error for the Qt build. Build
 products are placed in `bin/<OS>-<architecture>/`; Qt object trees are named
 `qtstriptool/O.<OS>-<architecture>-qt<major>`.
 
+On APS Linux hosts, the build automatically uses the RHEL 8-built GCC suite at
+`/usr/local/oag/3rdParty/gcc-11.3.0` when its `gcc` and `g++` executables are
+available. This matches the compiler used for the site EPICS libraries and
+statically links the C++ runtime, following the MEDM build convention. Set
+`CUSTOM_GCC_PATH=/another/gcc/prefix` to select another installation, or set it
+to an empty value to use the compiler from `PATH`. Run `make distclean` before
+switching compilers so objects from different C++ ABIs are not mixed. Use this
+compiler from `rhel8-build shell` when producing a RHEL 8-compatible binary;
+the compiler path by itself does not prevent a build run on RHEL 9 from taking
+dependencies on RHEL 9 glibc symbols.
+
 When checked out as `<extensions>/src/StripTool` in an EPICS extensions tree,
 the normal builds also copy executables into the extensions host binary
 directory. This is separate from the staged system packaging described below.
