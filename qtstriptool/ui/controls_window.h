@@ -71,6 +71,7 @@ private:
   QComboBox* yGrid_ = nullptr;
   QCheckBox* coloredAxes_ = nullptr;
   QSpinBox* lineWidth_ = nullptr;
+  QLineEdit* title_ = nullptr;
   QPushButton* foreground_ = nullptr;
   QPushButton* background_ = nullptr;
   QPushButton* gridColor_ = nullptr;

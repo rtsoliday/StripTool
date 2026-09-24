@@ -20,6 +20,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -75,11 +76,6 @@ ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
     : QMainWindow(parent), model_(model) {
   setObjectName(QStringLiteral("controlsWindow"));
   setWindowTitle(tr("Qt StripTool Controls"));
-  // Leave enough initial room for useful PV names alongside the full-precision
-  // minimum and maximum editors. The curve table remains horizontally
-  // scrollable on displays where this width is not available.
-  resize(1240, 610);
-
   auto* fileMenu = menuBar()->addMenu(tr("&File"));
   fileMenu->setObjectName(QStringLiteral("controlsFileMenu"));
   auto* open = fileMenu->addAction(tr("&Open…"));
@@ -110,6 +106,12 @@ ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
   tabs->addTab(createTimingPage(), tr("Timing"));
   tabs->addTab(createAppearancePage(), tr("Appearance"));
   setCentralWidget(tabs);
+
+  // Size the window to the ten curve rows instead of leaving an arbitrary
+  // empty region below them. Keep the generous initial width for PV names and
+  // full-precision limits; narrower displays can still use the scroll bars.
+  adjustSize();
+  resize(1240, height());
 
   connect(open, &QAction::triggered, this, &ControlsWindow::openRequested);
   connect(save, &QAction::triggered, this, &ControlsWindow::saveRequested);
@@ -204,8 +206,12 @@ QWidget* ControlsWindow::createCurvePage() {
   }
   grid->setColumnStretch(1, 1);
   auto* scroll = new QScrollArea(page);
+  scroll->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
   scroll->setWidgetResizable(true);
   scroll->setWidget(rows);
+  scroll->setMinimumHeight(rows->sizeHint().height() +
+                           scroll->horizontalScrollBar()->sizeHint().height() +
+                           2 * scroll->frameWidth());
   layout->addWidget(scroll);
   connect(connectButton, &QPushButton::clicked, this, &ControlsWindow::connectEnteredPv);
   connect(pvEntry_, &QLineEdit::returnPressed, this, &ControlsWindow::connectEnteredPv);
@@ -254,6 +260,9 @@ QWidget* ControlsWindow::createTimingPage() {
 QWidget* ControlsWindow::createAppearancePage() {
   auto* page = new QWidget(this);
   auto* form = new QFormLayout(page);
+  title_ = new QLineEdit(page);
+  title_->setObjectName(QStringLiteral("plotTitle"));
+  title_->setPlaceholderText(tr("No title"));
   foreground_ = new QPushButton(tr("Foreground"), page);
   foreground_->setObjectName(QStringLiteral("foregroundColor"));
   background_ = new QPushButton(tr("Background"), page);
@@ -271,6 +280,7 @@ QWidget* ControlsWindow::createAppearancePage() {
   lineWidth_ = new QSpinBox(page);
   lineWidth_->setObjectName(QStringLiteral("lineWidth"));
   lineWidth_->setRange(0, 10);
+  form->addRow(tr("Title:"), title_);
   form->addRow(tr("Foreground color:"), foreground_);
   form->addRow(tr("Background color:"), background_);
   form->addRow(tr("Grid color:"), gridColor_);
@@ -284,6 +294,14 @@ QWidget* ControlsWindow::createAppearancePage() {
           [this] { chooseColor(model_->colors.background, background_); });
   connect(gridColor_, &QPushButton::clicked, this,
           [this] { chooseColor(model_->colors.grid, gridColor_); });
+  connect(title_, &QLineEdit::editingFinished, this, [this] {
+    if (loading_) return;
+    const std::string title = title_->text().trimmed().toStdString();
+    if (model_->title == title) return;
+    model_->title = title;
+    updateTitle();
+    emit modelChanged();
+  });
   const auto updateGraph = [this] {
     if (loading_) return;
     model_->graph.xGrid = static_cast<GridMode>(xGrid_->currentIndex());
@@ -431,6 +449,7 @@ void ControlsWindow::reloadFromModel() {
   yGrid_->setCurrentIndex(static_cast<int>(model_->graph.yGrid));
   coloredAxes_->setChecked(model_->graph.coloredYAxis);
   lineWidth_->setValue(model_->graph.lineWidth);
+  title_->setText(QString::fromStdString(model_->title));
   updateColorButton(foreground_, model_->colors.foreground);
   updateColorButton(background_, model_->colors.background);
   updateColorButton(gridColor_, model_->colors.grid);
@@ -438,7 +457,7 @@ void ControlsWindow::reloadFromModel() {
 }
 
 void ControlsWindow::updateTitle() {
-  setWindowTitle(model_->filename.empty()
+  setWindowTitle(model_->title.empty()
                      ? tr("Qt StripTool Controls")
                      : QString::fromStdString(model_->title) +
                            tr(" Controls — Qt StripTool"));

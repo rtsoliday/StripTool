@@ -459,7 +459,7 @@ QRectF PlotWidget::plotRect() const {
       labelWidth = std::max(labelWidth, metrics.horizontalAdvance(label));
     leftMargin = std::max(leftMargin, unitsLaneWidth + labelGap + labelWidth + labelGap);
   }
-  return rect().adjusted(leftMargin, 20, -178, -64);
+  return rect().adjusted(leftMargin, model_.title.empty() ? 20 : 38, -178, -64);
 }
 
 std::vector<std::size_t> PlotWidget::plottedCurves() const {
@@ -586,6 +586,20 @@ void PlotWidget::paintEvent(QPaintEvent*) {
   const QRectF area = plotRect();
   const QColor foreground = color(model_.colors.foreground);
   const auto visibleCurves = plottedCurves();
+
+  const QString title = QString::fromStdString(model_.title);
+  if (!title.isEmpty()) {
+    QFont titleFont = painter.font();
+    titleFont.setBold(true);
+    painter.setFont(titleFont);
+    painter.setPen(foreground);
+    painter.drawText(QRectF(area.left(), 6, area.width(), 24),
+                     Qt::AlignCenter,
+                     painter.fontMetrics().elidedText(
+                         title, Qt::ElideRight, static_cast<int>(area.width())));
+    painter.setFont(font());
+  }
+
   for (std::size_t position = 0; position < visibleCurves.size(); ++position) {
     const std::size_t index = visibleCurves[position];
     const QRectF legend = legendRect(position);

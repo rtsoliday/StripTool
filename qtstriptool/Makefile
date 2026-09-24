@@ -165,6 +165,7 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                configurationWritesDiscoveredChannelMetadata \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
+           plotRendersModelTitle appearanceTitleEditsAndPersists \
            curveLimitEditorsFitLongValues \
            returnInCurveFieldsAppliesModify \
            mouseWheelZoomKeepsPointerTimestampFixed \

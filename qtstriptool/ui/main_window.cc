@@ -83,7 +83,7 @@ MainWindow::MainWindow(QWidget* parent) : MainWindow(makeDefaultModel(), parent)
 MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     : QMainWindow(parent), model_(std::move(model)) {
   setObjectName(QStringLiteral("mainWindow"));
-  setWindowTitle(model_.filename.empty()
+  setWindowTitle(model_.title.empty()
                      ? applicationName()
                      : QString::fromStdString(model_.title) +
                            QStringLiteral(" — ") + applicationName());
@@ -342,7 +342,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     plotWidget_->setModel(model_);
     if (timespanChanged && plotWidget_->autoScroll() && !plotWidget_->paused())
       plotWidget_->resetView();
-    setWindowTitle(model_.filename.empty()
+    setWindowTitle(model_.title.empty()
                        ? applicationName()
                        : QString::fromStdString(model_.title) + QStringLiteral(" — ") +
                              applicationName());
@@ -501,7 +501,7 @@ void MainWindow::applyModel() {
   plotWidget_->setModel(model_);
   plotWidget_->resetView();
   controlsWindow_->reloadFromModel();
-  setWindowTitle(model_.filename.empty()
+  setWindowTitle(model_.title.empty()
                      ? applicationName()
                      : QString::fromStdString(model_.title) + QStringLiteral(" — ") +
                            applicationName());
@@ -530,6 +530,7 @@ bool MainWindow::saveConfiguration(const QString& path, QString* error) {
     return false;
   }
   updateRecentFiles(path);
+  plotWidget_->setModel(model_);
   setWindowTitle(QString::fromStdString(model_.title) + QStringLiteral(" — ") +
                  applicationName());
   controlsWindow_->updateTitle();

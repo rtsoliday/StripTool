@@ -13,7 +13,6 @@ ConfigResult FileWorkflow::open(const std::filesystem::path& path,
   ConfigResult result = readConfigurationFile(path, candidate);
   if (result.success) {
     candidate.filename = path.string();
-    candidate.title = path.filename().string();
     model = std::move(candidate);
   }
   return result;
@@ -40,7 +39,6 @@ bool FileWorkflow::save(const std::filesystem::path& path, StripToolModel& model
     return false;
   }
   model.filename = path.string();
-  model.title = path.filename().string();
   return true;
 }
 

@@ -115,7 +115,7 @@ struct UnknownConfigField {
 };
 
 struct StripToolModel {
-  std::string title = "Untitled";
+  std::string title;
   std::string filename;
   TimingConfiguration timing;
   GraphConfiguration graph;

@@ -142,7 +142,9 @@ ConfigResult parseCurrent(const std::vector<std::string>& lines,
 
     bool known = true;
     bool valid = true;
-    if (parts.size() == 3 && parts[1] == "Time") {
+    if (parts.size() == 2 && parts[1] == "Title") {
+      candidate.title = value;
+    } else if (parts.size() == 3 && parts[1] == "Time") {
       if (parts[2] == "Timespan") {
         unsigned parsed = 0;
         valid = parseInteger(value, parsed);
@@ -305,10 +307,12 @@ ConfigResult readConfigurationFile(const std::filesystem::path& path,
                                    StripToolModel& model) {
   std::ifstream input(path);
   if (!input) return fail(0, "unable to open " + path.string());
-  ConfigResult result = readConfiguration(input, model);
+  StripToolModel candidate = model;
+  candidate.title = path.filename().string();
+  ConfigResult result = readConfiguration(input, candidate);
   if (result.success) {
-    model.filename = path.string();
-    model.title = path.filename().string();
+    candidate.filename = path.string();
+    model = std::move(candidate);
   }
   return result;
 }
@@ -341,6 +345,7 @@ bool writeConfiguration(std::ostream& output, const StripToolModel& model,
     }
   }
   writeField(output, "StripConfig", "1.2");
+  writeField(output, "Strip.Title", model.title);
   for (const auto& field : model.unknownFields) writeField(output, field.key, field.value);
   writeField(output, "Strip.Time.Timespan", std::to_string(model.timing.timespanSeconds));
   writeField(output, "Strip.Time.NumSamples", std::to_string(model.timing.numberOfSamples));

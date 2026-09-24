@@ -222,6 +222,47 @@ private slots:
     QVERIFY(!model.curves[0].nameSet);
     QCOMPARE(acquisition.count(), 3);
   }
+  void plotRendersModelTitle() {
+    auto model = striptool::makeDefaultModel();
+    model.title = "Beam Study";
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+
+    QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    plot.render(&image);
+
+    int titlePixels = 0;
+    for (int y = 6; y < 30; ++y)
+      for (int x = 72; x < 622; ++x) {
+        const QColor pixel = image.pixelColor(x, y);
+        if (pixel.red() < 120 && pixel.green() < 120 && pixel.blue() < 120)
+          ++titlePixels;
+      }
+    QVERIFY2(titlePixels > 20, "The model title was not rendered above the plot");
+  }
+  void appearanceTitleEditsAndPersists() {
+    auto model = striptool::makeDefaultModel();
+    QVERIFY(model.title.empty());
+    striptool::ControlsWindow controls(&model);
+    auto* title = controls.findChild<QLineEdit*>(QStringLiteral("plotTitle"));
+    QVERIFY(title);
+    QVERIFY(title->text().isEmpty());
+    QSignalSpy changed(&controls, &striptool::ControlsWindow::modelChanged);
+    title->setText(QStringLiteral("Beam Study"));
+    emit title->editingFinished();
+    QCOMPARE(model.title, std::string("Beam Study"));
+    QCOMPARE(changed.count(), 1);
+
+    std::ostringstream output;
+    QVERIFY(striptool::writeConfiguration(output, model));
+    QVERIFY(output.str().find("Strip.Title") != std::string::npos);
+    auto roundTripped = striptool::makeDefaultModel();
+    std::istringstream input(output.str());
+    QVERIFY(striptool::readConfiguration(input, roundTripped).success);
+    QCOMPARE(roundTripped.title, model.title);
+  }
   void curveLimitEditorsFitLongValues() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].minimum = -1.234567890123456e+100;
@@ -589,7 +630,7 @@ private slots:
     QCOMPARE(model.timing.timespanSeconds, 123U);
     QCOMPARE(model.timing.numberOfSamples, 2048);
     QCOMPARE(model.filename, path.string());
-    QCOMPARE(model.title, std::string("saved.stp"));
+    QVERIFY(model.title.empty());
     model.timing.sampleIntervalSeconds = -1.0;
     QVERIFY(!striptool::FileWorkflow::save(path, model, &error));
     auto saved = striptool::makeDefaultModel();
