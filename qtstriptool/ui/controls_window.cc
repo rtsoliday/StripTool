@@ -57,6 +57,11 @@ QLineEdit* limitEditor(QWidget* parent) {
   validator->setLocale(QLocale::c());
   validator->setNotation(QDoubleValidator::ScientificNotation);
   editor->setValidator(validator);
+  // limitText() writes up to 16 significant digits. Keep the leading digits
+  // visible even for signed values with three-digit exponents; on narrower
+  // screens the surrounding scroll area can scroll the table instead.
+  const QString widestExpected = QStringLiteral("-1.234567890123456e+100");
+  editor->setMinimumWidth(editor->fontMetrics().horizontalAdvance(widestExpected) + 24);
   return editor;
 }
 
@@ -70,7 +75,10 @@ ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
     : QMainWindow(parent), model_(model) {
   setObjectName(QStringLiteral("controlsWindow"));
   setWindowTitle(tr("Qt StripTool Controls"));
-  resize(1040, 610);
+  // Leave enough initial room for useful PV names alongside the full-precision
+  // minimum and maximum editors. The curve table remains horizontally
+  // scrollable on displays where this width is not available.
+  resize(1240, 610);
 
   auto* fileMenu = menuBar()->addMenu(tr("&File"));
   fileMenu->setObjectName(QStringLiteral("controlsFileMenu"));
@@ -149,6 +157,7 @@ QWidget* ControlsWindow::createCurvePage() {
     row.name = new QLineEdit(rows);
     row.name->setObjectName(QStringLiteral("curveName") + suffix);
     row.name->setMaxLength(static_cast<int>(kMaximumCurveNameLength));
+    row.name->setMinimumWidth(220);
     row.color = new QPushButton(tr("Color"), rows);
     row.color->setObjectName(QStringLiteral("curveColor") + suffix);
     row.plotted = new QCheckBox(rows);

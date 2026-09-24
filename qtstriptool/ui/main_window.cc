@@ -24,12 +24,15 @@
 #include <QPainter>
 #include <QSettings>
 #include <QSignalBlocker>
+#include <QScreen>
 #include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QUrl>
 #include <QtPrintSupport/QPrintDialog>
 #include <QtPrintSupport/QPrintPreviewDialog>
+#include <QtPrintSupport/QPrintPreviewWidget>
 #include <QtPrintSupport/QPrinter>
 #include <algorithm>
 #include <chrono>
@@ -259,13 +262,27 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   };
   connect(printAction, &QAction::triggered, this, [this, paintPlot] {
     QPrinter printer(QPrinter::HighResolution);
+    printer.setPageOrientation(QPageLayout::Landscape);
     QPrintDialog dialog(&printer, this);
     if (dialog.exec() == QDialog::Accepted) paintPlot(&printer);
   });
   connect(previewAction, &QAction::triggered, this, [this, paintPlot] {
-    QPrinter printer(QPrinter::HighResolution);
+    // HighResolution makes the preview page thousands of device pixels wide,
+    // which Qt then initially displays at only a few percent. ScreenResolution
+    // gives the preview sensible page metrics; the real Print path above still
+    // uses the printer's full resolution.
+    QPrinter printer(QPrinter::ScreenResolution);
+    printer.setPageOrientation(QPageLayout::Landscape);
     QPrintPreviewDialog preview(&printer, this);
+    const QSize available = screen() ? screen()->availableGeometry().size()
+                                     : QSize(1200, 800);
+    preview.resize(std::min(1200, std::max(800, available.width() - 120)),
+                   std::min(850, std::max(600, available.height() - 120)));
     connect(&preview, &QPrintPreviewDialog::paintRequested, this, paintPlot);
+    QTimer::singleShot(0, &preview, [&preview] {
+      if (auto* widget = preview.findChild<QPrintPreviewWidget*>())
+        widget->fitToWidth();
+    });
     preview.exec();
   });
   connect(pauseAction, &QAction::toggled, plotWidget_, &PlotWidget::setPaused);
@@ -574,32 +591,46 @@ void MainWindow::startAcquisition() {
       if (channelIds_[i] != id || localChannels_[i] != local) continue;
       controlsWindow_->setChannelMetadata(i, metadata);
       if (metadata.connection != ConnectionState::Connected ||
-          (metadata.units.empty() && !metadata.displayMinimum &&
+          (metadata.units.empty() && metadata.description.empty() &&
+           !metadata.displayMinimum &&
            !metadata.displayMaximum)) break;
       auto& curve = model_.curves[i];
       bool changed = false;
-      if (!curve.commentSet && !metadata.description.empty() &&
-          curve.comment != metadata.description) {
-        curve.comment = metadata.description;
-        changed = true;
+      if (!metadata.description.empty()) {
+        curve.commentDiscovered = true;
+        if (!curve.commentSet && curve.comment != metadata.description) {
+          curve.comment = metadata.description;
+          changed = true;
+        }
       }
-      if (!curve.unitsSet && !metadata.units.empty() && curve.units != metadata.units) {
-        curve.units = metadata.units;
-        changed = true;
+      if (!metadata.units.empty()) {
+        curve.unitsDiscovered = true;
+        if (!curve.unitsSet && curve.units != metadata.units) {
+          curve.units = metadata.units;
+          changed = true;
+        }
       }
-      if (!curve.precisionSet && curve.precision != metadata.precision) {
-        curve.precision = metadata.precision;
-        changed = true;
+      if (!metadata.units.empty() || metadata.displayMinimum || metadata.displayMaximum) {
+        curve.precisionDiscovered = true;
+        const int precision = std::clamp(metadata.precision, 0, 20);
+        if (!curve.precisionSet && curve.precision != precision) {
+          curve.precision = precision;
+          changed = true;
+        }
       }
-      if (!curve.minimumSet && metadata.displayMinimum &&
-          curve.minimum != *metadata.displayMinimum) {
-        curve.minimum = *metadata.displayMinimum;
-        changed = true;
+      if (metadata.displayMinimum) {
+        curve.minimumDiscovered = true;
+        if (!curve.minimumSet && curve.minimum != *metadata.displayMinimum) {
+          curve.minimum = *metadata.displayMinimum;
+          changed = true;
+        }
       }
-      if (!curve.maximumSet && metadata.displayMaximum &&
-          curve.maximum != *metadata.displayMaximum) {
-        curve.maximum = *metadata.displayMaximum;
-        changed = true;
+      if (metadata.displayMaximum) {
+        curve.maximumDiscovered = true;
+        if (!curve.maximumSet && curve.maximum != *metadata.displayMaximum) {
+          curve.maximum = *metadata.displayMaximum;
+          changed = true;
+        }
       }
       if (changed) {
         plotWidget_->setModel(model_);

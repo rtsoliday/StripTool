@@ -367,11 +367,16 @@ bool writeConfiguration(std::ostream& output, const StripToolModel& model,
     if (!curve.nameSet) continue;
     const std::string prefix = "Strip.Curve." + std::to_string(i) + ".";
     writeField(output, prefix + "Name", curve.name);
-    if (curve.unitsSet) writeField(output, prefix + "Units", curve.units);
-    if (curve.commentSet) writeField(output, prefix + "Comment", curve.comment);
-    if (curve.precisionSet) writeField(output, prefix + "Precision", std::to_string(curve.precision));
-    if (curve.minimumSet) writeField(output, prefix + "Min", number(curve.minimum));
-    if (curve.maximumSet) writeField(output, prefix + "Max", number(curve.maximum));
+    if (curve.unitsSet || curve.unitsDiscovered)
+      writeField(output, prefix + "Units", curve.units);
+    if (curve.commentSet || curve.commentDiscovered)
+      writeField(output, prefix + "Comment", curve.comment);
+    if (curve.precisionSet || curve.precisionDiscovered)
+      writeField(output, prefix + "Precision", std::to_string(curve.precision));
+    if (curve.minimumSet || curve.minimumDiscovered)
+      writeField(output, prefix + "Min", number(curve.minimum));
+    if (curve.maximumSet || curve.maximumDiscovered)
+      writeField(output, prefix + "Max", number(curve.maximum));
     writeField(output, prefix + "Scale", std::to_string(static_cast<int>(curve.scale)));
     writeField(output, prefix + "PlotStatus", curve.plotted ? "1" : "0");
   }

@@ -161,13 +161,16 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \
                appliesLayersInOrder writerRejectsInvalidModels \
                configurationRoundTripsFullDoublePrecision \
+               configurationWritesDiscoveredChannelMetadata \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
+           curveLimitEditorsFitLongValues \
            returnInCurveFieldsAppliesModify \
            mouseWheelZoomKeepsPointerTimestampFixed \
            narrowYAxisTicksRemainDistinct \
            mainAndControlWindowsShareOneModel historyDialogRoundTripsRange \
            mainWindowFileExportAndSnapshotEntryPointsWork iconResourceIsEmbedded \
+           printPreviewHasUsefulInitialGeometry \
            plotWidgetSupportsViewAndAnnotationOperations \
            liveAndHistoricalTracesRenderAsStepsWithoutCrossingGaps \
            stepTraceStopsAtPresentTime \

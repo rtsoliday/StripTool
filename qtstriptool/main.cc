@@ -72,5 +72,6 @@ int main(int argc, char** argv) {
   striptool::MainWindow window(std::move(model));
   window.startAcquisition();
   window.show();
+  if (explicitName.isEmpty()) window.showControls();
   return application.exec();
 }

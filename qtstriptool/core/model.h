@@ -77,6 +77,15 @@ struct CurveConfiguration {
   bool precisionSet = false;
   bool minimumSet = false;
   bool maximumSet = false;
+
+  // Provider metadata should be written to an .stp file like legacy
+  // StripTool metadata, but must remain distinguishable from user-configured
+  // values while the application is running (notably for auto scaling).
+  bool unitsDiscovered = false;
+  bool commentDiscovered = false;
+  bool precisionDiscovered = false;
+  bool minimumDiscovered = false;
+  bool maximumDiscovered = false;
 };
 
 struct TimingConfiguration {
