@@ -245,11 +245,18 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     if (!exportData(path, true, &error)) QMessageBox::critical(this, tr("Export Failed"), error);
   });
   connect(snapshotAction, &QAction::triggered, this, [this] {
+    QString selectedFilter;
     const QString path = QFileDialog::getSaveFileName(this, tr("Save Plot Snapshot"), {},
-                                                       tr("PNG images (*.png);;JPEG images (*.jpg)"));
+                                                       tr("PNG images (*.png);;JPEG images (*.jpg)"),
+                                                       &selectedFilter);
     if (path.isEmpty()) return;
+    const QString format = selectedFilter.contains(QStringLiteral("*.jpg"),
+                                                    Qt::CaseInsensitive)
+                               ? QStringLiteral("jpg")
+                               : QStringLiteral("png");
     QString error;
-    if (!saveSnapshot(path, &error)) QMessageBox::critical(this, tr("Snapshot Failed"), error);
+    if (!saveSnapshot(path, format, &error))
+      QMessageBox::critical(this, tr("Snapshot Failed"), error);
   });
   const auto paintPlot = [this](QPrinter* printer) {
     QPainter painter(printer);
@@ -557,8 +564,19 @@ bool MainWindow::exportData(const QString& path, bool csv, QString* error) const
 }
 
 bool MainWindow::saveSnapshot(const QString& path, QString* error) const {
-  if (plotWidget_->grab().save(path)) return true;
-  if (error) *error = tr("Unable to save image %1").arg(path);
+  return saveSnapshot(path, QStringLiteral("png"), error);
+}
+
+bool MainWindow::saveSnapshot(const QString& path, const QString& defaultFormat,
+                              QString* error) const {
+  QString outputPath = path;
+  if (QFileInfo(outputPath).suffix().isEmpty()) {
+    const bool jpeg = defaultFormat.compare(QStringLiteral("jpg"), Qt::CaseInsensitive) == 0 ||
+                      defaultFormat.compare(QStringLiteral("jpeg"), Qt::CaseInsensitive) == 0;
+    outputPath += jpeg ? QStringLiteral(".jpg") : QStringLiteral(".png");
+  }
+  if (plotWidget_->grab().save(outputPath)) return true;
+  if (error) *error = tr("Unable to save image %1").arg(outputPath);
   return false;
 }
 

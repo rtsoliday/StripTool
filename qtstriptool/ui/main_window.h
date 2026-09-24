@@ -32,6 +32,8 @@ public:
   bool saveConfiguration(const QString& path, QString* error = nullptr);
   bool exportData(const QString& path, bool csv, QString* error = nullptr) const;
   bool saveSnapshot(const QString& path, QString* error = nullptr) const;
+  bool saveSnapshot(const QString& path, const QString& defaultFormat,
+                    QString* error = nullptr) const;
   void setHistoryProvider(std::unique_ptr<HistoryProvider> provider);
 
 private:

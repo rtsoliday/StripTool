@@ -785,8 +785,14 @@ private slots:
                                &error), qPrintable(error));
     QVERIFY2(window.saveSnapshot(QString::fromStdString((root / "plot.png").string()),
                                  &error), qPrintable(error));
+    QVERIFY2(window.saveSnapshot(QString::fromStdString((root / "plot-default").string()),
+                                 &error), qPrintable(error));
+    QVERIFY2(window.saveSnapshot(QString::fromStdString((root / "plot-jpeg").string()),
+                                 QStringLiteral("jpg"), &error), qPrintable(error));
     QVERIFY(std::filesystem::file_size(root / "data.csv") > 0);
     QVERIFY(std::filesystem::file_size(root / "plot.png") > 0);
+    QVERIFY(std::filesystem::file_size(root / "plot-default.png") > 0);
+    QVERIFY(std::filesystem::file_size(root / "plot-jpeg.jpg") > 0);
     std::filesystem::remove_all(root);
   }
   void printPreviewHasUsefulInitialGeometry() {

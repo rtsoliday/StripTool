@@ -121,7 +121,8 @@ still reported.
   Qt uses one row per curve sample; legacy StripTool's dump files use one row
   per timestamp with separate curve columns.
 - **Save Snapshot** writes the graph as PNG or JPEG according to the chosen
-  filename/filter.
+  filename/filter. If the filename has no extension, the selected format's
+  `.png` or `.jpg` extension is added automatically.
 - **Print** and **Print Preview** render the graph through Qt PrintSupport.
   Available printers and PDF support come from the platform's Qt print backend.
 
