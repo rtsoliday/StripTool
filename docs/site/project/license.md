@@ -1,3 +1,8 @@
+# License
+
+The repository agreement below explicitly covers both StripTool and qtstriptool. Existing source-file copyright notices remain in effect.
+
+~~~~text
 License Copyright (c) 2002 University of Chicago. All rights reserved.
 
 StripTool and qtstriptool (Qt StripTool) are distributed subject to the following license conditions:
@@ -62,3 +67,4 @@ StripTool and qtstriptool (Qt StripTool) are distributed subject to the followin
     CONTRACT, TORT (INCLUDING NEGLIGENCE OR STRICT LIABILITY), OR
     OTHERWISE, EVEN IF ANY OF SAID PARTIES HAS BEEN WARNED OF THE
     POSSIBILITY OF SUCH LOSS OR DAMAGES.
+~~~~

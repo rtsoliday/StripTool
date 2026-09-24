@@ -125,7 +125,7 @@ ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
     emit acquisitionConfigurationChanged();
   });
   connect(about, &QAction::triggered, this, [this] {
-    QMessageBox::about(this, tr("About Qt StripTool"), versionText());
+    QMessageBox::about(this, tr("About Qt StripTool"), aboutText());
   });
   reloadFromModel();
 }

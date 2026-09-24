@@ -4,9 +4,9 @@ Qt StripTool displays timestamped EPICS Channel Access values for as many as
 ten process variables. The graph and controls windows share one configuration;
 changes made in Controls immediately affect the graph and acquisition.
 
-This guide describes the current **alpha**. Keep the legacy `StripTool`
-available for operational rollback until the compatibility release gates are
-closed.
+This guide describes Qt StripTool 1.0.0. The legacy StripTool executable remains
+available for workflows that depend on one of the documented differences and
+for site-specific rollback.
 
 ## Start the application
 
@@ -137,12 +137,12 @@ Migrate one launcher at a time and preserve an explicit rollback command:
 # old
 exec /opt/epics/extensions/bin/$EPICS_HOST_ARCH/StripTool "$config"
 
-# alpha trial
+# Qt StripTool
 exec /opt/epics/extensions/bin/$EPICS_HOST_ARCH/qtstriptool "$config"
 ```
 
 Keep the `.stp` argument and relevant CA/search-path environment unchanged.
-Do not create a `StripTool` alias or replace the legacy binary during alpha.
+Keep the legacy binary under its own name during a site rollout; an alias is not installed by this release.
 For a fast rollback, retain the old launcher or add a site-owned selector that
 names both executables explicitly.
 
@@ -163,7 +163,7 @@ changing the executable name.
   EPICS CA address-list environment and network path.
 - **Startup file is not found:** use an absolute path or inspect
   `STRIP_FILE_SEARCH_PATH`; directory-containing paths are not searched.
-- **History reports no provider:** this is expected in the distributed alpha.
+- **Historical Range fails:** check the configured Archiver Appliance endpoint and network access; local CPU_Usage has no archive data.
 - **Help shows built-in guidance:** set `STRIP_HELP_PATH` to a reachable URL or
   an existing local help file if site documentation is required.
 - **Visual or printer output differs from Motif:** Qt uses the active platform

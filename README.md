@@ -5,12 +5,11 @@ This repository builds two EPICS trend applications side by side:
 - `StripTool` is the maintained legacy Motif application in `striptool/`.
 - `qtstriptool` is the C++17/Qt replacement in `qtstriptool/`.
 
-The Qt application is currently an **alpha**. It supports live Channel Access,
-ten-curve controls, compatible `.stp` load/save, graph interaction,
+Qt StripTool 1.0.0 is the first normal release. It supports live Channel Access,
+ten-curve controls, compatible configuration load/save, graph interaction,
 annotations, Archiver Appliance history, text/CSV and image export, and Qt
-printing. It is not yet the default replacement: operational archive,
-cross-platform, parity, and soak validation remain open. Keep both executable
-names distinct while those gates are open.
+printing. It remains a separately named application so sites can keep the
+legacy StripTool available where a documented difference matters.
 
 ## Repository layout
 
@@ -106,11 +105,11 @@ metadata with:
 ```sh
 make install-qt-package PREFIX=/usr/local
 make install-qt-package DESTDIR=/tmp/qtstriptool-stage PREFIX=/usr
-make package-qtstriptool PACKAGE_VERSION=0.1.0-alpha1
+make package-qtstriptool
 ```
 
 The install target writes under `PREFIX`: `bin/qtstriptool`, the desktop entry,
-the scalable icon, AppStream metadata, and these guides. `DESTDIR` supports
+the scalable icon, AppStream metadata, the license, author credits, and these guides. `DESTDIR` supports
 distribution staging. The package target creates a relocatable staging tarball
 under `O.package/`; it is not a native RPM, DEB, or signed application bundle
 and does not bundle Qt runtime libraries.
@@ -127,8 +126,24 @@ for launch-script and desktop-entry migration with an explicit rollback path.
 
 ## Documentation
 
+The [HTML documentation site](docs/site/index.md) provides searchable operator
+guides and reference in the same style as QtEDM and QtALH. With Node.js 22+
+and Python 3, build and serve it locally:
+
+~~~sh
+make docs
+python3 -m http.server 8000 --directory docs/html --bind 127.0.0.1
+~~~
+
+For hosting below a URL prefix, use
+~~~sh
+make docs DOCS_BASE=/manuals/QtStripTool/
+~~~
+See the [documentation workflow](docs/site/develop/documentation.md).
+
 - [Qt user guide](docs/qtstriptool-user-guide.md)
-- [Compatibility, known differences, and release progression](docs/qtstriptool-compatibility.md)
+- [Authors and acknowledgments](docs/site/project/authors.md)
+- [Compatibility, known differences, and rollout](docs/qtstriptool-compatibility.md)
 - [Appearance and visual review](docs/qtstriptool-appearance.md)
 - [Performance and soak testing](docs/qtstriptool-performance.md)
 - [Parity matrix](docs/QtParityMatrix.md)

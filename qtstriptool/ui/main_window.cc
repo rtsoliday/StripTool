@@ -377,7 +377,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
                                ? tr("Ready")
                                : tr("Loaded %1").arg(QString::fromStdString(model_.filename)));
   connect(aboutAction, &QAction::triggered, this, [this] {
-    QMessageBox::about(this, tr("About Qt StripTool"), versionText());
+    QMessageBox::about(this, tr("About Qt StripTool"), aboutText());
   });
   connect(helpAction, &QAction::triggered, this, [this] {
     const QString configured = qEnvironmentVariable("STRIP_HELP_PATH");

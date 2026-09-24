@@ -6,18 +6,17 @@ acquisition, and plotting code. The detailed behavioral contract is in
 `StripToolCompatibilityBaseline.md`; test and platform evidence is maintained
 in `QtParityMatrix.md`.
 
-## Current release status: alpha
+## Release status: 1.0.0
 
-The current code meets the planned alpha milestone: live Channel Access,
-ten-curve connection and plotting controls, and `.stp` load/save are implemented. It also
-contains annotations, text/CSV and image exports, Qt printing, and a cancellable
-EPICS Archiver Appliance provider. Those additional features do not make the
-release beta because operational archive and cross-platform evidence are still
-incomplete.
+Qt StripTool 1.0.0 is the first normal release of the Qt application. It
+includes live Channel Access, ten-curve connection and plotting controls,
+configuration load/save, annotations, text/CSV and image exports, Qt printing,
+and a cancellable EPICS Archiver Appliance provider.
 
-The legacy executable remains `StripTool`; the Qt executable remains
-`qtstriptool`. The Qt program must not replace or alias `StripTool` at this
-stage.
+The Qt executable remains qtstriptool and the Motif executable remains
+StripTool. Version 1.0.0 is a release of the Qt application under its own name;
+it does not assert complete compatibility with every legacy extension or site
+deployment. The known differences below remain relevant to migrations.
 
 ## Compatible behavior
 
@@ -91,32 +90,21 @@ bugs, or exact pixels.
 Any site that depends on a listed difference must resolve it or formally
 accept it before declaring replacement compatibility.
 
-## Release progression and gates
+## Rollout and validation
 
-1. **Developer preview** — configuration parsing, simulated data, and a basic
-   plot. Completed.
-2. **Alpha** — live CA, complete controls, and load/save. **Current stage.**
-3. **Beta** — operational archive validation, annotations, exports, printing,
-   and clean supported cross-platform builds. The existing feature
-   implementations must be coupled with real archive and platform evidence.
-4. **Compatibility release** — every mandatory automated parity test passes;
-   the same configuration and IOC/archive data pass recorded side-by-side,
-   output, reconnect, visual, and soak review; site-specific differences are
-   resolved or accepted.
-5. **Default-switch release** — launch documentation and managed desktop
-   entries recommend `qtstriptool`, while `StripTool` remains available for a
-   defined rollback interval.
-6. **Optional rename/alias release** — only after the transition interval may
-   Qt be exposed as `StripTool`; retain the Motif application under an explicit
-   legacy name for the announced support period.
+The earlier preview and development milestones led to the 1.0.0 release. A
+site can install qtstriptool alongside StripTool and use the Qt application for
+supported live trending and file workflows. Changing existing operator
+launchers is a separate site decision.
 
-Promotion is evidence-based, not feature-count based. Update the platform
-record and attach manual results for each candidate rather than carrying
-forward assumptions from a previous host.
+For a site-wide default switch, complete the checks below on the intended
+platforms and record any accepted differences. Keeping distinct executable
+names makes rollback explicit. A future optional alias should be considered
+only after a site has completed its transition interval.
 
 ## Cutover checklist
 
-Before compatibility or default-switch approval:
+Before a site-wide default switch:
 
 1. Configure and load-test the Archiver Appliance provider for the supported
    APS deployment; document ownership, endpoints, and failure modes.
@@ -134,5 +122,5 @@ Before compatibility or default-switch approval:
    `.stp` arguments; keep an explicit legacy launcher throughout the announced
    rollback period.
 
-The optional alias decision is deliberately separate from technical parity so
-that scripts cannot silently change application during alpha or beta testing.
+The optional alias decision remains separate from technical parity so scripts
+cannot silently change applications during a site rollout.

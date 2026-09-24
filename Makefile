@@ -8,13 +8,15 @@ include Makefile.rules
         test-qtstriptool-visual test-qtstriptool-performance test-qt-versions \
         test-ioc test-visual benchmark-resource-usage test-qtstriptool-leaks \
         test-qtstriptool-memory-soak install install-qt-package package-qtstriptool \
+        docs docs-clean docs-distclean \
         clean distclean \
         check-dependencies
 
 PREFIX ?= /usr/local
 DESTDIR ?=
-PACKAGE_VERSION ?= 0.1.0-dev
+PACKAGE_VERSION ?= 1.0.0
 PACKAGE_ROOT := O.package/qtstriptool-$(PACKAGE_VERSION)-$(OS)-$(ARCH)
+DOCS_BASE ?= /
 export QT_VERSION HAVE_QT EPICS_BASE
 QT_SUBMAKE = $(MAKE) -C qtstriptool
 
@@ -92,6 +94,16 @@ test-qtstriptool-memory-soak: qtstriptool
 
 install: check-dependencies $(if $(HAVE_LEGACY),striptool) qtstriptool
 
+# Build the standalone HTML documentation without Qt or EPICS.
+docs:
+	$(PYTHON) scripts/build-docs.py --base "$(DOCS_BASE)"
+
+docs-clean:
+	$(PYTHON) scripts/clean-docs.py
+
+docs-distclean:
+	$(PYTHON) scripts/clean-docs.py --dependencies
+
 install-qt-package: qtstriptool
 ifeq ($(OS),Windows)
 	@echo "Desktop integration installation is for Unix-like systems; use windeployqt on Windows."
@@ -109,7 +121,8 @@ else
 	               "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/qtstriptool.svg"
 	install -m 644 qtstriptool/resources/org.epics.qtstriptool.metainfo.xml \
 	               "$(DESTDIR)$(PREFIX)/share/metainfo/org.epics.qtstriptool.metainfo.xml"
-	install -m 644 README.md docs/qtstriptool-*.md docs/QtParityMatrix.md \
+	install -m 644 README.md LICENSE docs/site/project/authors.md \
+	               docs/qtstriptool-*.md docs/QtParityMatrix.md \
 	               "$(DESTDIR)$(PREFIX)/share/doc/qtstriptool/"
 endif
 
