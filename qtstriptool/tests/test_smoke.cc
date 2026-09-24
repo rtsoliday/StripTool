@@ -30,6 +30,7 @@
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QSettings>
+#include <QStyle>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
@@ -100,6 +101,7 @@ private slots:
     QVERIFY(!striptool::qtVersion().isEmpty());
     QVERIFY(!striptool::epicsVersion().isEmpty());
     QVERIFY(striptool::versionText().contains(QStringLiteral("Qt StripTool")));
+    QCOMPARE(QApplication::style()->objectName(), QStringLiteral("fusion"));
   }
   void mainWindowHasStableScaffold() {
     striptool::MainWindow window;
@@ -965,6 +967,37 @@ private slots:
     QVERIFY(plot.removeAnnotation(0));
     QCOMPARE(plot.selectedAnnotation(), -1);
   }
+  void narrowYAxisTicksRemainDistinct() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "S-DCCT:CurrentM";
+    model.curves[0].nameSet = true;
+    model.curves[0].precision = 2;
+    model.curves[0].minimum = 99.991;
+    model.curves[0].maximum = 100.009;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximumSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+
+    const QStringList labels = plot.yAxisLabels(0);
+    QCOMPARE(labels.size(), 6);
+    for (int i = 1; i < labels.size(); ++i)
+      QVERIFY2(labels[i] != labels[i - 1],
+               "A narrow Y-axis range produced duplicate tick labels");
+    QVERIFY(labels.front().contains(QLatin1Char('.')));
+
+    plot.resize(800, 500);
+    const QFontMetrics metrics(plot.font());
+    int widestLabel = 0;
+    for (const QString& label : labels)
+      widestLabel = std::max(widestLabel, metrics.horizontalAdvance(label));
+    const int firstPlotPixel = [&plot] {
+      for (int x = 0; x < plot.width(); ++x)
+        if (plot.isInPlot(QPoint(x, plot.height() / 2))) return x;
+      return -1;
+    }();
+    QVERIFY(firstPlotPixel >= 22 + 8 + widestLabel + 8);
+  }
   void visibleRangeIncludesCrossingSegments() {
     const auto base = std::chrono::system_clock::from_time_t(1000);
     const std::vector<striptool::Sample> crossing{
@@ -1724,6 +1757,7 @@ private slots:
   }
 };
 int main(int argc, char** argv) {
+  striptool::setDefaultApplicationStyle();
   QApplication application(argc, argv);
   striptool::configureApplication(application);
   SmokeTests tests;

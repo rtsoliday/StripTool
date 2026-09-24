@@ -33,6 +33,49 @@ QString formattedValue(double value, int precision, ScaleMode scale) {
   return label == QStringLiteral("-0") ? QStringLiteral("0") : label;
 }
 
+bool labelsAreDistinct(const QStringList& labels) {
+  for (int i = 1; i < labels.size(); ++i)
+    if (labels[i] == labels[i - 1]) return false;
+  return true;
+}
+
+QStringList axisLabels(const ValueRange& range, int precision,
+                       ScaleMode scale, int divisions) {
+  QStringList labels;
+  if (!range.isValid() || divisions < 1) return labels;
+
+  // A channel's precision describes its values, but an axis may be zoomed to
+  // a range whose tick spacing is smaller than that precision. Add decimals
+  // until adjacent ticks remain distinguishable.
+  const int firstPrecision = scale == ScaleMode::Log10
+                                 ? std::max(1, precision)
+                                 : std::max(0, precision);
+  const int maximumPrecision = scale == ScaleMode::Log10 ? 17 : 15;
+  for (int candidate = std::min(firstPrecision, maximumPrecision);
+       candidate <= maximumPrecision; ++candidate) {
+    labels.clear();
+    for (int tick = 0; tick <= divisions; ++tick) {
+      const double value = range.maximum -
+          (range.maximum - range.minimum) * tick / divisions;
+      labels.push_back(formattedValue(value, candidate, scale));
+    }
+    if (labelsAreDistinct(labels)) return labels;
+  }
+
+  // Fixed notation can still run out of useful decimal places for a narrow
+  // range around a very large value. Full significant-digit notation is the
+  // final lossless fallback.
+  labels.clear();
+  for (int tick = 0; tick <= divisions; ++tick) {
+    const double plotted = range.maximum -
+        (range.maximum - range.minimum) * tick / divisions;
+    const double value = scale == ScaleMode::Log10 ? std::pow(10.0, plotted)
+                                                    : plotted;
+    labels.push_back(QString::number(value, 'g', 17));
+  }
+  return labels;
+}
+
 }  // namespace
 
 PlotWidget::PlotWidget(QWidget* parent) : QWidget(parent) {
@@ -188,6 +231,12 @@ ValueRange PlotWidget::valueRange(std::size_t curve) const {
   ValueRange range{plotValue(config.minimum, config.scale),
                    plotValue(config.maximum, config.scale)};
   return range.isValid() ? range : ValueRange{};
+}
+
+QStringList PlotWidget::yAxisLabels(std::size_t curve, int divisions) const {
+  if (curve >= kMaximumCurves) return {};
+  return axisLabels(valueRange(curve), model_.curves[curve].precision,
+                    model_.curves[curve].scale, divisions);
 }
 
 void PlotWidget::setAutoScroll(bool enabled) {
@@ -377,7 +426,20 @@ void PlotWidget::editSelectedAnnotation() {
 
 QRectF PlotWidget::plotRect() const {
   // The Motif graph has one selectable Y axis and a legend beside the plot.
-  return rect().adjusted(72, 20, -178, -64);
+  constexpr int unitsLaneWidth = 22;
+  constexpr int labelGap = 8;
+  int leftMargin = 72;
+  const auto curves = plottedCurves();
+  const int axisCurve = selectedCurve_ >= 0 ? selectedCurve_ :
+                        (curves.empty() ? -1 : static_cast<int>(curves.front()));
+  if (axisCurve >= 0) {
+    const QFontMetrics metrics(font());
+    int labelWidth = 0;
+    for (const QString& label : yAxisLabels(static_cast<std::size_t>(axisCurve)))
+      labelWidth = std::max(labelWidth, metrics.horizontalAdvance(label));
+    leftMargin = std::max(leftMargin, unitsLaneWidth + labelGap + labelWidth + labelGap);
+  }
+  return rect().adjusted(leftMargin, 20, -178, -64);
 }
 
 std::vector<std::size_t> PlotWidget::plottedCurves() const {
@@ -630,21 +692,20 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     const QColor curveColor = color(model_.colors.curves[curveIndex]);
     if (static_cast<int>(curveIndex) == axisCurve) {
       painter.setPen(model_.graph.coloredYAxis ? curveColor : foreground);
-      const qreal axisX = area.left() - 46;
+      const QStringList labels = yAxisLabels(curveIndex);
+      constexpr qreal unitsLaneWidth = 22;
+      constexpr qreal labelGap = 8;
+      const qreal labelX = unitsLaneWidth + labelGap;
+      const qreal labelWidth = area.left() - labelX - labelGap;
       for (int tick = 0; tick <= 5; ++tick) {
-        const double value = range.maximum -
-            (range.maximum - range.minimum) * tick / 5.0;
-        QString label = formattedValue(value, config.precision, config.scale);
-        if (painter.fontMetrics().horizontalAdvance(label) > 40)
-          label = QString::number(config.scale == ScaleMode::Log10
-                                      ? std::pow(10.0, value) : value, 'g', 4);
-        painter.drawText(QRectF(axisX, area.top() + area.height() * tick / 5.0 - 9,
-                                40, 18), Qt::AlignRight, label);
+        painter.drawText(QRectF(labelX, area.top() + area.height() * tick / 5.0 - 9,
+                                labelWidth, 18), Qt::AlignRight, labels[tick]);
       }
       painter.save();
-      painter.translate(axisX - 9, area.center().y());
+      painter.translate(unitsLaneWidth / 2.0, area.center().y());
       painter.rotate(-90);
-      painter.drawText(QRectF(-area.height() / 2, -9, area.height(), 18),
+      painter.drawText(QRectF(-area.height() / 2.0, -unitsLaneWidth / 2.0,
+                              area.height(), unitsLaneWidth),
                        Qt::AlignCenter, QString::fromStdString(config.units));
       painter.restore();
     }

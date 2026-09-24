@@ -10,6 +10,9 @@ QString versionText() {
   return QStringLiteral("%1 %2 (Qt %3, EPICS %4)")
       .arg(applicationName(), applicationVersion(), qtVersion(), epicsVersion());
 }
+void setDefaultApplicationStyle() {
+  QApplication::setStyle(QStringLiteral("fusion"));
+}
 void configureApplication(QApplication& application) {
   QCoreApplication::setApplicationName(QStringLiteral("qtstriptool"));
   QCoreApplication::setApplicationVersion(applicationVersion());

@@ -14,9 +14,11 @@ closed.
 qtstriptool [--help] [--version] [configuration.stp]
 ```
 
-Qt also consumes its standard command-line options. For example,
-`qtstriptool -style fusion example.stp` uses Qt's Fusion style. Pass at most
-one configuration file; other application-specific switches are not defined.
+Qt StripTool defaults to Qt's Fusion style for consistent, compact controls
+across desktop environments. Qt also consumes its standard command-line
+options; for example, `qtstriptool -style adwaita example.stp` selects an
+installed native style instead. Pass at most one configuration file; other
+application-specific switches are not defined.
 
 For a bare relative configuration name, Qt StripTool checks the current
 directory and then each directory in `STRIP_FILE_SEARCH_PATH`. Absolute paths

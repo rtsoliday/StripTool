@@ -80,10 +80,12 @@ directory. This is separate from the staged system packaging described below.
 ```sh
 bin/$(uname -s)-$(uname -m)/StripTool example.stp
 bin/$(uname -s)-$(uname -m)/qtstriptool example.stp
-bin/$(uname -s)-$(uname -m)/qtstriptool -style fusion example.stp
+bin/$(uname -s)-$(uname -m)/qtstriptool -style adwaita example.stp
 ```
 
-Qt consumes standard Qt options such as `-style`; application-specific syntax
+Qt StripTool defaults to the Fusion style for consistent, compact controls
+across desktop environments. Qt consumes standard Qt options such as `-style`,
+which can select another installed style; application-specific syntax
 is `qtstriptool [--help] [--version] [configuration.stp]`. A bare configuration
 name is searched in the current directory and then `STRIP_FILE_SEARCH_PATH`.
 

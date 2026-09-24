@@ -7,6 +7,9 @@
 #include <QTextStream>
 #include <utility>
 int main(int argc, char** argv) {
+  // Establish consistent metrics across desktops. QApplication processes any
+  // explicit -style option afterward, so users can still select another style.
+  striptool::setDefaultApplicationStyle();
   QApplication application(argc, argv);
   striptool::configureApplication(application);
   const QStringList arguments = application.arguments();

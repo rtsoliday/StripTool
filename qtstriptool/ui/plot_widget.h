@@ -4,6 +4,7 @@
 #include "core/plot_data.h"
 
 #include <QDateTime>
+#include <QStringList>
 #include <QWidget>
 #include <array>
 #include <optional>
@@ -30,6 +31,7 @@ public:
   bool paused() const { return paused_; }
   TimeRange visibleTimeRange() const { return visibleTimeRange_; }
   ValueRange valueRange(std::size_t curve) const;
+  QStringList yAxisLabels(std::size_t curve, int divisions = 5) const;
   int selectedAnnotation() const { return selectedAnnotation_; }
   bool isInPlot(const QPoint& position) const { return plotRect().contains(position); }
 

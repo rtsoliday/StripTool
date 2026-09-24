@@ -13,16 +13,17 @@ has its own color. Curve scale, precision, and bounds control Y-axis formatting
 and transformation. These values round-trip through `.stp` files where the
 legacy format defines them.
 
-The application accepts standard Qt style options. For a relatively consistent
-cross-desktop review baseline, launch with:
+The application defaults to Qt's Fusion style, providing a relatively
+consistent cross-desktop review baseline. An explicit standard Qt style option
+can select another installed style, for example:
 
 ```sh
-qtstriptool -style fusion configuration.stp
+qtstriptool -style adwaita configuration.stp
 ```
 
-This does not emulate Motif and is not forced for users. Native platform styles
-remain supported. Screenshots should record the OS, Qt version, style, font,
-DPI/scaling, window size, and fixture used.
+Fusion does not emulate Motif. Native platform styles remain available through
+the command-line override. Screenshots should record the OS, Qt version, style,
+font, DPI/scaling, window size, and fixture used.
 
 ## Intentional visual differences
 
