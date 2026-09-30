@@ -4,6 +4,7 @@
 
 #include <QMainWindow>
 #include <array>
+#include <QStringList>
 
 class QCheckBox;
 class QComboBox;
@@ -20,6 +21,7 @@ class ControlsWindow final : public QMainWindow {
 public:
   explicit ControlsWindow(StripToolModel* model, QWidget* parent = nullptr);
 
+  bool addPvs(const QStringList& names);
   void reloadFromModel();
   void updateTitle();
   void refreshCurveMetadata(std::size_t curve);

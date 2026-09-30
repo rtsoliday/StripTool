@@ -9,6 +9,7 @@
 #include "ui/controls_window.h"
 #include "ui/history_dialog.h"
 #include "ui/plot_widget.h"
+#include "ui/pv_drop.h"
 #include <QAction>
 #include <QApplication>
 #include <QDateTime>
@@ -206,6 +207,12 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   toolbar->addAction(autoScrollAction);
   toolbar->addAction(pauseAction);
   controlsWindow_ = std::make_unique<ControlsWindow>(&model_);
+  installPvDropTarget(this, [this](const QStringList& names) {
+    const bool added = controlsWindow_->addPvs(names);
+    if (!added)
+      statusBar()->showMessage(tr("Not enough free curve slots (maximum ten)."), 5000);
+    return added;
+  });
   setHistoryProvider(std::make_unique<ArchiverHistoryProvider>());
   updateRecentFiles();
   const auto chooseOpen = [this] {

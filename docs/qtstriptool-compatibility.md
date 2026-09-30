@@ -29,6 +29,9 @@ deployment. The known differences below remain relevant to migrations.
 - Records Channel Access monitor updates with workstation timestamps and alarm
   metadata in bounded buffers, independently refreshes the display, preserves
   reconnect gaps, and periodically samples the local `CPU_Usage` curve.
+- Accepts middle-button PV drops from QtEDM on Controls and Plot; accepts
+  legacy MEDM's Motif drops on Linux X11 when built with libxcb. Multiple
+  names, duplicate suppression, and the ten-curve limit apply on both screens.
 - Provides the normal live plot operations, multiple colored axes,
   annotations, controls, full configuration open/save, text/CSV export,
   snapshots, and native print/preview.

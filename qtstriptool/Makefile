@@ -14,7 +14,7 @@ SERVICES = services/runtime_capabilities.cc services/acquisition_manager.cc \
            services/file_workflow.cc services/export_service.cc \
            services/history_provider.cc
 UI = ui/main_window.cc ui/plot_widget.cc ui/controls_window.cc \
-     ui/history_dialog.cc
+     ui/history_dialog.cc ui/pv_drop.cc ui/motif_pv_drop.cc
 APP_SOURCES = $(CORE) $(SERVICES) $(UI)
 APP_OBJECTS = $(addprefix $(OBJ_DIR)/,$(APP_SOURCES:.cc=.$(OBJEXT)))
 MOC_HEADERS = services/channel_provider.h services/acquisition_manager.h \
@@ -79,6 +79,14 @@ define link_exe
 	$(CXX) $(LDFLAGS) -o $@ $^ -Wl,-rpath,$(EPICS_LIB_DIR) \
 	  $(EPICS_LIBS) $(EPICS_SYSTEM_LIBS) $(QT_LIBS) $(1)
 endef
+endif
+
+# The legacy MEDM drop protocol is available on X11 without linking Motif.
+ifeq ($(OS),Linux)
+ifneq ($(shell $(PKG_CONFIG) --exists xcb && echo yes),)
+CPPFLAGS += -DSTRIPTOOL_HAVE_XCB $(shell $(PKG_CONFIG) --cflags xcb)
+QT_LIBS += $(shell $(PKG_CONFIG) --libs xcb)
+endif
 endif
 
 include ../Makefile.build
@@ -165,6 +173,7 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                configurationWritesDiscoveredChannelMetadata \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
+           pvDropsAddCurvesOnBothScreens pvDropCapacityIsTransactionalAndReplotsExistingCurves \
            plotRendersModelTitle appearanceTitleEditsAndPersists \
            curveLimitEditorsFitLongValues \
            returnInCurveFieldsAppliesModify \
@@ -258,3 +267,25 @@ distclean: clean
 	rm -f $(BIN_DIR)/$(notdir $(PROGRAM))
 
 -include $(wildcard $(OBJ_DIR)/*.d $(OBJ_DIR)/*/*.d)
+
+# Real Motif interoperability check; run in an X11 session or under xvfb-run.
+.PHONY: test-motif
+$(OBJ_DIR)/motif_drag_source: tests/motif_drag_source.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(addprefix -I,$(MOTIF_INC) $(X11_INC)) $< -o $@ -lXm -lXt -lX11 -lXtst
+
+test-motif: $(TEST_PROGRAM) $(OBJ_DIR)/motif_drag_source
+	QT_QPA_PLATFORM=xcb QTSTRIPTOOL_TEST_MOTIF_SOURCE="$(abspath $(OBJ_DIR)/motif_drag_source)" \
+	  $(TEST_PROGRAM) motifPvDropsUseRealMotifSource
+
+# End-to-end QtEDM gesture: plain middle button, with no Ctrl modifier.
+QTEDM_TEST_PROGRAM ?= $(abspath ../../medm/bin/$(OS)-$(ARCH)/qtedm)
+.PHONY: test-qtedm-drop
+$(OBJ_DIR)/x11_drag_driver: tests/x11_drag_driver.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(addprefix -I,$(X11_INC)) $< -o $@ -lX11 -lXtst
+
+test-qtedm-drop: $(TEST_PROGRAM) $(OBJ_DIR)/x11_drag_driver
+	QT_QPA_PLATFORM=xcb QTSTRIPTOOL_TEST_QTEDM="$(QTEDM_TEST_PROGRAM)" \
+	  QTSTRIPTOOL_TEST_DRAG_DRIVER="$(abspath $(OBJ_DIR)/x11_drag_driver)" \
+	  $(TEST_PROGRAM) qtedmMiddleButtonDropsReachBothScreens

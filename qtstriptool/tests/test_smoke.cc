@@ -12,14 +12,19 @@
 #include "ui/history_dialog.h"
 #include "ui/main_window.h"
 #include "ui/plot_widget.h"
+#include "ui/pv_drop.h"
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QContextMenuEvent>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QMimeData>
+#include <QProcess>
 #include <QDateTimeEdit>
 #include <QIcon>
+#include <QFileInfo>
 #include <QImage>
 #include <QElapsedTimer>
 #include <QLabel>
@@ -31,8 +36,10 @@
 #include <QPrintPreviewDialog>
 #include <QPrintPreviewWidget>
 #include <QSignalSpy>
+#include <QScreen>
 #include <QSpinBox>
 #include <QSettings>
+#include <QScopeGuard>
 #include <QStyle>
 #include <QTabWidget>
 #include <QTemporaryDir>
@@ -161,6 +168,137 @@ private slots:
     QVERIFY(window.findChild<QAction*>(QStringLiteral("graphOpenAction"))->isEnabled());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("exportCsvAction"))->isEnabled());
     QVERIFY(window.controlsWindow());
+  }
+  void pvDropsAddCurvesOnBothScreens() {
+    striptool::MainWindow window;
+    window.stopAcquisition();
+    window.show();
+    window.showControls();
+    auto* controls = window.controlsWindow();
+    auto* pendingName = controls->findChild<QLineEdit*>(QStringLiteral("curveName5"));
+    pendingName->setText(QStringLiteral("pending:edit"));
+    auto drop = [](QWidget* target, const QString& text) {
+      QMimeData mime;
+      mime.setText(text);
+      QDragEnterEvent enter(QPoint(10, 10), Qt::CopyAction, &mime,
+                            Qt::MiddleButton, Qt::NoModifier);
+      QApplication::sendEvent(target, &enter);
+      if (!enter.isAccepted()) return false;
+      // Model an external source that releases its selection at mouse-up.
+      mime.clear();
+      QDropEvent event(QPointF(10, 10), Qt::CopyAction, &mime,
+                       Qt::MiddleButton, Qt::NoModifier);
+      QApplication::sendEvent(target, &event);
+      return event.isAccepted() && event.dropAction() == Qt::CopyAction;
+    };
+    // Drop over a line editor must add curves instead of inserting PV text.
+    QVERIFY(drop(pendingName, QStringLiteral("test:first test:second test:first")));
+    QCOMPARE(window.model().curves[0].name, std::string("test:first"));
+    QCOMPARE(window.model().curves[1].name, std::string("test:second"));
+    QVERIFY(!window.model().curves[2].nameSet);
+    QCOMPARE(pendingName->text(), QStringLiteral("pending:edit"));
+    QVERIFY(drop(window.plotWidget(), QStringLiteral("test:third\ntest:fourth")));
+    QCOMPARE(window.plotWidget()->model().curves[2].name, std::string("test:third"));
+    QVERIFY(window.plotWidget()->model().curves[2].plotted);
+    QVERIFY(drop(controls, QStringLiteral("test:third")));
+    QVERIFY(!window.model().curves[4].nameSet);
+    QVERIFY(!drop(controls, QString(64, QLatin1Char('x'))));
+    QVERIFY(!drop(controls, QStringLiteral("invalid") + QChar(0)));
+    window.stopAcquisition();
+  }
+  void pvDropCapacityIsTransactionalAndReplotsExistingCurves() {
+    auto model = striptool::makeDefaultModel();
+    striptool::ControlsWindow controls(&model);
+    QSignalSpy acquisition(&controls,
+                            &striptool::ControlsWindow::acquisitionConfigurationChanged);
+    QStringList names;
+    for (int i = 0; i < 9; ++i) names.append(QStringLiteral("test:%1").arg(i));
+    QVERIFY(controls.addPvs(names));
+    QCOMPARE(acquisition.count(), 1);
+    QVERIFY(!controls.addPvs({QStringLiteral("test:9"), QStringLiteral("test:10")}));
+    QVERIFY(!model.curves[9].nameSet);
+    QCOMPARE(acquisition.count(), 1);
+    model.curves[0].plotted = false;
+    QVERIFY(controls.addPvs({QStringLiteral("test:0")}));
+    QVERIFY(model.curves[0].plotted);
+    QCOMPARE(acquisition.count(), 1);
+    QVERIFY(controls.addPvs({QStringLiteral("test:9")}));
+    QVERIFY(!controls.addPvs({QStringLiteral("test:10")}));
+    QCOMPARE(model.curves[9].name, std::string("test:9"));
+  }
+  void qtedmMiddleButtonDropsReachBothScreens() {
+    const QString qtedm = qEnvironmentVariable("QTSTRIPTOOL_TEST_QTEDM");
+    const QString driver = qEnvironmentVariable("QTSTRIPTOOL_TEST_DRAG_DRIVER");
+    if (qtedm.isEmpty() || driver.isEmpty() ||
+        QApplication::platformName() != QStringLiteral("xcb"))
+      QSKIP("Run test-qtedm-drop under X11 with QtEDM and the mouse driver.");
+    striptool::MainWindow window;
+    window.move(400, 200);
+    window.controlsWindow()->move(400, 200);
+    QProcess source;
+    const auto stopSource = qScopeGuard([&source] {
+      source.terminate();
+      if (!source.waitForFinished(3000)) {
+        source.kill();
+        source.waitForFinished(3000);
+      }
+    });
+    source.start(qtedm, {QStringLiteral("-x"),
+                         QFileInfo(QStringLiteral("tests/pv_drag_source.adl")).absoluteFilePath()});
+    QVERIFY(source.waitForStarted());
+    for (QWidget* target : {static_cast<QWidget*>(window.controlsWindow()),
+                             static_cast<QWidget*>(&window)}) {
+      target->show();
+      QApplication::processEvents();
+      QProcess mouse;
+      mouse.start(driver, {QString::number(target->winId())});
+      QVERIFY(mouse.waitForStarted());
+      QTRY_VERIFY_WITH_TIMEOUT(mouse.state() == QProcess::NotRunning, 10000);
+      QCOMPARE(mouse.exitCode(), 0);
+      QTRY_VERIFY_WITH_TIMEOUT(window.model().curves[0].nameSet, 3000);
+      QCOMPARE(window.model().curves[0].name, std::string("qtedm:drop"));
+      QVERIFY(window.plotWidget()->model().curves[0].plotted);
+      window.controlsWindow()->findChild<QPushButton*>(QStringLiteral("curveRemove0"))->click();
+      target->hide();
+    }
+    source.terminate();
+    QVERIFY(source.waitForFinished());
+    window.stopAcquisition();
+  }
+  void motifPvDropsUseRealMotifSource() {
+    const QString source = qEnvironmentVariable("QTSTRIPTOOL_TEST_MOTIF_SOURCE");
+    if (source.isEmpty() || QApplication::platformName() != QStringLiteral("xcb"))
+      QSKIP("Run test-motif under X11 with the Motif drag source helper.");
+    striptool::MainWindow window;
+    window.show();
+    window.showControls();
+    QApplication::processEvents();
+    int curve = 0;
+    for (QWidget* target : {static_cast<QWidget*>(window.controlsWindow()),
+                             static_cast<QWidget*>(&window)}) {
+      QProcess sender;
+      const QString pv = QStringLiteral("motif:test%1").arg(curve);
+      sender.start(source, {QString::number(target->winId()), pv});
+      QVERIFY(sender.waitForStarted());
+      QTRY_VERIFY_WITH_TIMEOUT(window.model().curves[std::size_t(curve)].nameSet, 10000);
+      QCOMPARE(window.model().curves[std::size_t(curve)].name, pv.toStdString());
+      QVERIFY(window.plotWidget()->model().curves[std::size_t(curve)].plotted);
+      QTRY_VERIFY_WITH_TIMEOUT(sender.state() == QProcess::NotRunning, 10000);
+      QCOMPARE(sender.exitCode(), 0);
+      ++curve;
+    }
+    QStringList remaining;
+    for (int i = curve; i < int(striptool::kMaximumCurves); ++i)
+      remaining.append(QStringLiteral("motif:fill%1").arg(i));
+    QVERIFY(window.controlsWindow()->addPvs(remaining));
+    QProcess rejected;
+    rejected.start(source, {QString::number(window.winId()),
+                            QStringLiteral("motif:overflow")});
+    QVERIFY(rejected.waitForStarted());
+    QTRY_VERIFY_WITH_TIMEOUT(rejected.state() == QProcess::NotRunning, 10000);
+    QCOMPARE(rejected.exitCode(), 1);
+    QCOMPARE(window.model().curves.back().name, std::string("motif:fill9"));
+    window.stopAcquisition();
   }
   void controlsWindowEditsTheSharedModel() {
     auto model = striptool::makeDefaultModel();

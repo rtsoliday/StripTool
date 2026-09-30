@@ -55,6 +55,8 @@ make test-qtstriptool-core
 make test-qtstriptool-config
 make test-qtstriptool-ui
 make test-qtstriptool-performance
+xvfb-run -a -s '-screen 0 1920x1080x24' make -C qtstriptool test-qtedm-drop # Real QtEDM PV drops
+xvfb-run -a make -C qtstriptool test-motif # MEDM drop protocol (Linux; Motif/XTest dev files)
 make test-qtstriptool-visual
 make test-qtstriptool-ioc             # Self-contained IOC restart/reconnect test
 make test-qtstriptool-ioc TEST_PV=some:readable:numeric:pv  # Also test a site PV

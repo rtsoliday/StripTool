@@ -53,6 +53,23 @@ The Controls window opens at startup and is available later through
 5. Use Appearance for graph colors, grid density, colored Y axes, and line
    width.
 
+You can also hold the middle mouse button on a PV in an executing MEDM or
+QtEDM display, drag it to the Controls or Plot window, and release. Dropping
+on either screen fills unused curve slots, connects the PVs, and starts
+plotting immediately. A display object with multiple PVs adds each distinct
+name. Dropping an existing curve makes it plotted without adding a duplicate.
+Drops onto curve editors add PVs rather than replacing the editor's text.
+If the entire drop cannot fit in the ten slots, it is rejected and the status
+bar shows the curve limit; remove a curve and try again.
+
+QtEDM uses normal Qt text drag and drop. Its middle-button handling must
+start an external Qt drag when leaving the display window; older QtEDM builds
+require holding Ctrl while dragging. Rebuild and restart QtEDM to use the
+modifier-free gesture. Legacy MEDM drops require the Linux
+X11 backend and a build with libxcb development files available. In a Wayland
+session, launch qtstriptool with `QT_QPA_PLATFORM=xcb` to receive MEDM drops
+through XWayland. The runtime does not require Motif.
+
 Y-axis scaling is graph-wide. **Auto Scale** fits every plotted curve to its
 visible data, including curves added while that mode is active. **Reset View**
 returns every curve to the Minimum and Maximum shown in Controls; curves added

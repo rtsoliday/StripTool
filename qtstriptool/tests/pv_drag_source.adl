@@ -1,0 +1,25 @@
+file {
+  name="pv_drag_source.adl"
+  version=030107
+}
+display {
+  object { x=0 y=0 width=240 height=140 }
+  clr=14
+  bclr=4
+  cmap=""
+  gridSpacing=5
+  gridOn=0
+  snapToGrid=0
+}
+"color map" {
+  ncolors=2
+  colors { ffffff, 000000, }
+}
+"text update" {
+  object { x=0 y=0 width=240 height=140 }
+  monitor { chan="qtedm:drop" clr=1 bclr=0 }
+  clrmod="static"
+  format="decimal"
+  align="horiz. centered"
+  limits { loprDefault=0 hoprDefault=100 precDefault=2 }
+}

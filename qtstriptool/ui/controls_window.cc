@@ -1,4 +1,5 @@
 #include "ui/controls_window.h"
+#include "ui/pv_drop.h"
 
 #include "core/application.h"
 #include "services/file_workflow.h"
@@ -22,6 +23,7 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSpinBox>
+#include <QStatusBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -74,6 +76,7 @@ QString limitText(double value) {
 
 ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
     : QMainWindow(parent), model_(model) {
+  installPvDropTarget(this, [this](const QStringList& names) { return addPvs(names); });
   setObjectName(QStringLiteral("controlsWindow"));
   setWindowTitle(tr("Qt StripTool Controls"));
   auto* fileMenu = menuBar()->addMenu(tr("&File"));
@@ -319,6 +322,48 @@ QWidget* ControlsWindow::createAppearancePage() {
   connect(lineWidth_, qOverload<int>(&QSpinBox::valueChanged), this,
           [updateGraph](int) { updateGraph(); });
   return page;
+}
+
+bool ControlsWindow::addPvs(const QStringList& names) {
+  if (names.isEmpty()) return false;
+  QStringList newNames;
+  std::vector<std::size_t> available;
+  for (std::size_t i = 0; i < model_->curves.size(); ++i) {
+    if (!model_->curves[i].nameSet) available.push_back(i);
+  }
+  for (const auto& name : names) {
+    if (droppedPvNames(name) != QStringList{name}) return false;
+    const auto found = std::find_if(model_->curves.begin(), model_->curves.end(),
+        [&name](const CurveConfiguration& curve) {
+          return curve.nameSet && curve.name == name.toStdString();
+        });
+    if (found == model_->curves.end() && !newNames.contains(name))
+      newNames.append(name);
+  }
+  if (std::size_t(newNames.size()) > available.size()) {
+    statusBar()->showMessage(tr("Not enough free curve slots (maximum ten)."), 5000);
+    return false;
+  }
+  for (int n = 0; n < newNames.size(); ++n) {
+    const auto index = available[std::size_t(n)];
+    auto& curve = model_->curves[index];
+    curve.name = newNames[n].toStdString();
+    curve.nameSet = true;
+    curve.plotted = true;
+    reloadCurveRow(index);
+  }
+  // Dropping an existing hidden curve makes it visible without reconnecting.
+  for (std::size_t i = 0; i < model_->curves.size(); ++i) {
+    auto& curve = model_->curves[i];
+    if (curve.nameSet && names.contains(QString::fromStdString(curve.name)) &&
+        !curve.plotted) {
+      curve.plotted = true;
+      curveRows_[i].plotted->setChecked(true);
+    }
+  }
+  emit modelChanged();
+  if (!newNames.isEmpty()) emit acquisitionConfigurationChanged();
+  return true;
 }
 
 void ControlsWindow::connectEnteredPv() {
