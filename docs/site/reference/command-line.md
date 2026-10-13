@@ -3,22 +3,25 @@
 The Qt StripTool application syntax is:
 
 ```text
-qtstriptool [--help] [--version] [configuration.stp]
+qtstriptool [--help] [--version] [-history=seconds] [-sampleCount=count] [configuration.stp]
 ```
 
 | Argument | Behavior |
 | --- | --- |
 | `--help` | Print usage and exit. |
 | `--version` | Print version information and exit. |
+| `-history=seconds` | Set the initial time window and automatic archive backfill in seconds; integer from 1 to 2147483647. Default: 300 unless set by the configuration file. |
+| `-sampleCount=count` | Set the maximum live samples retained per curve; integer from 1 to 65536. Default: 7200 unless set by the configuration file. |
 | `configuration.stp` | Open one configuration file; a bare name is searched in the current directory and then `STRIP_FILE_SEARCH_PATH`. |
 
-Use at most one configuration file. Other application-specific switches are not defined. Qt consumes its standard options, such as `-style adwaita`, before the application sees its arguments. The default style is Fusion.
+Use at most one configuration file. Timing options override settings loaded from that file or the startup fallback. Both single and double dashes are accepted, with `=` or a separate value (for example, `--history 3600`). Invalid values and unknown application options report an error and exit. Qt consumes its standard options, such as `-style adwaita`, before the application sees its arguments. The default style is Fusion.
 
 If an explicit file cannot be loaded, Qt StripTool tries `StripTool.stp` in the current directory and otherwise starts with compiled defaults. An absolute path or path containing a directory component is used directly; it is not searched along `STRIP_FILE_SEARCH_PATH`.
 
 ```sh
 qtstriptool beam.stp
 qtstriptool -style adwaita beam.stp
+qtstriptool -history=3600 -sampleCount=7200 beam.stp
 ```
 
 For variable behavior, see [environment variables](./environment). For file contents, see [configuration files](./configuration).

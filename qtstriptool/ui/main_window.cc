@@ -167,7 +167,16 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   plotWidget_ = new PlotWidget(this);
   plotWidget_->setObjectName(QStringLiteral("plotArea"));
   plotWidget_->setModel(model_);
+  plotWidget_->resetView();
   setCentralWidget(plotWidget_);
+  historyExtensionTimer_ = new QTimer(this);
+  historyExtensionTimer_->setSingleShot(true);
+  // Let a burst of wheel or toolbar zoom steps settle before asking the
+  // archive for the newly exposed span.
+  historyExtensionTimer_->setInterval(500);
+  connect(historyExtensionTimer_, &QTimer::timeout, this, &MainWindow::extendHistoryToView);
+  connect(plotWidget_, &PlotWidget::visibleTimeRangeChanged, historyExtensionTimer_,
+          qOverload<>(&QTimer::start));
   auto* toolbar = new QToolBar(tr("Graph"), this);
   addToolBar(Qt::BottomToolBarArea, toolbar);
   toolbar->setObjectName(QStringLiteral("graphToolbar"));
@@ -453,18 +462,32 @@ void MainWindow::setHistoryProvider(std::unique_ptr<HistoryProvider> provider) {
   cancelHistoryRequests();
   historyProvider_ = std::move(provider);
   if (!historyProvider_) historyProvider_ = std::make_unique<NoHistoryProvider>();
+  // A finished request extends coverage when it reaches the covered span.
+  // Failures count too, so an unarchived PV is not requested again for the
+  // same span on every zoom.
+  const auto finish = [this](HistoryRequestId id) -> std::optional<std::size_t> {
+    const TimeRange range = historyRanges_.take(id);
+    if (!historyRequests_.contains(id)) return std::nullopt;
+    const std::size_t curve = historyRequests_.take(id);
+    auto& coverage = historyCoverage_[curve];
+    if (coverage && range.end >= *coverage && range.start < *coverage)
+      coverage = range.start;
+    historyExtensionTimer_->start();
+    return curve;
+  };
   connect(historyProvider_.get(), &HistoryProvider::resultReady, this,
-          [this](HistoryRequestId id, const QString&, std::vector<Sample> samples) {
+          [this, finish](HistoryRequestId id, const QString&, std::vector<Sample> samples) {
             const bool automatic = automaticHistoryRequests_.remove(id);
-            if (!historyRequests_.contains(id)) return;
-            plotWidget_->joinHistoricalSamples(historyRequests_.take(id), samples);
+            const auto curve = finish(id);
+            if (!curve) return;
+            plotWidget_->joinHistoricalSamples(*curve, samples);
             if (!automatic)
               statusBar()->showMessage(tr("Historical samples loaded"), 5000);
           });
   connect(historyProvider_.get(), &HistoryProvider::requestFailed, this,
-          [this](HistoryRequestId id, const QString& message) {
+          [this, finish](HistoryRequestId id, const QString& message) {
             const bool automatic = automaticHistoryRequests_.remove(id);
-            if (!historyRequests_.remove(id) || automatic) return;
+            if (!finish(id) || automatic) return;
             QMessageBox::information(this, tr("History Unavailable"), message);
           });
 }
@@ -473,6 +496,7 @@ void MainWindow::cancelHistoryRequests(std::optional<std::size_t> curve) {
   if (!historyProvider_) {
     historyRequests_.clear();
     automaticHistoryRequests_.clear();
+    historyRanges_.clear();
     return;
   }
   const auto requests = historyRequests_;
@@ -480,19 +504,44 @@ void MainWindow::cancelHistoryRequests(std::optional<std::size_t> curve) {
     if (curve && it.value() != *curve) continue;
     historyRequests_.remove(it.key());
     automaticHistoryRequests_.remove(it.key());
+    historyRanges_.remove(it.key());
     historyProvider_->cancel(it.key());
   }
 }
 
 void MainWindow::requestRecentHistory(std::size_t curve,
                                       const std::string& channel) {
-  if (!historyProvider_ || curve >= kMaximumCurves || channel.empty() ||
-      channel == "CPU_Usage") return;
+  if (curve >= kMaximumCurves) return;
+  historyCoverage_[curve].reset();
+  if (!historyProvider_ || channel.empty() || channel == "CPU_Usage") return;
+  // Live samples cover the curve from now on; the archive fills in before it.
   const auto end = std::chrono::system_clock::now();
+  historyCoverage_[curve] = end;
+  requestAutomaticHistory(
+      curve, {end - std::chrono::seconds(model_.timing.timespanSeconds), end});
+}
+
+void MainWindow::requestAutomaticHistory(std::size_t curve, TimeRange range) {
   const auto id = historyProvider_->request(
-      QString::fromStdString(channel), {end - std::chrono::minutes(5), end});
+      QString::fromStdString(acquiredNames_[curve]), range);
   historyRequests_.insert(id, curve);
   automaticHistoryRequests_.insert(id);
+  historyRanges_.insert(id, range);
+}
+
+void MainWindow::extendHistoryToView() {
+  if (!historyProvider_) return;
+  const auto start = plotWidget_->visibleTimeRange().start;
+  QSet<std::size_t> pending;
+  for (const std::size_t curve : historyRequests_) pending.insert(curve);
+  for (std::size_t i = 0; i < historyCoverage_.size(); ++i) {
+    const auto& coverage = historyCoverage_[i];
+    // One request per curve at a time; a completed request restarts the
+    // check, so a view zoomed out meanwhile is still filled.
+    if (!coverage || pending.contains(i) ||
+        *coverage - start < std::chrono::seconds(1)) continue;
+    requestAutomaticHistory(i, {start, *coverage});
+  }
 }
 
 void MainWindow::showControls() {
@@ -506,6 +555,10 @@ void MainWindow::applyModel() {
   plotWidget_->clearSamples();
   if (channelAcquisition_) channelAcquisition_->clearSamples();
   if (cpuAcquisition_) cpuAcquisition_->clearSamples();
+  // Retained channels restart with live data only; refill their history.
+  const auto now = std::chrono::system_clock::now();
+  for (auto& coverage : historyCoverage_)
+    if (coverage) coverage = now;
   plotWidget_->setModel(model_);
   plotWidget_->resetView();
   controlsWindow_->reloadFromModel();
@@ -617,6 +670,7 @@ void MainWindow::requestHistory() {
     if (!model_.curves[i].nameSet || model_.curves[i].name == "CPU_Usage") continue;
     const auto id = historyProvider_->request(QString::fromStdString(model_.curves[i].name), range);
     historyRequests_.insert(id, i);
+    historyRanges_.insert(id, range);
   }
   if (!historyRequests_.isEmpty())
     statusBar()->showMessage(tr("Retrieving historical samples…"));
@@ -736,6 +790,7 @@ void MainWindow::stopAcquisition() {
   channelIds_.fill(0);
   localChannels_.fill(false);
   acquiredNames_.fill(std::string{});
+  historyCoverage_.fill(std::nullopt);
   acquisitionRunning_ = false;
 }
 
@@ -752,6 +807,7 @@ void MainWindow::restartAcquisition() {
     const std::string name = model_.curves[i].nameSet ? model_.curves[i].name : "";
     if (acquiredNames_[i] == name) continue;
     cancelHistoryRequests(i);
+    historyCoverage_[i].reset();
     if (channelIds_[i]) {
       auto* oldAcquisition = localChannels_[i] ? cpuAcquisition_.get()
                                                 : channelAcquisition_.get();

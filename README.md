@@ -90,13 +90,17 @@ directory. This is separate from the staged system packaging described below.
 ```sh
 bin/$(uname -s)-$(uname -m)/StripTool example.stp
 bin/$(uname -s)-$(uname -m)/qtstriptool example.stp
+bin/$(uname -s)-$(uname -m)/qtstriptool -history=3600 -sampleCount=7200 example.stp
 bin/$(uname -s)-$(uname -m)/qtstriptool -style adwaita example.stp
 ```
 
 Qt StripTool defaults to the Fusion style for consistent, compact controls
 across desktop environments. Qt consumes standard Qt options such as `-style`,
 which can select another installed style; application-specific syntax
-is `qtstriptool [--help] [--version] [configuration.stp]`. A bare configuration
+is `qtstriptool [--help] [--version] [-history=seconds] [-sampleCount=count] [configuration.stp]`.
+The timing options override the loaded configuration. `-history` sets the
+initial time window and automatic archive backfill; `-sampleCount` sets the
+maximum live samples per curve. A bare configuration
 name is searched in the current directory and then `STRIP_FILE_SEARCH_PATH`.
 
 ## Install and package Qt StripTool

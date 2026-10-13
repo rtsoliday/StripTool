@@ -13,6 +13,13 @@ class QContextMenuEvent;
 
 namespace striptool {
 
+struct TimeAxisLabels {
+  QStringList relative;
+  QStringList clock;
+  QString caption;
+  QString date;
+};
+
 class PlotWidget final : public QWidget {
   Q_OBJECT
 public:
@@ -33,6 +40,10 @@ public:
   TimeRange visibleTimeRange() const { return visibleTimeRange_; }
   ValueRange valueRange(std::size_t curve) const;
   QStringList yAxisLabels(std::size_t curve, int divisions = 5) const;
+  TimeAxisLabels xAxisLabels(int divisions = 5) const;
+  // Labelled tick and grid divisions at the current size and font.
+  int timeAxisDivisions() const;
+  int valueAxisDivisions() const;
   int selectedAnnotation() const { return selectedAnnotation_; }
   bool isInPlot(const QPoint& position) const { return plotRect().contains(position); }
 
@@ -62,10 +73,14 @@ signals:
   void annotationSelectionChanged(int index);
   void annotationsChanged();
   void autoScrollChanged(bool enabled);
+  // Emitted when zoom, pan, drag or reset changes the visible time range;
+  // live scrolling, which only moves it forward, does not emit it.
+  void visibleTimeRangeChanged();
   void autoScaleChanged(bool enabled);
   void plotContextMenuRequested(QPoint globalPosition, QPoint plotPosition);
 
 protected:
+  void changeEvent(QEvent* event) override;
   void paintEvent(QPaintEvent* event) override;
   void mouseMoveEvent(QMouseEvent* event) override;
   void mousePressEvent(QMouseEvent* event) override;
@@ -79,12 +94,15 @@ private:
   QRectF plotRect() const;
   std::vector<std::size_t> plottedCurves() const;
   QRectF legendRect(std::size_t position) const;
+  QStringList legendLines(std::size_t curve, bool widestValue = false) const;
+  int valueDivisionsForHeight(qreal plotHeight) const;
+  void updateMinimumSize();
   QRectF annotationRect(std::size_t index) const;
   int annotationAt(const QPoint& position) const;
   std::chrono::system_clock::time_point timeAt(const QPoint& position) const;
   std::optional<double> valueAt(const QPoint& position) const;
   void updateAutoRange();
-  void zoomAt(double factor, const QPointF& position);
+  void zoomAt(double factor, const QPointF& position, bool keepAutoScroll = false);
   void updateDrag(const QPoint& position);
   void finishDrag();
   QColor color(const Rgba16& value) const;
@@ -96,6 +114,8 @@ private:
   StripToolModel model_ = makeDefaultModel();
   std::array<std::vector<Sample>, kMaximumCurves> liveSamples_;
   std::array<std::vector<Sample>, kMaximumCurves> historicalSamples_;
+  // Widest legend value line shown per curve; plotRect() only ever grows it.
+  mutable std::array<QString, kMaximumCurves> widestLegendValue_;
   std::array<std::vector<Sample>, kMaximumCurves> samples_;
   std::array<std::optional<ValueRange>, kMaximumCurves> automaticRanges_;
   std::array<std::optional<ValueRange>, kMaximumCurves> verticalRanges_;

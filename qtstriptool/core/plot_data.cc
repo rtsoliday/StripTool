@@ -1,6 +1,7 @@
 #include "core/plot_data.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iterator>
 #include <limits>
@@ -26,6 +27,57 @@ std::vector<Sample> selectSamples(
         (scale == ScaleMode::Log10 && !(sample.value > 0.0)))
       sample.plotable = false;
   return decimateSamples(visible, maximumPoints);
+}
+
+std::vector<Sample> selectTraceSamples(
+    const std::vector<Sample>& samples,
+    std::chrono::system_clock::time_point start,
+    std::chrono::system_clock::time_point end,
+    std::chrono::system_clock::duration bucketDuration,
+    ScaleMode scale) {
+  if (start > end || bucketDuration <= bucketDuration.zero()) return {};
+  const auto first = std::lower_bound(
+      samples.begin(), samples.end(), start,
+      [](const Sample& sample, const auto& time) { return sample.timestamp < time; });
+  const auto last = std::upper_bound(
+      first, samples.end(), end,
+      [](const auto& time, const Sample& sample) { return time < sample.timestamp; });
+  const auto plotable = [scale](const Sample& sample) {
+    return sample.plotable && std::isfinite(sample.value) &&
+           (scale != ScaleMode::Log10 || sample.value > 0.0);
+  };
+  const auto bucketOf = [bucketDuration](std::chrono::system_clock::time_point time) {
+    const auto ticks = time.time_since_epoch().count();
+    const auto width = bucketDuration.count();
+    return ticks / width - (ticks % width < 0 ? 1 : 0);
+  };
+
+  std::vector<Sample> result;
+  for (auto bucketStart = first; bucketStart != last;) {
+    const auto bucket = bucketOf(bucketStart->timestamp);
+    auto minimum = last, maximum = last, gap = last, bucketEnd = bucketStart;
+    for (; bucketEnd != last && bucketOf(bucketEnd->timestamp) == bucket; ++bucketEnd) {
+      if (!plotable(*bucketEnd)) {
+        if (gap == last) gap = bucketEnd;
+        continue;
+      }
+      if (minimum == last || bucketEnd->value < minimum->value) minimum = bucketEnd;
+      if (maximum == last || bucketEnd->value > maximum->value) maximum = bucketEnd;
+    }
+    std::array<std::vector<Sample>::const_iterator, 5> kept{};
+    std::size_t count = 0;
+    for (const auto it : {bucketStart, minimum, maximum, gap, std::prev(bucketEnd)})
+      if (it != last) kept[count++] = it;
+    std::sort(kept.begin(), kept.begin() + count);
+    const auto keptEnd = std::unique(kept.begin(), kept.begin() + count);
+    for (auto it = kept.begin(); it != keptEnd; ++it) {
+      Sample sample = **it;
+      sample.plotable = plotable(sample);
+      result.push_back(sample);
+    }
+    bucketStart = bucketEnd;
+  }
+  return result;
 }
 
 double plotValue(double value, ScaleMode scale) {

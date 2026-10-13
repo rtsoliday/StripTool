@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QFontMetrics>
+#include <QEvent>
 #include <QWheelEvent>
 #include <algorithm>
 #include <cmath>
@@ -22,10 +23,14 @@ qint64 milliseconds(std::chrono::system_clock::time_point time) {
              time.time_since_epoch()).count();
 }
 
-QString formattedValue(double value, int precision, ScaleMode scale) {
-  if (scale == ScaleMode::Log10)
-    return QString::number(std::pow(10.0, value), 'g', std::max(1, precision));
-  QString label = QString::number(value, 'f', std::clamp(precision, 0, 12));
+bool labelsAreDistinct(const QStringList& labels) {
+  for (int i = 1; i < labels.size(); ++i)
+    if (labels[i] == labels[i - 1]) return false;
+  return true;
+}
+
+QString fixedLabel(double value, int decimals) {
+  QString label = QString::number(value, 'f', decimals);
   if (label.contains(QLatin1Char('.'))) {
     while (label.endsWith(QLatin1Char('0'))) label.chop(1);
     if (label.endsWith(QLatin1Char('.'))) label.chop(1);
@@ -33,46 +38,32 @@ QString formattedValue(double value, int precision, ScaleMode scale) {
   return label == QStringLiteral("-0") ? QStringLiteral("0") : label;
 }
 
-bool labelsAreDistinct(const QStringList& labels) {
-  for (int i = 1; i < labels.size(); ++i)
-    if (labels[i] == labels[i - 1]) return false;
-  return true;
-}
-
-QStringList axisLabels(const ValueRange& range, int precision,
-                       ScaleMode scale, int divisions) {
+QStringList axisLabels(const ValueRange& range, ScaleMode scale, int divisions) {
   QStringList labels;
   if (!range.isValid() || divisions < 1) return labels;
 
-  // A channel's precision describes its values, but an axis may be zoomed to
-  // a range whose tick spacing is smaller than that precision. Add decimals
-  // until adjacent ticks remain distinguishable.
-  const int firstPrecision = scale == ScaleMode::Log10
-                                 ? std::max(1, precision)
-                                 : std::max(0, precision);
-  const int maximumPrecision = scale == ScaleMode::Log10 ? 17 : 15;
-  for (int candidate = std::min(firstPrecision, maximumPrecision);
-       candidate <= maximumPrecision; ++candidate) {
+  // Tick precision depends on the visible range, rather than the PV's value
+  // precision. Use four significant digits of the largest magnitude, adding
+  // more only for narrow zooms. Ordinary linear values use fixed notation;
+  // exponents are kept for log axes and very large or small magnitudes.
+  const double span = range.maximum - range.minimum;
+  const double magnitude = std::max(std::abs(range.minimum), std::abs(range.maximum));
+  const int exponent = magnitude > 0.0 ? int(std::floor(std::log10(magnitude))) : 0;
+  const bool fixed = scale != ScaleMode::Log10 && exponent >= -3 && exponent < 6;
+  for (int candidate = 4; candidate <= 17; ++candidate) {
     labels.clear();
     for (int tick = 0; tick <= divisions; ++tick) {
-      const double value = range.maximum -
-          (range.maximum - range.minimum) * tick / divisions;
-      labels.push_back(formattedValue(value, candidate, scale));
+      double plotted = range.maximum - span * tick / divisions;
+      // A tick at a zero crossing can carry arithmetic residue such as 1e-17.
+      if (std::abs(plotted) < span * 1e-9) plotted = 0.0;
+      const double value = scale == ScaleMode::Log10 ? std::pow(10.0, plotted)
+                                                     : plotted;
+      labels.push_back(fixed ? fixedLabel(value, std::clamp(candidate - 1 - exponent, 0, 20))
+                             : QString::number(value == 0.0 ? 0.0 : value, 'g', candidate));
     }
     if (labelsAreDistinct(labels)) return labels;
   }
 
-  // Fixed notation can still run out of useful decimal places for a narrow
-  // range around a very large value. Full significant-digit notation is the
-  // final lossless fallback.
-  labels.clear();
-  for (int tick = 0; tick <= divisions; ++tick) {
-    const double plotted = range.maximum -
-        (range.maximum - range.minimum) * tick / divisions;
-    const double value = scale == ScaleMode::Log10 ? std::pow(10.0, plotted)
-                                                    : plotted;
-    labels.push_back(QString::number(value, 'g', 17));
-  }
   return labels;
 }
 
@@ -80,13 +71,16 @@ QStringList axisLabels(const ValueRange& range, int precision,
 
 PlotWidget::PlotWidget(QWidget* parent) : QWidget(parent) {
   setObjectName(QStringLiteral("plotWidget"));
-  setMinimumSize(800, 260);
+  updateMinimumSize();
   setMouseTracking(true);
   setFocusPolicy(Qt::StrongFocus);
   resetView();
 }
 
 void PlotWidget::setModel(const StripToolModel& model) {
+  // Precision, scale or limits may have changed; size legend values afresh.
+  widestLegendValue_.fill(QString());
+  const bool timespanChanged = model_.timing.timespanSeconds != model.timing.timespanSeconds;
   std::array<bool, kMaximumCurves> replacedCurves{};
   for (std::size_t i = 0; i < kMaximumCurves; ++i) {
     const auto& old = model_.curves[i];
@@ -102,6 +96,7 @@ void PlotWidget::setModel(const StripToolModel& model) {
         (!next.nameSet || old.name != next.name);
   }
   model_ = model;
+  updateMinimumSize();
   const int previousSelection = selectedAnnotation_;
   int nextSelection = previousSelection;
   int removedBeforeSelection = 0;
@@ -137,30 +132,28 @@ void PlotWidget::setModel(const StripToolModel& model) {
       (!model_.curves[static_cast<std::size_t>(selectedCurve_)].nameSet ||
        !model_.curves[static_cast<std::size_t>(selectedCurve_)].plotted))
     selectedCurve_ = -1;
-  updateAutoRange();
+  if (timespanChanged && autoScroll_ && !paused_) resetView();
+  else updateAutoRange();
   update();
 }
 
 void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples) {
   if (curve >= samples_.size()) return;
-  const bool hadSamples = std::any_of(samples_.begin(), samples_.end(),
-                                      [](const auto& data) { return !data.empty(); });
   std::sort(samples.begin(), samples.end(), [](const auto& left, const auto& right) {
     return left.timestamp < right.timestamp;
   });
   liveSamples_[curve] = std::move(samples);
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
   if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
-    if (!hadSamples) resetView();
-    else if (!samples_[curve].empty()) {
+    if (!samples_[curve].empty()) {
+      const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
       const auto now = std::chrono::system_clock::now();
       if (visibleTimeRange_.end > now)
         visibleTimeRange_.end = now;
       else if (samples_[curve].back().timestamp <= now)
         visibleTimeRange_.end = std::max(visibleTimeRange_.end,
                                          samples_[curve].back().timestamp);
-      visibleTimeRange_.start = visibleTimeRange_.end -
-          std::chrono::seconds(model_.timing.timespanSeconds);
+      visibleTimeRange_.start = visibleTimeRange_.end - duration;
     }
   }
   if (dragMode_ == DragMode::None) updateAutoRange();
@@ -184,13 +177,13 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
     data.erase(data.begin(), data.end() - static_cast<std::ptrdiff_t>(maximum));
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], data);
   if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
+    const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
     const auto now = std::chrono::system_clock::now();
     if (visibleTimeRange_.end > now)
       visibleTimeRange_.end = now;
     else if (sample.timestamp <= now)
       visibleTimeRange_.end = std::max(visibleTimeRange_.end, sample.timestamp);
-    visibleTimeRange_.start = visibleTimeRange_.end -
-        std::chrono::seconds(model_.timing.timespanSeconds);
+    visibleTimeRange_.start = visibleTimeRange_.end - duration;
   }
   if (dragMode_ == DragMode::None) updateAutoRange();
   update();
@@ -200,6 +193,7 @@ void PlotWidget::clearCurveSamples(std::size_t curve) {
   if (curve >= samples_.size()) return;
   liveSamples_[curve].clear();
   historicalSamples_[curve].clear();
+  widestLegendValue_[curve].clear();
   samples_[curve].clear();
   automaticRanges_[curve].reset();
   verticalRanges_[curve].reset();
@@ -241,20 +235,45 @@ ValueRange PlotWidget::valueRange(std::size_t curve) const {
 
 QStringList PlotWidget::yAxisLabels(std::size_t curve, int divisions) const {
   if (curve >= kMaximumCurves) return {};
-  return axisLabels(valueRange(curve), model_.curves[curve].precision,
-                    model_.curves[curve].scale, divisions);
+  return axisLabels(valueRange(curve), model_.curves[curve].scale, divisions);
+}
+
+TimeAxisLabels PlotWidget::xAxisLabels(int divisions) const {
+  TimeAxisLabels labels;
+  if (divisions < 1) return labels;
+  const qint64 begin = milliseconds(visibleTimeRange_.start);
+  const qint64 end = milliseconds(visibleTimeRange_.end);
+  const qint64 span = end - begin;
+  const double unit = span >= 86400000 ? 86400000.0 : span >= 3600000 ? 3600000.0
+                      : span >= 60000 ? 60000.0 : 1000.0;
+  labels.caption = span >= 86400000 ? tr("Days relative to right edge")
+                   : span >= 3600000 ? tr("Hours relative to right edge")
+                   : span >= 60000 ? tr("Minutes relative to right edge")
+                   : tr("Seconds relative to right edge");
+  const QString format = span >= 86400000 ? QStringLiteral("MMM d HH:mm")
+                         : span >= 3600000 ? QStringLiteral("HH:mm")
+                         : span < 10000 ? QStringLiteral("HH:mm:ss.zzz")
+                         : QStringLiteral("HH:mm:ss");
+  for (int i = 0; i <= divisions; ++i) {
+    const qint64 time = begin + span * i / divisions;
+    labels.relative.push_back(i == divisions ? QStringLiteral("0")
+        : QString::number(-double(span) / unit * (divisions - i) / divisions, 'g', 4));
+    labels.clock.push_back(QDateTime::fromMSecsSinceEpoch(time).toString(format));
+  }
+  labels.date = QDateTime::fromMSecsSinceEpoch(end).toString(QStringLiteral("MMM d, yyyy"));
+  return labels;
 }
 
 void PlotWidget::setAutoScroll(bool enabled) {
   const bool changed = autoScroll_ != enabled;
   autoScroll_ = enabled;
   if (changed) emit autoScrollChanged(enabled);
-  if (enabled && !paused_) resetView();
+  if (enabled && !paused_) advanceToNow();
 }
 
 void PlotWidget::setPaused(bool paused) {
   paused_ = paused;
-  if (!paused_ && autoScroll_) resetView();
+  if (!paused_ && autoScroll_) advanceToNow();
 }
 
 void PlotWidget::setVisibleTimeRange(TimeRange range) {
@@ -263,6 +282,7 @@ void PlotWidget::setVisibleTimeRange(TimeRange range) {
   setAutoScroll(false);
   updateAutoRange();
   update();
+  emit visibleTimeRangeChanged();
 }
 
 void PlotWidget::pan(double fractionOfWindow) {
@@ -275,13 +295,18 @@ void PlotWidget::pan(double fractionOfWindow) {
   setAutoScroll(false);
   updateAutoRange();
   update();
+  emit visibleTimeRangeChanged();
 }
 
 void PlotWidget::zoom(double factor) {
-  zoomAt(factor, plotRect().center());
+  const QRectF area = plotRect();
+  // Toolbar zoom in a live view changes its duration and keeps now at the
+  // right edge. Wheel zoom remains anchored at the pointer in a fixed view.
+  zoomAt(factor, autoScroll_ ? QPointF(area.right(), area.center().y()) : area.center(),
+         autoScroll_);
 }
 
-void PlotWidget::zoomAt(double factor, const QPointF& position) {
+void PlotWidget::zoomAt(double factor, const QPointF& position, bool keepAutoScroll) {
   if (!(factor > 0.0) || !std::isfinite(factor)) return;
   const QRectF area = plotRect();
   if (area.width() <= 0.0) return;
@@ -304,9 +329,10 @@ void PlotWidget::zoomAt(double factor, const QPointF& position) {
   const auto anchor = visibleTimeRange_.start + anchorOffset;
   visibleTimeRange_ = {anchor - scaledAnchorOffset,
                        anchor - scaledAnchorOffset + scaledDuration};
-  setAutoScroll(false);
+  if (!keepAutoScroll) setAutoScroll(false);
   updateAutoRange();
   update();
+  emit visibleTimeRangeChanged();
 }
 
 void PlotWidget::panY(double fractionOfRange) {
@@ -364,13 +390,14 @@ void PlotWidget::resetView() {
   if (changed) emit autoScrollChanged(true);
   updateAutoRange();
   update();
+  emit visibleTimeRangeChanged();
 }
 
 void PlotWidget::advanceToNow() {
   if (!autoScroll_ || paused_ || dragMode_ != DragMode::None) return;
+  const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
   visibleTimeRange_.end = std::chrono::system_clock::now();
-  visibleTimeRange_.start = visibleTimeRange_.end -
-      std::chrono::seconds(model_.timing.timespanSeconds);
+  visibleTimeRange_.start = visibleTimeRange_.end - duration;
   updateAutoRange();
   update();
 }
@@ -446,20 +473,85 @@ void PlotWidget::editSelectedAnnotation() {
 
 QRectF PlotWidget::plotRect() const {
   // The Motif graph has one selectable Y axis and a legend beside the plot.
-  constexpr int unitsLaneWidth = 22;
+  const QFontMetrics metrics(font(), this);
+  const int lineHeight = std::max(metrics.height(), metrics.lineSpacing());
+  const int unitsLaneWidth = std::max(22, metrics.height() + 8);
   constexpr int labelGap = 8;
   int leftMargin = 72;
+  const int topMargin = model_.title.empty() ? std::max(20, lineHeight / 2 + 8)
+                                            : lineHeight + 18;
+  const int bottomMargin = 3 * lineHeight + lineHeight / 2 + 16;
   const auto curves = plottedCurves();
   const int axisCurve = selectedCurve_ >= 0 ? selectedCurve_ :
                         (curves.empty() ? -1 : static_cast<int>(curves.front()));
   if (axisCurve >= 0) {
-    const QFontMetrics metrics(font());
     int labelWidth = 0;
-    for (const QString& label : yAxisLabels(static_cast<std::size_t>(axisCurve)))
+    const int divisions = valueDivisionsForHeight(height() - topMargin - bottomMargin);
+    for (const QString& label : yAxisLabels(static_cast<std::size_t>(axisCurve), divisions))
       labelWidth = std::max(labelWidth, metrics.horizontalAdvance(label));
     leftMargin = std::max(leftMargin, unitsLaneWidth + labelGap + labelWidth + labelGap);
   }
-  return rect().adjusted(leftMargin, model_.title.empty() ? 20 : 38, -178, -64);
+  int timeLabelWidth = 0;
+  const auto timeLabels = xAxisLabels();
+  for (const auto& labels : {timeLabels.relative, timeLabels.clock})
+    for (const QString& label : labels)
+      timeLabelWidth = std::max(timeLabelWidth, metrics.horizontalAdvance(label));
+  leftMargin = std::max(leftMargin, timeLabelWidth / 2 + labelGap);
+
+  int nameWidth = 178;
+  int valueWidth = 0;
+  for (const auto curve : curves) {
+    nameWidth = std::max(nameWidth,
+                         metrics.horizontalAdvance(legendLines(curve)[0]) + 40);
+    // The value line never shrinks while a curve is configured: it keeps the
+    // widest text shown so far, starting from the widest value the precision
+    // allows. Otherwise each update that changes its width would rescale the
+    // time axis and shift the whole trace.
+    auto& widest = widestLegendValue_[curve];
+    for (const QString& line : {legendLines(curve, true)[1], legendLines(curve)[1]})
+      if (metrics.horizontalAdvance(line) > metrics.horizontalAdvance(widest)) widest = line;
+    valueWidth = std::max(valueWidth, metrics.horizontalAdvance(widest) + 26);
+  }
+  // Long names can be elided with a full tooltip, so their space is capped to
+  // leave room for the traces. The value and limits are always shown in full.
+  const int traceRoom = width() - leftMargin - 200;
+  const int rightMargin = std::max({timeLabelWidth / 2 + labelGap,
+      std::min(nameWidth, std::max(178, std::min(width() * 2 / 5, traceRoom))),
+      std::min(valueWidth, traceRoom)});
+  return rect().adjusted(leftMargin, topMargin, -rightMargin, -bottomMargin);
+}
+
+int PlotWidget::timeAxisDivisions() const {
+  const QRectF area = plotRect();
+  const QFontMetrics metrics(font(), this);
+  // Labels are centred on their ticks; plotRect() reserves half of the widest
+  // label beyond each end of the axis.
+  const auto fits = [&metrics, &area](const QStringList& labels) {
+    qreal previousRight = -std::numeric_limits<qreal>::infinity();
+    const int divisions = labels.size() - 1;
+    for (int i = 0; i <= divisions; ++i) {
+      const int width = metrics.horizontalAdvance(labels[i]);
+      const qreal left = area.left() + area.width() * i / divisions - width / 2.0;
+      if (left < previousRight + 12) return false;
+      previousRight = left + width;
+    }
+    return true;
+  };
+  for (int divisions = 5; divisions > 1; --divisions) {
+    const auto labels = xAxisLabels(divisions);
+    if (fits(labels.relative) && fits(labels.clock)) return divisions;
+  }
+  return 1;
+}
+
+int PlotWidget::valueAxisDivisions() const {
+  return valueDivisionsForHeight(plotRect().height());
+}
+
+int PlotWidget::valueDivisionsForHeight(qreal plotHeight) const {
+  const QFontMetrics metrics(font(), this);
+  const int lineHeight = std::max(metrics.height(), metrics.lineSpacing());
+  return std::clamp(int(plotHeight / (lineHeight + 6)), 1, 5);
 }
 
 std::vector<std::size_t> PlotWidget::plottedCurves() const {
@@ -470,11 +562,59 @@ std::vector<std::size_t> PlotWidget::plottedCurves() const {
 }
 
 QRectF PlotWidget::legendRect(std::size_t position) const {
-  const qreal rowHeight = std::min<qreal>(56, qreal(height() - 12) /
-                                                std::max<std::size_t>(1, plottedCurves().size()));
+  const QFontMetrics metrics(font(), this);
+  const int lineHeight = std::max(metrics.height(), metrics.lineSpacing());
   const QRectF area = plotRect();
+  const qreal rowHeight = std::min<qreal>(3 * lineHeight + 8, (area.bottom() - 8) /
+                                                std::max<std::size_t>(1, plottedCurves().size()));
   return QRectF(area.right() + 10, 8 + position * rowHeight,
                 width() - area.right() - 16, rowHeight - 2);
+}
+
+QStringList PlotWidget::legendLines(std::size_t curve, bool widestValue) const {
+  const auto& config = model_.curves[curve];
+  const int digits = std::clamp(config.precision, 1, 15);
+  QString latestValue;
+  if (widestValue)
+    latestValue = QStringLiteral("-.") + QString(digits, QLatin1Char('8'));
+  else if (!samples_[curve].empty() && samples_[curve].back().plotable &&
+           std::isfinite(samples_[curve].back().value))
+    latestValue = QString::number(samples_[curve].back().value, 'g', digits);
+  const ValueRange range = valueRange(curve);
+  const double lower = config.scale == ScaleMode::Log10 ? std::pow(10.0, range.minimum)
+                                                       : range.minimum;
+  const double upper = config.scale == ScaleMode::Log10 ? std::pow(10.0, range.maximum)
+                                                       : range.maximum;
+  const QString limits = QStringLiteral("%1(%2, %3)")
+      .arg(config.scale == ScaleMode::Log10 ? QStringLiteral("log10 ") : QString())
+      .arg(lower, 0, 'g', 4).arg(upper, 0, 'g', 4);
+  QString detail = config.units == "Undefined" ? QString() : QString::fromStdString(config.units);
+  if (!config.comment.empty()) {
+    if (!detail.isEmpty()) detail += QStringLiteral(" · ");
+    detail += QString::fromStdString(config.comment);
+  }
+  return {QString::fromStdString(config.name),
+          latestValue.isEmpty() ? limits : latestValue + QStringLiteral("  ") + limits,
+          detail};
+}
+
+void PlotWidget::updateMinimumSize() {
+  const QFontMetrics metrics(font(), this);
+  const int lineHeight = std::max(metrics.height(), metrics.lineSpacing());
+  // Every active curve gets a name and value row, even with a large desktop font.
+  const int footerHeight = 3 * lineHeight + lineHeight / 2 + 16;
+  const int topHeight = model_.title.empty() ? std::max(20, lineHeight / 2 + 8)
+                                            : lineHeight + 18;
+  const int legendHeight = int(plottedCurves().size()) * (2 * lineHeight + 8) + 16;
+  setMinimumSize(800, std::max(260, topHeight + footerHeight + legendHeight));
+}
+
+void PlotWidget::changeEvent(QEvent* event) {
+  QWidget::changeEvent(event);
+  if (event->type() == QEvent::FontChange || event->type() == QEvent::ApplicationFontChange) {
+    updateMinimumSize();
+    update();
+  }
 }
 
 std::chrono::system_clock::time_point PlotWidget::timeAt(const QPoint& position) const {
@@ -584,6 +724,8 @@ void PlotWidget::paintEvent(QPaintEvent*) {
   const QRectF area = plotRect();
   const QColor foreground = color(model_.colors.foreground);
   const auto visibleCurves = plottedCurves();
+  const QFontMetrics metrics(font(), this);
+  const int lineHeight = std::max(metrics.height(), metrics.lineSpacing());
 
   const QString title = QString::fromStdString(model_.title);
   if (!title.isEmpty()) {
@@ -591,7 +733,7 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     titleFont.setBold(true);
     painter.setFont(titleFont);
     painter.setPen(foreground);
-    painter.drawText(QRectF(area.left(), 6, area.width(), 24),
+    painter.drawText(QRectF(area.left(), 6, area.width(), lineHeight),
                      Qt::AlignCenter,
                      painter.fontMetrics().elidedText(
                          title, Qt::ElideRight, static_cast<int>(area.width())));
@@ -606,51 +748,21 @@ void PlotWidget::paintEvent(QPaintEvent*) {
       painter.drawRect(legend);
     }
     painter.setPen(QPen(color(model_.colors.curves[index]), 3));
-    painter.drawLine(QPointF(legend.left() + 4, legend.top() + 10),
-                     QPointF(legend.left() + 18, legend.top() + 10));
-    const auto& config = model_.curves[index];
-    const QString label = QString::fromStdString(config.name);
-    QString latestValue;
-    if (!samples_[index].empty() && samples_[index].back().plotable &&
-        std::isfinite(samples_[index].back().value))
-      latestValue = QString::number(samples_[index].back().value, 'g',
-                                    std::clamp(config.precision, 1, 15));
+    painter.drawLine(QPointF(legend.left() + 4, legend.top() + lineHeight / 2.0),
+                     QPointF(legend.left() + 18, legend.top() + lineHeight / 2.0));
+    const QStringList lines = legendLines(index);
     painter.setPen(foreground);
     const QRectF textArea(legend.left() + 23, legend.top(),
-                          legend.width() - 26, 21);
+                          legend.width() - 26, lineHeight);
     painter.drawText(textArea, Qt::AlignVCenter | Qt::AlignLeft,
-                     painter.fontMetrics().elidedText(label, Qt::ElideRight,
+                     metrics.elidedText(lines[0], Qt::ElideRight,
                                                        static_cast<int>(textArea.width())));
-    if (legend.height() >= 38) {
-      const ValueRange plottedRange = valueRange(index);
-      const double lower = config.scale == ScaleMode::Log10
-                               ? std::pow(10.0, plottedRange.minimum) : plottedRange.minimum;
-      const double upper = config.scale == ScaleMode::Log10
-                               ? std::pow(10.0, plottedRange.maximum) : plottedRange.maximum;
-      const QString limits = QStringLiteral("%1(%2, %3)")
-          .arg(config.scale == ScaleMode::Log10 ? QStringLiteral("log10 ") : QString())
-          .arg(lower, 0, 'g', 4).arg(upper, 0, 'g', 4);
-      const QString secondLine = latestValue.isEmpty()
-          ? limits : latestValue + QStringLiteral("  ") + limits;
-      painter.drawText(QRectF(legend.left() + 5, legend.top() + 21,
-                              legend.width() - 9, 18), Qt::AlignLeft | Qt::AlignTop,
-                       painter.fontMetrics().elidedText(secondLine, Qt::ElideRight,
-                                                         static_cast<int>(legend.width() - 9)));
-    }
-    if (legend.height() >= 52) {
-      QString detail = config.units == "Undefined" ? QString()
-                        : QString::fromStdString(config.units);
-      if (!config.comment.empty()) {
-        const QString comment = QString::fromStdString(config.comment);
-        const QString combined = detail.isEmpty() ? comment
-            : detail + QStringLiteral(" · ") + comment;
-        detail = painter.fontMetrics().horizontalAdvance(combined) <= legend.width() - 9
-                     ? combined : comment;
-      }
-      painter.drawText(QRectF(legend.left() + 5, legend.top() + 38,
-                              legend.width() - 9, 16), Qt::AlignLeft | Qt::AlignTop,
-                       painter.fontMetrics().elidedText(detail, Qt::ElideRight,
-                                                         static_cast<int>(legend.width() - 9)));
+    for (int row = 1; row < lines.size(); ++row) {
+      if (legend.height() < (row + 1) * lineHeight) break;
+      painter.drawText(QRectF(legend.left() + 5, legend.top() + row * lineHeight,
+                              legend.width() - 9, lineHeight), Qt::AlignLeft | Qt::AlignVCenter,
+                       metrics.elidedText(lines[row], Qt::ElideRight,
+                                          static_cast<int>(legend.width() - 9)));
     }
   }
   painter.setPen(foreground);
@@ -658,8 +770,11 @@ void PlotWidget::paintEvent(QPaintEvent*) {
 
   const QColor grid = color(model_.colors.grid);
   painter.setPen(QPen(grid, 1, Qt::DashLine));
-  const int xDivisions = model_.graph.xGrid == GridMode::All ? 10 : 5;
-  const int yDivisions = model_.graph.yGrid == GridMode::All ? 10 : 5;
+  // Grid lines fall on the labelled ticks; All adds a line midway between them.
+  const int timeDivisions = timeAxisDivisions();
+  const int valueDivisions = valueDivisionsForHeight(area.height());
+  const int xDivisions = timeDivisions * (model_.graph.xGrid == GridMode::All ? 2 : 1);
+  const int yDivisions = valueDivisions * (model_.graph.yGrid == GridMode::All ? 2 : 1);
   if (model_.graph.xGrid != GridMode::None)
     for (int i = 1; i < xDivisions; ++i)
       painter.drawLine(QPointF(area.left() + area.width() * i / xDivisions, area.top()),
@@ -672,29 +787,27 @@ void PlotWidget::paintEvent(QPaintEvent*) {
   painter.setPen(foreground);
   const qint64 begin = milliseconds(visibleTimeRange_.start);
   const qint64 end = milliseconds(visibleTimeRange_.end);
-  const bool showMilliseconds = end - begin < 10000;
-  const int labelWidth = showMilliseconds ? 106 : 76;
-  const int timeDivisions = std::clamp(int(area.width() / (labelWidth + 12)), 1, 5);
+  const TimeAxisLabels timeLabels = xAxisLabels(timeDivisions);
+  int labelWidth = 0;
+  for (const auto& labels : {timeLabels.relative, timeLabels.clock})
+    for (const QString& label : labels)
+      labelWidth = std::max(labelWidth, metrics.horizontalAdvance(label) + 8);
+  const qreal timeLabelTop = area.bottom() + 5 + lineHeight / 2;
   for (int i = 0; i <= timeDivisions; ++i) {
-    const qint64 time = begin + (end - begin) * i / timeDivisions;
-    const QString clockLabel = QDateTime::fromMSecsSinceEpoch(time).toString(
-        showMilliseconds ? QStringLiteral("HH:mm:ss.zzz") : QStringLiteral("HH:mm:ss"));
-    const double minutesFromEnd = -double(end - begin) / 60000.0 *
-        (timeDivisions - i) / timeDivisions;
-    const QString minuteLabel = i == timeDivisions
-        ? QStringLiteral("0") : QString::number(minutesFromEnd, 'g', 6);
-    const qreal x = area.left() + area.width() * i / timeDivisions;
-    painter.drawText(QRectF(x - labelWidth / 2.0, area.bottom() + 5,
-                            labelWidth, 17), Qt::AlignHCenter, minuteLabel);
-    painter.drawText(QRectF(x - labelWidth / 2.0, area.bottom() + 22,
-                            labelWidth, 19), Qt::AlignHCenter, clockLabel);
+    const qreal labelLeft = area.left() + area.width() * i / timeDivisions - labelWidth / 2.0;
+    painter.drawText(QRectF(labelLeft, timeLabelTop, labelWidth, lineHeight),
+                     Qt::AlignHCenter | Qt::AlignVCenter, timeLabels.relative[i]);
+    painter.drawText(QRectF(labelLeft, timeLabelTop + lineHeight, labelWidth, lineHeight),
+                     Qt::AlignHCenter | Qt::AlignVCenter, timeLabels.clock[i]);
   }
-  painter.drawText(QRectF(area.left(), area.bottom() + 42, 230, 20),
-                   Qt::AlignLeft, tr("Minutes relative to right edge"));
-  painter.drawText(QRectF(area.right() - 160, area.bottom() + 42, 160, 20),
-                   Qt::AlignRight,
-                   QDateTime::fromMSecsSinceEpoch(milliseconds(visibleTimeRange_.end))
-                       .toString(QStringLiteral("MMM d, yyyy")));
+  const int dateWidth = metrics.horizontalAdvance(timeLabels.date) + 8;
+  const qreal captionWidth = std::max<qreal>(0, area.width() - dateWidth - 8);
+  painter.drawText(QRectF(area.left(), timeLabelTop + 2 * lineHeight,
+                          captionWidth, lineHeight), Qt::AlignLeft | Qt::AlignVCenter,
+                   metrics.elidedText(timeLabels.caption, Qt::ElideRight, int(captionWidth)));
+  painter.drawText(QRectF(area.right() - dateWidth, timeLabelTop + 2 * lineHeight,
+                          dateWidth, lineHeight), Qt::AlignRight | Qt::AlignVCenter,
+                   timeLabels.date);
 
   const int axisCurve = selectedCurve_ >= 0 ? selectedCurve_ :
                         (visibleCurves.empty() ? -1 : static_cast<int>(visibleCurves.front()));
@@ -714,14 +827,15 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     const QColor curveColor = color(model_.colors.curves[curveIndex]);
     if (static_cast<int>(curveIndex) == axisCurve) {
       painter.setPen(model_.graph.coloredYAxis ? curveColor : foreground);
-      const QStringList labels = yAxisLabels(curveIndex);
-      constexpr qreal unitsLaneWidth = 22;
+      const QStringList labels = yAxisLabels(curveIndex, valueDivisions);
+      const qreal unitsLaneWidth = std::max(22, metrics.height() + 8);
       constexpr qreal labelGap = 8;
       const qreal labelX = unitsLaneWidth + labelGap;
       const qreal labelWidth = area.left() - labelX - labelGap;
-      for (int tick = 0; tick <= 5; ++tick) {
-        painter.drawText(QRectF(labelX, area.top() + area.height() * tick / 5.0 - 9,
-                                labelWidth, 18), Qt::AlignRight, labels[tick]);
+      for (int tick = 0; tick <= valueDivisions; ++tick) {
+        painter.drawText(QRectF(labelX, area.top() + area.height() * tick / valueDivisions - lineHeight / 2.0,
+                                labelWidth, lineHeight), Qt::AlignRight | Qt::AlignVCenter,
+                         labels[tick]);
       }
       painter.save();
       painter.translate(unitsLaneWidth / 2.0, area.center().y());
@@ -734,9 +848,12 @@ void PlotWidget::paintEvent(QPaintEvent*) {
 
     const auto traceEnd = std::min(visibleTimeRange_.end,
                                    std::chrono::system_clock::now());
-    auto selected = selectSamples(samples_[curveIndex], visibleTimeRange_.start,
-                                  traceEnd,
-                                  std::max(2, int(area.width()) * 2), config.scale);
+    // One bucket per pixel column, sized from the whole visible duration so
+    // it stays fixed while the trace scrolls.
+    const auto bucket = (visibleTimeRange_.end - visibleTimeRange_.start) /
+                        std::max(1, int(area.width()));
+    auto selected = selectTraceSamples(samples_[curveIndex], visibleTimeRange_.start,
+                                       traceEnd, bucket, config.scale);
     const auto& source = samples_[curveIndex];
     const auto first = std::lower_bound(source.begin(), source.end(),
                                         visibleTimeRange_.start,
@@ -824,16 +941,7 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
   const auto curves = plottedCurves();
   for (std::size_t row = 0; row < curves.size(); ++row) {
     if (!legendRect(row).contains(event->pos())) continue;
-    const auto& curve = model_.curves[curves[row]];
-    legendTip = QString::fromStdString(curve.name);
-    if (curve.units != "Undefined" && !curve.units.empty()) {
-      legendTip += QLatin1Char('\n');
-      legendTip += QString::fromStdString(curve.units);
-    }
-    if (!curve.comment.empty()) {
-      legendTip += QLatin1Char('\n');
-      legendTip += QString::fromStdString(curve.comment);
-    }
+    legendTip = legendLines(curves[row]).join(QLatin1Char('\n'));
     break;
   }
   if (toolTip() != legendTip) setToolTip(legendTip);
@@ -908,6 +1016,7 @@ void PlotWidget::updateDrag(const QPoint& position) {
         visibleTimeRange_ = {dragRange_.start + shift, dragRange_.end + shift};
         setAutoScroll(false);
         updateAutoRange();
+        emit visibleTimeRangeChanged();
       }
     }
   }

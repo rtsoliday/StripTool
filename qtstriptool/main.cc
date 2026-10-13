@@ -1,4 +1,5 @@
 #include "core/application.h"
+#include "core/command_line.h"
 #include "core/config.h"
 #include "services/file_workflow.h"
 #include "ui/main_window.h"
@@ -14,21 +15,26 @@ int main(int argc, char** argv) {
   QApplication application(argc, argv);
   striptool::configureApplication(application);
   const QStringList arguments = application.arguments();
-  if (arguments.contains(QStringLiteral("--help"))) {
-    QTextStream(stdout) << "Usage: qtstriptool [--help] [--version] [configuration.stp]\n";
+  QCommandLineParser parser;
+  striptool::configureCommandLineParser(parser);
+  if (!parser.parse(arguments)) {
+    QTextStream(stderr) << "qtstriptool: " << parser.errorText() << '\n';
+    return 1;
+  }
+  if (parser.isSet(QStringLiteral("help-all"))) parser.process(application);
+  if (parser.isSet(QStringLiteral("help"))) {
+    QTextStream(stdout) << parser.helpText();
     return 0;
   }
-  if (arguments.contains(QStringLiteral("--version"))) {
+  if (parser.isSet(QStringLiteral("version"))) {
     QTextStream(stdout) << striptool::versionText() << '\n';
     return 0;
   }
-  QString explicitName;
-  for (int i = 1; i < arguments.size(); ++i) {
-    if (!arguments[i].startsWith(QLatin1Char('-'))) {
-      explicitName = arguments[i];
-      break;
-    }
+  if (parser.positionalArguments().size() > 1) {
+    QTextStream(stderr) << "qtstriptool: specify at most one configuration file\n";
+    return 1;
   }
+  const QString explicitName = parser.positionalArguments().value(0);
   auto model = striptool::makeDefaultModel();
   const auto explicitConfiguration = explicitName.isEmpty()
                                          ? std::filesystem::path{}
@@ -69,6 +75,11 @@ int main(int argc, char** argv) {
                             << QString::fromStdString(result.diagnostics.front().message)
                             << "; using defaults\n";
     }
+  }
+  QString timingError;
+  if (!striptool::applyCommandLineTiming(parser, model, &timingError)) {
+    QTextStream(stderr) << "qtstriptool: " << timingError << '\n';
+    return 1;
   }
   striptool::MainWindow window(std::move(model));
   window.startAcquisition();

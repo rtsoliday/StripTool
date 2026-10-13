@@ -7,7 +7,7 @@ TEST_PROGRAM := $(OBJ_DIR)/test_smoke$(if $(filter Windows,$(OS)),.exe)
 IOC_TEST_PROGRAM := $(OBJ_DIR)/test_channel_access$(if $(filter Windows,$(OS)),.exe)
 OBJEXT := $(if $(filter Windows,$(OS)),obj,o)
 
-CORE = core/application.cc core/model.cc core/config.cc core/sample_buffer.cc \
+CORE = core/application.cc core/command_line.cc core/model.cc core/config.cc core/sample_buffer.cc \
        core/plot_data.cc
 SERVICES = services/runtime_capabilities.cc services/acquisition_manager.cc \
            services/channel_access.cc services/cpu_usage_provider.cc \
@@ -148,9 +148,11 @@ $(IOC_TEST_PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(RESOURCE_OBJECT) $(OBJ_DIR)
 	$(call link_exe,$(QT_TEST_LIBS))
 
 CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
+             commandLineTimingOverridesConfiguration commandLineRejectsInvalidTiming \
              sampleBufferWrapsAndHonorsMemoryLimit \
              decimationPreservesChronologyAndExtrema \
              denseDecimationRetainsStepTransitionsAndSpikes \
+             traceSelectionIsStableAsViewScrolls \
              logDecimationKeepsNonPositiveGap \
              acquisitionTracksReconnectMetadataAndTimestamps \
              acquisitionShutdownDisconnectsActiveChannels \
@@ -179,6 +181,11 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            returnInCurveFieldsAppliesModify \
            mouseWheelZoomKeepsPointerTimestampFixed \
            narrowYAxisTicksRemainDistinct \
+           yAxisUsesConciseSignificantDigits gridLinesFollowLabelledTicks \
+           timeAxisUnitsFollowVisibleDuration \
+           autoScrollAndLiveZoomPreserveDuration plotAreaIgnoresLatestValueWidth \
+           legendShowsFullValueAndLimits \
+           largeFontsExpandPlotMarginsAndLegendRows \
            mainAndControlWindowsShareOneModel historyDialogRoundTripsRange \
            mainWindowFileExportAndSnapshotEntryPointsWork iconResourceIsEmbedded \
            printPreviewHasUsefulInitialGeometry \
@@ -188,6 +195,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            localChannelMetadataReachesControlsAndGraph \
            connectButtonKeepsUntouchedLimitsAutomatic \
            addingPvSilentlyBackfillsFiveMinutesFromArchiver \
+           automaticHistoryUsesConfiguredWindow \
+           zoomingOutExtendsArchivedHistory \
            resetViewUsesProviderLimitsWithoutManualEdits \
            newCurveInheritsGlobalConfiguredLimitMode \
            addingCurveKeepsExistingAcquisitionHistory \
@@ -246,7 +255,8 @@ test-visual: $(TEST_PROGRAM)
 	@mkdir -p $(OBJ_DIR)/test-artifacts
 	QT_QPA_PLATFORM=offscreen \
 	  QTSTRIPTOOL_VISUAL_OUTPUT=$(OBJ_DIR)/test-artifacts/plot-baseline.png \
-	  $(TEST_PROGRAM) plotWidgetRendersFixtureOffscreen mainAndControlsRenderOffscreen
+  $(TEST_PROGRAM) plotWidgetRendersFixtureOffscreen mainAndControlsRenderOffscreen \
+    largeFontsExpandPlotMarginsAndLegendRows
 	@echo "Visual review image: $(OBJ_DIR)/test-artifacts/plot-baseline.png"
 
 test-qt-versions:

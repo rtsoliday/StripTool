@@ -11,14 +11,18 @@ for site-specific rollback.
 ## Start the application
 
 ```text
-qtstriptool [--help] [--version] [configuration.stp]
+qtstriptool [--help] [--version] [-history=seconds] [-sampleCount=count] [configuration.stp]
 ```
 
 Qt StripTool defaults to Qt's Fusion style for consistent, compact controls
 across desktop environments. Qt also consumes its standard command-line
 options; for example, `qtstriptool -style adwaita example.stp` selects an
-installed native style instead. Pass at most one configuration file; other
-application-specific switches are not defined.
+installed native style instead. Pass at most one configuration file.
+For example, `qtstriptool -history=3600 -sampleCount=7200 beam.stp` opens
+with a one-hour view and archive backfill, retaining up to 7200 live samples
+per curve. These options override loaded configuration settings. History must
+be an integer from 1 to 2147483647 seconds; sample count must be from 1 to 65536.
+Double dashes and separate values are also accepted, such as `--history 3600`.
 
 For a bare relative configuration name, Qt StripTool checks the current
 directory and then each directory in `STRIP_FILE_SEARCH_PATH`. Absolute paths
@@ -88,13 +92,27 @@ samples create a gap and cannot be plotted on a base-10 scale.
 The View menu can pause time scrolling, enable or disable auto-scroll, pan in time or
 value, zoom either axis, auto-scale configured curves, reset both axes, and
 force a replot. Moving the pointer over the plot updates the location readout.
-Each X-axis tick has two labels: minutes relative to the right edge above,
+Each X-axis tick has two labels: an offset relative to the right edge above,
 and local clock time below. The rightmost relative label is always 0; earlier
 ticks are negative. With auto-scroll, the right edge tracks the latest time.
 With auto-scroll off, it is the end of the fixed visible range.
+Offsets use seconds below a minute, minutes below an hour, hours below a day,
+and days for longer windows. Hour-scale clock labels omit seconds, and
+day-scale labels also show the month and day. Y-axis ticks use four significant
+digits, adding more only to distinguish ticks in narrow ranges. Text margins
+and legend rows adapt to the desktop font. The legend always shows each
+curve's latest value and plotted limits in full; that column widens as needed
+but does not shrink while the curve is unchanged, so the plot does not shift
+as values update. Long PV names, units, and comments may be elided; hover over
+the legend entry to see its full contents.
 The toolbar uses arrows for panning, X+/X− for time zoom, and Y+/Y− for value
 zoom. Right click a toolbar Pan or Zoom button for a smaller step, as in the
 legacy graph. Vertical zoom uses logarithmic units for Log 10 curves.
+Enabling auto-scroll preserves the visible duration and moves the right edge
+to now. Toolbar time zoom remains in auto-scroll and keeps the right edge fixed;
+mouse-wheel zoom keeps the pointer timestamp fixed and disables auto-scroll.
+Resuming after Pause also preserves the duration. Reset View restores the
+configured History length.
 The legend beside the plot shows each visible curve's name and latest value.
 Click a legend entry to read that curve's value at the pointer location.
 
@@ -123,10 +141,18 @@ Controls window, but silence alone does not end its plotted line because CA
 monitors are not required to repeat unchanged values.
 
 When a Channel Access PV is added, qtstriptool also attempts a background
-Archiver request for the preceding five minutes. If the Archiver is unavailable
+Archiver request for the configured History length (five minutes by default).
+Set it in the Timing tab, a configuration file, or with `-history` at launch.
+If the Archiver is unavailable
 or has no usable data, this automatic backfill fails silently and live plotting
 continues normally. Errors from an explicitly selected **Historical Range** are
 still reported.
+
+Zooming out or panning to a time before the retrieved history extends it
+automatically. About half a second after the view settles, qtstriptool requests
+only the newly exposed span for each archived curve and joins it to the data
+already plotted. These requests are also silent; a span that failed is not
+requested again unless the PV is reconnected or the configuration is reloaded.
 
 ## Open, save, export, and print
 

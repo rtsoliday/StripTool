@@ -21,6 +21,19 @@ std::vector<Sample> selectSamples(
     std::size_t maximumPoints,
     ScaleMode scale = ScaleMode::Linear);
 
+// Reduces samples for drawing with time buckets of bucketDuration, normally
+// one pixel column. Buckets are aligned to multiples of bucketDuration since
+// the epoch, so a sample stays in the same bucket as the view scrolls and the
+// trace is stable between refreshes. Each bucket keeps its first and last
+// samples, its plotable extrema and its first unplotable sample, preserving
+// step levels, spikes and breaks to within one bucket.
+std::vector<Sample> selectTraceSamples(
+    const std::vector<Sample>& samples,
+    std::chrono::system_clock::time_point start,
+    std::chrono::system_clock::time_point end,
+    std::chrono::system_clock::duration bucketDuration,
+    ScaleMode scale = ScaleMode::Linear);
+
 std::optional<ValueRange> sampleValueRange(const std::vector<Sample>& samples,
                                            ScaleMode scale);
 

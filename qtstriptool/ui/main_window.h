@@ -6,8 +6,11 @@
 #include <QSet>
 #include <QString>
 #include <array>
+#include <chrono>
 #include <memory>
+#include <optional>
 class QMenu;
+class QTimer;
 namespace striptool {
 class AcquisitionManager;
 class ChannelAccessProvider;
@@ -41,6 +44,8 @@ private:
   void updateRecentFiles(const QString& path = {});
   void requestHistory();
   void requestRecentHistory(std::size_t curve, const std::string& channel);
+  void requestAutomaticHistory(std::size_t curve, TimeRange range);
+  void extendHistoryToView();
   void cancelHistoryRequests(std::optional<std::size_t> curve = std::nullopt);
 
   StripToolModel model_;
@@ -59,6 +64,12 @@ private:
   std::array<std::string, kMaximumCurves> acquiredNames_{};
   QHash<quint64, std::size_t> historyRequests_;
   QSet<quint64> automaticHistoryRequests_;
+  QHash<quint64, TimeRange> historyRanges_;
+  // Earliest time from which each archived curve has history or live data.
+  // Zooming or panning before it requests the missing span from the archive.
+  std::array<std::optional<std::chrono::system_clock::time_point>, kMaximumCurves>
+      historyCoverage_{};
+  QTimer* historyExtensionTimer_ = nullptr;
   bool acquisitionRunning_ = false;
 };
 }

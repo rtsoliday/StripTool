@@ -1,4 +1,5 @@
 #include "core/application.h"
+#include "core/command_line.h"
 #include "core/config.h"
 #include "core/model.h"
 #include "core/sample_buffer.h"
@@ -627,6 +628,62 @@ private slots:
     controls->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
     QCOMPARE(recording->requests.size(), std::size_t{2});
   }
+  void zoomingOutExtendsArchivedHistory() {
+    striptool::MainWindow window;
+    auto provider = std::make_unique<RecordingHistoryProvider>();
+    auto* recording = provider.get();
+    window.setHistoryProvider(std::move(provider));
+    window.resize(1000, 700);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    window.startAcquisition();
+    auto* controls = window.controlsWindow();
+    auto* entry = controls->findChild<QLineEdit*>(QStringLiteral("pvEntry"));
+    auto* connect = controls->findChild<QPushButton*>(QStringLiteral("connectButton"));
+    entry->setText(QStringLiteral("test:extend-history"));
+    connect->click();
+    entry->setText(QStringLiteral("CPU_Usage"));
+    connect->click();
+    QCOMPARE(recording->requests.size(), std::size_t{1});
+    const auto first = recording->requests.front();
+    auto* plot = window.plotWidget();
+
+    // A zoom while the startup backfill is pending waits for that request.
+    plot->zoom(4.0);
+    QVERIFY(plot->autoScroll());
+    QTest::qWait(700);
+    QCOMPARE(recording->requests.size(), std::size_t{1});
+    recording->succeed(first.id, first.channel,
+                       {{first.range.start + std::chrono::seconds(1), 1.0, 0, 0}});
+    QTRY_COMPARE(recording->requests.size(), std::size_t{2});
+    const auto second = recording->requests.back();
+    QCOMPARE(second.channel, first.channel);
+    QCOMPARE(second.range.end, first.range.start);
+    QVERIFY(second.range.start <= plot->visibleTimeRange().start);
+    QVERIFY(first.range.start - second.range.start > std::chrono::minutes(14));
+    const auto older = second.range.start + std::chrono::seconds(1);
+    recording->succeed(second.id, second.channel, {{older, 2.0, 0, 0}});
+    QCOMPARE(plot->curveSamples(0).size(), std::size_t{2});
+    QCOMPARE(plot->curveSamples(0).front().timestamp, older);
+
+    // A view inside the covered span requests nothing.
+    plot->zoom(0.5);
+    QTest::qWait(700);
+    QCOMPARE(recording->requests.size(), std::size_t{2});
+
+    // Panning further back requests only the uncovered span. Failure stays
+    // silent and the same span is not requested again.
+    plot->pan(-2.0);
+    QTRY_COMPARE(recording->requests.size(), std::size_t{3});
+    const auto third = recording->requests.back();
+    QCOMPARE(third.range.end, second.range.start);
+    QCOMPARE(third.range.start, plot->visibleTimeRange().start);
+    recording->fail(third.id);
+    QVERIFY(window.findChildren<QMessageBox*>().isEmpty());
+    plot->pan(0.5);
+    QTest::qWait(700);
+    QCOMPARE(recording->requests.size(), std::size_t{3});
+  }
   void resetViewUsesProviderLimitsWithoutManualEdits() {
     striptool::MainWindow window;
     window.startAcquisition();
@@ -1002,6 +1059,59 @@ private slots:
     QVERIFY((model.colors.background == striptool::Rgba16{65535, 65535, 65535, 65535}));
     QVERIFY((model.colors.curves[9] == striptool::Rgba16{39578, 52685, 12850, 65535}));
   }
+  void commandLineTimingOverridesConfiguration() {
+    for (const QStringList& arguments : {
+        QStringList{"qtstriptool", "-history=3600", "-sampleCount=7200", "beam.stp"},
+        QStringList{"qtstriptool", "--history", "3600", "--sampleCount", "7200", "beam.stp"}}) {
+      QCommandLineParser parser;
+      striptool::configureCommandLineParser(parser);
+      QVERIFY(parser.parse(arguments));
+      QCOMPARE(parser.positionalArguments(), QStringList{"beam.stp"});
+      auto model = striptool::makeDefaultModel();
+      QVERIFY(striptool::readConfigurationFile(fixture("canonical-1.2.stp"), model).success);
+      const auto interval = model.timing.sampleIntervalSeconds;
+      QVERIFY(striptool::applyCommandLineTiming(parser, model));
+      QCOMPARE(model.timing.timespanSeconds, 3600U);
+      QCOMPARE(model.timing.numberOfSamples, 7200);
+      QCOMPARE(model.timing.sampleIntervalSeconds, interval);
+      striptool::MainWindow window(model);
+      const auto range = window.plotWidget()->visibleTimeRange();
+      QCOMPARE(range.end - range.start, std::chrono::seconds(3600));
+      QCOMPARE(window.controlsWindow()->findChild<QSpinBox*>(QStringLiteral("timespanSeconds"))->value(), 3600);
+      QCOMPARE(window.controlsWindow()->findChild<QSpinBox*>(QStringLiteral("sampleCount"))->value(), 7200);
+    }
+  }
+  void commandLineRejectsInvalidTiming() {
+    for (const QString argument : {"-history=0", "-history=-1", "-history=1.5",
+                                   "-history=2147483648", "-history=abc", "-history=",
+                                   "-sampleCount=0", "-sampleCount=65537",
+                                   "-sampleCount=999999999999999999999999"}) {
+      QCommandLineParser parser;
+      striptool::configureCommandLineParser(parser);
+      QVERIFY(parser.parse({"qtstriptool", argument}));
+      auto model = striptool::makeDefaultModel();
+      QString error;
+      QVERIFY(!striptool::applyCommandLineTiming(parser, model, &error));
+      QVERIFY(!error.isEmpty());
+      QCOMPARE(model.timing.timespanSeconds, 300U);
+      QCOMPARE(model.timing.numberOfSamples, 7200);
+    }
+  }
+  void automaticHistoryUsesConfiguredWindow() {
+    auto model = striptool::makeDefaultModel();
+    model.timing.timespanSeconds = 3600;
+    striptool::MainWindow window(model);
+    auto provider = std::make_unique<RecordingHistoryProvider>();
+    auto* recording = provider.get();
+    window.setHistoryProvider(std::move(provider));
+    window.startAcquisition();
+    window.controlsWindow()->findChild<QLineEdit*>(QStringLiteral("pvEntry"))
+        ->setText(QStringLiteral("test:hour-history"));
+    window.controlsWindow()->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
+    QCOMPARE(recording->requests.size(), std::size_t{1});
+    const auto range = recording->requests.front().range;
+    QCOMPARE(range.end - range.start, std::chrono::hours(1));
+  }
   void readsCanonicalFixture() {
     auto model = striptool::makeDefaultModel();
     const auto result = striptool::readConfigurationFile(fixture("canonical-1.2.stp"), model);
@@ -1313,6 +1423,54 @@ private slots:
       return !sample.plotable && sample.value == 0.0;
     }));
     QVERIFY(selected.size() <= std::size_t{5});
+  }
+  void traceSelectionIsStableAsViewScrolls() {
+    using std::chrono::hours;
+    using std::chrono::seconds;
+    // Ten hours of 1 Hz decay and top-up, drawn 800 pixels wide (45 s each).
+    const auto base = std::chrono::system_clock::time_point{} + hours(1000);
+    std::vector<striptool::Sample> samples;
+    for (int i = 0; i < 36000; ++i)
+      samples.push_back({base + seconds(i),
+                         200.0 - (i % 120) * 0.01 + ((i * 7919) % 13) * 0.001, 0, 0});
+    samples[20000].value = 250.0;
+    samples[25000].plotable = false;
+    const auto window = hours(10);
+    const auto bucket = std::chrono::system_clock::duration(window) / 800;
+    const auto between = [](const std::vector<striptool::Sample>& trace,
+                            std::chrono::system_clock::time_point from,
+                            std::chrono::system_clock::time_point to) {
+      std::vector<std::tuple<std::int64_t, double, bool>> points;
+      for (const auto& sample : trace)
+        if (sample.timestamp >= from && sample.timestamp < to)
+          points.emplace_back(sample.timestamp.time_since_epoch().count(),
+                              sample.value, sample.plotable);
+      return points;
+    };
+    const auto referenceEnd = base + seconds(35000);
+    const auto reference = striptool::selectTraceSamples(
+        samples, referenceEnd - window, referenceEnd, bucket);
+    QVERIFY(reference.size() <= std::size_t{5 * 802});
+    QVERIFY(reference.size() < samples.size() / 4);
+    QVERIFY(std::is_sorted(reference.begin(), reference.end(), [](const auto& a, const auto& b) {
+      return a.timestamp < b.timestamp;
+    }));
+    const auto spike = std::find_if(reference.begin(), reference.end(),
+                                    [](const auto& sample) { return sample.value == 250.0; });
+    QVERIFY(spike != reference.end() && std::next(spike) != reference.end());
+    // A spike is held no longer than one pixel column.
+    QVERIFY(std::next(spike)->timestamp - spike->timestamp < bucket);
+    QVERIFY(std::any_of(reference.begin(), reference.end(),
+                        [](const auto& sample) { return !sample.plotable; }));
+
+    for (int shift = 1; shift <= 90; shift += 7) {
+      const auto end = referenceEnd + seconds(shift);
+      const auto trace = striptool::selectTraceSamples(samples, end - window, end, bucket);
+      const auto from = end - window + 2 * bucket;
+      const auto to = referenceEnd - 2 * bucket;
+      QVERIFY2(between(trace, from, to) == between(reference, from, to),
+               "Scrolling the view changed the trace away from its edges");
+    }
   }
   void acquisitionTracksReconnectMetadataAndTimestamps() {
     FakeChannelProvider provider;
@@ -1702,6 +1860,305 @@ private slots:
     }();
     QVERIFY(firstPlotPixel >= 22 + 8 + widestLabel + 8);
   }
+  void yAxisUsesConciseSignificantDigits() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    model.curves[0].precision = 12;
+    model.curves[0].minimum = 0.006;
+    model.curves[0].maximum = 199.7957;
+    model.curves[0].minimumSet = model.curves[0].maximumSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    QCOMPARE(plot.yAxisLabels(0).front(), QStringLiteral("199.8"));
+    for (const auto& label : plot.yAxisLabels(0)) QVERIFY(label.size() <= 6);
+    model.curves[0].scale = striptool::ScaleMode::Log10;
+    model.curves[0].minimum = 1e-12;
+    model.curves[0].maximum = 1e-6;
+    plot.setModel(model);
+    const auto logarithmic = plot.yAxisLabels(0);
+    for (int i = 1; i < logarithmic.size(); ++i) QVERIFY(logarithmic[i] != logarithmic[i - 1]);
+    QCOMPARE(logarithmic.back(), QStringLiteral("1e-12"));
+
+    model.curves[0].scale = striptool::ScaleMode::Linear;
+    const auto linearLabels = [&](double minimum, double maximum) {
+      model.curves[0].minimum = minimum;
+      model.curves[0].maximum = maximum;
+      plot.setModel(model);
+      return plot.yAxisLabels(0);
+    };
+    QCOMPARE(linearLabels(0, 250000),
+             (QStringList{"250000", "200000", "150000", "100000", "50000", "0"}));
+    QCOMPARE(linearLabels(12000, 13000),
+             (QStringList{"13000", "12800", "12600", "12400", "12200", "12000"}));
+    QCOMPARE(linearLabels(-0.02, 0.03),
+             (QStringList{"0.03", "0.02", "0.01", "0", "-0.01", "-0.02"}));
+    QCOMPARE(linearLabels(-0.05, 0.15),
+             (QStringList{"0.15", "0.11", "0.07", "0.03", "-0.01", "-0.05"}));
+    QCOMPARE(plot.yAxisLabels(0, 4),
+             (QStringList{"0.15", "0.1", "0.05", "0", "-0.05"}));
+    QCOMPARE(linearLabels(0.0012, 0.0017).front(), QStringLiteral("0.0017"));
+    const auto large = linearLabels(0, 5e9);
+    QCOMPARE(large.front(), QStringLiteral("5e+09"));
+    for (int i = 1; i < large.size(); ++i) QVERIFY(large[i] != large[i - 1]);
+  }
+  void gridLinesFollowLabelledTicks() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "S-DCCT:CurrentM";
+    model.curves[0].nameSet = true;
+    model.curves[0].units = "mA";
+    model.curves[0].minimum = 0.006;
+    model.curves[0].maximum = 199.7957;
+    model.curves[0].minimumSet = model.curves[0].maximumSet = true;
+    model.colors.grid = striptool::Rgba16{65535, 0, 65535, 65535};
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    const auto end = std::chrono::system_clock::from_time_t(1000000);
+    plot.setVisibleTimeRange({end - std::chrono::minutes(5), end});
+
+    // Returns an empty string when every grid line sits on a labelled tick,
+    // or midway between ticks for GridMode::All.
+    const auto gridMismatch = [&plot](int linesPerTick) -> QString {
+      QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+      plot.render(&image);
+      int left = 0, top = 0;
+      while (!plot.isInPlot(QPoint(left, plot.height() / 2))) ++left;
+      int right = left;
+      while (plot.isInPlot(QPoint(right + 1, plot.height() / 2))) ++right;
+      while (!plot.isInPlot(QPoint(plot.width() / 2, top))) ++top;
+      int bottom = top;
+      while (plot.isInPlot(QPoint(plot.width() / 2, bottom + 1))) ++bottom;
+      const auto check = [&](bool vertical, int divisions) -> QString {
+        const int from = vertical ? left : top, to = vertical ? right : bottom;
+        const int acrossFrom = vertical ? top : left, acrossTo = vertical ? bottom : right;
+        QList<int> found, expected;
+        for (int p = from + 2; p <= to - 2; ++p) {
+          int count = 0;
+          for (int q = acrossFrom; q <= acrossTo; ++q)
+            if (image.pixelColor(vertical ? p : q, vertical ? q : p) == QColor(255, 0, 255))
+              ++count;
+          if (count > (acrossTo - acrossFrom) / 4) found.push_back(p);
+        }
+        for (int i = 1; i < divisions; ++i)
+          expected.push_back(qRound(from + double(to - from) * i / divisions));
+        bool same = found.size() == expected.size();
+        for (int i = 0; same && i < found.size(); ++i)
+          same = std::abs(found[i] - expected[i]) <= 1;
+        if (same) return {};
+        QStringList foundText, expectedText;
+        for (int x : found) foundText << QString::number(x);
+        for (int x : expected) expectedText << QString::number(x);
+        return QStringLiteral("%1 grid at %2, ticks expect %3")
+            .arg(vertical ? "Time" : "Value", foundText.join(','), expectedText.join(','));
+      };
+      const QString time = check(true, plot.timeAxisDivisions() * linesPerTick);
+      return time.isEmpty() ? check(false, plot.valueAxisDivisions() * linesPerTick) : time;
+    };
+
+    QCOMPARE(plot.timeAxisDivisions(), 5);
+    QCOMPARE(plot.valueAxisDivisions(), 5);
+    QCOMPARE(plot.xAxisLabels(5).relative, (QStringList{"-5", "-4", "-3", "-2", "-1", "0"}));
+    QString mismatch = gridMismatch(1);
+    QVERIFY2(mismatch.isEmpty(), qPrintable(mismatch));
+
+    model.graph.xGrid = model.graph.yGrid = striptool::GridMode::All;
+    plot.setModel(model);
+    mismatch = gridMismatch(2);
+    QVERIFY2(mismatch.isEmpty(), qPrintable(mismatch));
+
+    model.graph.xGrid = model.graph.yGrid = striptool::GridMode::Some;
+    plot.setModel(model);
+    QFont font = plot.font();
+    font.setPointSize(18);
+    plot.setFont(font);
+    plot.resize(960, 300);
+    plot.setVisibleTimeRange({end - std::chrono::hours(2), end});
+    QVERIFY(plot.valueAxisDivisions() < 5);
+    mismatch = gridMismatch(1);
+    QVERIFY2(mismatch.isEmpty(), qPrintable(mismatch));
+  }
+  void timeAxisUnitsFollowVisibleDuration() {
+    striptool::PlotWidget plot;
+    const auto end = std::chrono::system_clock::from_time_t(1000000);
+    plot.setVisibleTimeRange({end - std::chrono::seconds(300), end});
+    auto labels = plot.xAxisLabels();
+    QCOMPARE(labels.relative.front(), QStringLiteral("-5"));
+    QCOMPARE(labels.relative.back(), QStringLiteral("0"));
+    QVERIFY(labels.caption.startsWith(QStringLiteral("Minutes")));
+    QCOMPARE(labels.clock.front().count(QLatin1Char(':')), 2);
+    plot.setVisibleTimeRange({end - std::chrono::hours(2), end});
+    labels = plot.xAxisLabels();
+    QCOMPARE(labels.relative.front(), QStringLiteral("-2"));
+    QCOMPARE(labels.relative.back(), QStringLiteral("0"));
+    QVERIFY(labels.caption.startsWith(QStringLiteral("Hours")));
+    QCOMPARE(labels.clock.front().count(QLatin1Char(':')), 1);
+    plot.setVisibleTimeRange({end - std::chrono::hours(48), end});
+    labels = plot.xAxisLabels();
+    QVERIFY(labels.caption.startsWith(QStringLiteral("Days")));
+    QCOMPARE(labels.relative.front(), QStringLiteral("-2"));
+    QVERIFY(labels.clock.front() != labels.clock.back());
+    plot.setVisibleTimeRange({end - std::chrono::seconds(5), end});
+    labels = plot.xAxisLabels();
+    QVERIFY(labels.caption.startsWith(QStringLiteral("Seconds")));
+    QVERIFY(labels.clock.front().contains(QLatin1Char('.')));
+  }
+  void autoScrollAndLiveZoomPreserveDuration() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    const auto oldEnd = std::chrono::system_clock::now() - std::chrono::hours(1);
+    plot.setVisibleTimeRange({oldEnd - std::chrono::hours(2), oldEnd});
+    plot.setAutoScroll(true);
+    auto range = plot.visibleTimeRange();
+    QCOMPARE(range.end - range.start, std::chrono::hours(2));
+    QVERIFY(range.end > oldEnd);
+    plot.zoom(2.0);
+    QVERIFY(plot.autoScroll());
+    QCOMPARE(plot.visibleTimeRange().end, range.end);
+    const auto checkDuration = [&plot] {
+      const auto visible = plot.visibleTimeRange();
+      return visible.end - visible.start == std::chrono::hours(4);
+    };
+    QVERIFY(checkDuration());
+    plot.setCurveSamples(0, {{std::chrono::system_clock::now(), 100.0, 0, 0}});
+    QVERIFY(checkDuration());
+    plot.appendSample(0, {std::chrono::system_clock::now(), 101.0, 0, 0});
+    QVERIFY(checkDuration());
+    plot.advanceToNow();
+    QVERIFY(checkDuration());
+    plot.setPaused(true);
+    range = plot.visibleTimeRange();
+    plot.advanceToNow();
+    QCOMPARE(plot.visibleTimeRange().end, range.end);
+    plot.setPaused(false);
+    QVERIFY(checkDuration());
+    QCOMPARE(plot.xAxisLabels().relative.back(), QStringLiteral("0"));
+    plot.resetView();
+    range = plot.visibleTimeRange();
+    QCOMPARE(range.end - range.start, std::chrono::seconds(300));
+  }
+  void plotAreaIgnoresLatestValueWidth() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "S-DCCT:CurrentM";
+    model.curves[0].nameSet = true;
+    model.curves[0].precision = 5;
+    model.curves[0].minimum = -10;
+    model.curves[0].maximum = 220;
+    model.curves[0].minimumSet = model.curves[0].maximumSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(960, 400);
+    plot.setModel(model);
+    plot.resetVerticalView();
+    const auto rightEdge = [&plot] {
+      int right = plot.width() - 1;
+      while (right > 0 && !plot.isInPlot(QPoint(right, plot.height() / 2))) --right;
+      return right;
+    };
+    const auto now = std::chrono::system_clock::now();
+    QList<int> edges;
+    for (const double value : {197.54456, 197.5, -1.0, 0.0012345, 197.54})
+      plot.setCurveSamples(0, {{now, value, 0, 0}}), edges.push_back(rightEdge());
+    // A changing value width must not rescale the time axis under the trace.
+    // Values within the precision's width never move it; a wider one widens
+    // the legend once, and narrower values afterwards keep that width.
+    QCOMPARE(edges[1], edges[0]);
+    QCOMPARE(edges[2], edges[0]);
+    QVERIFY(edges[3] < edges[0]);
+    QCOMPARE(edges[4], edges[3]);
+  }
+  void legendShowsFullValueAndLimits() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "S-INJ:MPS:LifetimeMinutesM:WithAnExtraLongDescriptor";
+    model.curves[0].nameSet = true;
+    model.curves[0].precision = 12;
+    model.curves[0].minimum = -250000;
+    model.curves[0].maximum = 250000;
+    model.curves[0].minimumSet = model.curves[0].maximumSet = true;
+    striptool::PlotWidget plot;
+    QFont font = plot.font();
+    font.setPointSize(18);
+    plot.setFont(font);
+    // Wide enough for the value line beyond the cap on names, while the plot
+    // keeps its 200 pixel minimum.
+    plot.resize(1100, 400);
+    plot.setModel(model);
+    plot.resetVerticalView();
+    plot.setCurveSamples(0, {{std::chrono::system_clock::now(), -123456.789012, 0, 0}});
+    int right = plot.width() - 1;
+    while (right > 0 && !plot.isInPlot(QPoint(right, plot.height() / 2))) --right;
+    const QFontMetrics metrics(plot.font(), &plot);
+    const int legendText = plot.width() - right - 25;
+    // The name is elided, but the value and limits line is shown in full.
+    QVERIFY(legendText < metrics.horizontalAdvance(QString::fromStdString(model.curves[0].name)));
+    QVERIFY(legendText >= metrics.horizontalAdvance(
+        QStringLiteral("-123456.789012  (-2.5e+05, 2.5e+05)")));
+  }
+  void largeFontsExpandPlotMarginsAndLegendRows() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "S-DCCT:CurrentM";
+    model.curves[0].nameSet = true;
+    model.curves[0].units = "mA";
+    model.curves[1].name = "S-INJ:EfficiencyM";
+    model.curves[1].nameSet = true;
+    model.curves[1].units = "percent";
+    striptool::PlotWidget plot;
+    QFont font = plot.font();
+    font.setPointSize(9);
+    plot.setFont(font);
+    plot.resize(960, 300);
+    plot.setModel(model);
+    const auto end = std::chrono::system_clock::now();
+    plot.setCurveSamples(0, {{end - std::chrono::hours(2), 0.006, 0, 0}, {end, 197.54456, 0, 0}});
+    plot.setCurveSamples(1, {{end - std::chrono::hours(2), 25.0, 0, 0}, {end, 73.851, 0, 0}});
+    plot.setVisibleTimeRange({end - std::chrono::hours(2), end});
+    const auto bounds = [&plot] {
+      int row = 0;
+      while (row < plot.height() && !plot.isInPlot(QPoint(plot.width() / 2, row))) ++row;
+      if (row == plot.height()) return QRect{};
+      int left = 0, right = plot.width() - 1;
+      while (!plot.isInPlot(QPoint(left, row))) ++left;
+      while (!plot.isInPlot(QPoint(right, row))) --right;
+      int bottom = plot.height() - 1;
+      while (!plot.isInPlot(QPoint((left + right) / 2, bottom))) --bottom;
+      return QRect(left, 0, right - left + 1, bottom + 1);
+    };
+    const QRect small = bounds();
+    const int smallBottomMargin = plot.height() - small.bottom();
+    font.setPointSize(18);
+    plot.setFont(font);
+    const QRect large = bounds();
+    QVERIFY(large.isValid());
+    QVERIFY(large.left() > small.left());
+    QVERIFY(large.right() < small.right());
+    QVERIFY(plot.height() - large.bottom() > smallBottomMargin);
+    const QFontMetrics metrics(plot.font(), &plot);
+    QVERIFY(plot.width() - large.right() >= metrics.horizontalAdvance(QString::fromStdString(model.curves[1].name)) + 36);
+    QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    plot.render(&image);
+    const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
+    if (!output.isEmpty()) {
+      const auto directory = std::filesystem::path(output.toStdString()).parent_path();
+      QVERIFY(image.save(QString::fromStdString((directory / "large-font.png").string())));
+    }
+    for (auto& curve : model.curves) curve.nameSet = true;
+    plot.setModel(model);
+    QVERIFY(plot.height() >= 10 * 2 * metrics.height());
+    const auto fullBounds = bounds();
+    image = QImage(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    plot.render(&image);
+    // The rightmost time labels are centred on the axis end, so skip their
+    // overhang; anything further right would be legend text.
+    int labelOverhang = 0;
+    const auto timeLabels = plot.xAxisLabels(plot.timeAxisDivisions());
+    for (const auto& labels : {timeLabels.relative, timeLabels.clock})
+      for (const QString& label : labels)
+        labelOverhang = std::max(labelOverhang, (metrics.horizontalAdvance(label) + 8) / 2 + 1);
+    for (int y = fullBounds.bottom() + 6; y < image.height(); ++y)
+      for (int x = fullBounds.right() + std::max(12, labelOverhang + 2); x < image.width(); ++x)
+        QVERIFY2(image.pixelColor(x, y) == QColor(Qt::white),
+                 "Legend text and time labels overlap below the plot");
+  }
   void visibleRangeIncludesCrossingSegments() {
     const auto base = std::chrono::system_clock::from_time_t(1000);
     const std::vector<striptool::Sample> crossing{
@@ -1752,9 +2209,17 @@ private slots:
     plot.setModel(model);
     plot.show();
     QSignalSpy cursor(&plot, &striptool::PlotWidget::cursorLocationChanged);
-    moveWhileDragging(&plot, QPoint(680, 76), Qt::NoButton);
+    QPoint secondLegend;
+    for (int y = 10; y < plot.height(); y += 8) {
+      const QPoint point(plot.width() - 30, y);
+      moveWhileDragging(&plot, point, Qt::NoButton);
+      if (plot.toolTip().contains(QStringLiteral("Complete channel description"))) {
+        secondLegend = point;
+        break;
+      }
+    }
     QVERIFY(plot.toolTip().contains(QStringLiteral("Complete channel description")));
-    QTest::mouseClick(&plot, Qt::LeftButton, Qt::NoModifier, QPoint(680, 76));
+    QTest::mouseClick(&plot, Qt::LeftButton, Qt::NoModifier, secondLegend);
     moveWhileDragging(&plot, QPoint(400, 200), Qt::NoButton);
     QVERIFY(!cursor.isEmpty());
     QCOMPARE(cursor.last().at(2).toInt(), 1);
@@ -1933,7 +2398,9 @@ private slots:
     QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
     plot.render(&image);
     bool traceAtCenter = false;
-    for (int y = 420; y <= 440; ++y)
+    int bottom = plot.height() - 1;
+    while (bottom > 0 && !plot.isInPlot(QPoint(plot.width() / 2, bottom))) --bottom;
+    for (int y = bottom - 3; y <= bottom + 3; ++y)
       for (int x = 300; x <= 410; ++x) {
         const QColor pixel = image.pixelColor(x, y);
         if (pixel.blue() > 150 && pixel.red() < 100) traceAtCenter = true;
