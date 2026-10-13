@@ -344,6 +344,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   connect(historyAction, &QAction::triggered, this, &MainWindow::requestHistory);
   connect(clearAction, &QAction::triggered, this, [this] {
     plotWidget_->clearSamples();
+    refreshedGenerations_.fill(0);
     if (channelAcquisition_) channelAcquisition_->clearSamples();
     if (cpuAcquisition_) cpuAcquisition_->clearSamples();
   });
@@ -354,8 +355,10 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     for (std::size_t i = 0; i < model_.curves.size(); ++i) {
       const auto& old = plotWidget_->model().curves[i];
       const auto& next = model_.curves[i];
-      if (old.nameSet != next.nameSet || old.name != next.name)
+      if (old.nameSet != next.nameSet || old.name != next.name) {
         plotWidget_->clearCurveSamples(i);
+        refreshedGenerations_[i] = 0;
+      }
     }
     plotWidget_->setModel(model_);
     if (timespanChanged && plotWidget_->autoScroll() && !plotWidget_->paused())
@@ -553,6 +556,7 @@ void MainWindow::showControls() {
 void MainWindow::applyModel() {
   cancelHistoryRequests();
   plotWidget_->clearSamples();
+  refreshedGenerations_.fill(0);
   if (channelAcquisition_) channelAcquisition_->clearSamples();
   if (cpuAcquisition_) cpuAcquisition_->clearSamples();
   // Retained channels restart with live data only; refill their history.
@@ -686,8 +690,9 @@ void MainWindow::startAcquisition() {
   const auto sampleInterval = timerInterval(model_.timing.sampleIntervalSeconds);
   const auto refreshInterval = timerInterval(model_.timing.refreshIntervalSeconds);
   cpuUsage_->setSampleInterval(sampleInterval);
+  // One timer refreshes every curve; a second would repaint the plot twice
+  // per interval. Both managers still request a refresh when cleared.
   channelAcquisition_->setRefreshInterval(refreshInterval);
-  cpuAcquisition_->setRefreshInterval(refreshInterval);
 
   const auto updateMetadata = [this](bool local, ChannelId id,
                                       const ChannelMetadata& metadata) {
@@ -764,15 +769,23 @@ void MainWindow::startAcquisition() {
     controlsWindow_->setChannelMetadata(i, acquisition->metadata(channelIds_[i]));
     if (!local) requestRecentHistory(i, acquiredNames_[i]);
   }
+  // Only buffers that changed since the last refresh are copied to the plot.
   const auto refresh = [this] {
+    bool acquiring = false;
     for (std::size_t i = 0; i < channelIds_.size(); ++i) {
       if (!channelIds_[i]) continue;
       const auto* acquisition = localChannels_[i] ? cpuAcquisition_.get()
                                                   : channelAcquisition_.get();
-      if (const auto* buffer = acquisition->buffer(channelIds_[i]))
-        plotWidget_->setCurveSamples(i, buffer->samples());
+      const auto* buffer = acquisition->buffer(channelIds_[i]);
+      if (!buffer) continue;
+      acquiring = true;
+      if (buffer->generation() == refreshedGenerations_[i]) continue;
+      refreshedGenerations_[i] = buffer->generation();
+      plotWidget_->setCurveSamples(i, buffer->samples());
     }
     plotWidget_->advanceToNow();
+    // A held trace extends to the present even when the view does not scroll.
+    if (acquiring) plotWidget_->replot();
   };
   connect(channelAcquisition_.get(), &AcquisitionManager::displayRefreshRequested,
           this, refresh);
@@ -788,6 +801,7 @@ void MainWindow::stopAcquisition() {
   channelAccess_.reset();
   cpuUsage_.reset();
   channelIds_.fill(0);
+  refreshedGenerations_.fill(0);
   localChannels_.fill(false);
   acquiredNames_.fill(std::string{});
   historyCoverage_.fill(std::nullopt);
@@ -800,7 +814,6 @@ void MainWindow::restartAcquisition() {
   const auto refreshInterval = timerInterval(model_.timing.refreshIntervalSeconds);
   cpuUsage_->setSampleInterval(sampleInterval);
   channelAcquisition_->setRefreshInterval(refreshInterval);
-  cpuAcquisition_->setRefreshInterval(refreshInterval);
   channelAcquisition_->setBufferCapacity(model_.timing.numberOfSamples);
   cpuAcquisition_->setBufferCapacity(model_.timing.numberOfSamples);
   for (std::size_t i = 0; i < acquiredNames_.size(); ++i) {
@@ -815,6 +828,7 @@ void MainWindow::restartAcquisition() {
       channelIds_[i] = 0;
     }
     plotWidget_->clearCurveSamples(i);
+    refreshedGenerations_[i] = 0;
     acquiredNames_[i] = name;
     if (name.empty()) {
       controlsWindow_->setChannelMetadata(i, {});

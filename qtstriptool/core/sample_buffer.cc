@@ -1,6 +1,7 @@
 #include "core/sample_buffer.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <iterator>
 
@@ -8,6 +9,11 @@ namespace striptool {
 
 SampleBuffer::SampleBuffer(std::size_t requestedSamples, std::size_t memoryLimit) {
   setCapacity(requestedSamples, memoryLimit);
+}
+
+void SampleBuffer::touch() {
+  static std::atomic<std::uint64_t> counter{0};
+  generation_ = ++counter;
 }
 
 void SampleBuffer::setCapacity(std::size_t requestedSamples,
@@ -23,9 +29,11 @@ void SampleBuffer::setCapacity(std::size_t requestedSamples,
   storage_.reserve(capacity_);
   size_ = storage_.size();
   head_ = size_ == capacity_ ? 0 : size_;
+  touch();
 }
 
 void SampleBuffer::append(Sample sample) {
+  touch();
   if (storage_.size() < capacity_) {
     storage_.push_back(sample);
     size_ = storage_.size();
@@ -41,6 +49,7 @@ void SampleBuffer::clear() {
   storage_.clear();
   head_ = 0;
   size_ = 0;
+  touch();
 }
 
 std::optional<Sample> SampleBuffer::latest() const {
@@ -51,9 +60,10 @@ std::optional<Sample> SampleBuffer::latest() const {
 std::vector<Sample> SampleBuffer::samples() const {
   std::vector<Sample> result;
   result.reserve(size_);
-  const std::size_t begin = size_ < capacity_ ? 0 : head_;
-  for (std::size_t i = 0; i < size_; ++i)
-    result.push_back(storage_[(begin + i) % size_]);
+  const auto begin = storage_.begin() +
+      static_cast<std::ptrdiff_t>(size_ < capacity_ ? 0 : head_);
+  result.insert(result.end(), begin, storage_.end());
+  result.insert(result.end(), storage_.begin(), begin);
   return result;
 }
 

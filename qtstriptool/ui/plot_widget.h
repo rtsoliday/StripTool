@@ -4,12 +4,14 @@
 #include "core/plot_data.h"
 
 #include <QDateTime>
+#include <QImage>
 #include <QStringList>
 #include <QWidget>
 #include <array>
 #include <optional>
 
 class QContextMenuEvent;
+class QPainter;
 
 namespace striptool {
 
@@ -92,8 +94,14 @@ protected:
 
 private:
   QRectF plotRect() const;
+  // plotRect() as last painted while that is still current.
+  QRectF currentPlotRect() const;
   std::vector<std::size_t> plottedCurves() const;
   QRectF legendRect(std::size_t position) const;
+  // These take an already computed plotRect(), which is costly to lay out.
+  QRectF legendRect(std::size_t position, const QRectF& area) const;
+  int timeAxisDivisions(const QRectF& area) const;
+  QRectF annotationRect(std::size_t index, const QRectF& area) const;
   QStringList legendLines(std::size_t curve, bool widestValue = false) const;
   int valueDivisionsForHeight(qreal plotHeight) const;
   void updateMinimumSize();
@@ -102,6 +110,11 @@ private:
   std::chrono::system_clock::time_point timeAt(const QPoint& position) const;
   std::optional<double> valueAt(const QPoint& position) const;
   void updateAutoRange();
+  void resolveAutoRange(std::size_t curve) const;
+  void resolveAutoRanges() const;
+  // Schedules a repaint of everything; update() alone only redraws the cursor.
+  void redraw();
+  void paintPlot(QPainter& painter, const QRectF& area);
   void zoomAt(double factor, const QPointF& position, bool keepAutoScroll = false);
   void updateDrag(const QPoint& position);
   void finishDrag();
@@ -117,7 +130,10 @@ private:
   // Widest legend value line shown per curve; plotRect() only ever grows it.
   mutable std::array<QString, kMaximumCurves> widestLegendValue_;
   std::array<std::vector<Sample>, kMaximumCurves> samples_;
-  std::array<std::optional<ValueRange>, kMaximumCurves> automaticRanges_;
+  // Automatic ranges are computed when next read. A stale range is resolved
+  // before its inputs change without a new updateAutoRange().
+  mutable std::array<std::optional<ValueRange>, kMaximumCurves> automaticRanges_;
+  mutable std::array<bool, kMaximumCurves> automaticRangeStale_{};
   std::array<std::optional<ValueRange>, kMaximumCurves> verticalRanges_;
   bool autoScaleEnabled_ = true;
   TimeRange visibleTimeRange_;
@@ -133,6 +149,12 @@ private:
   QPoint cursorPosition_{-1, -1};
   int selectedAnnotation_ = -1;
   int selectedCurve_ = -1;
+  // Everything except the cursor and annotations, reused while only the
+  // cursor moves.
+  QImage plotCache_;
+  QRectF plotCacheArea_;
+  QSize plotCacheSize_;
+  bool plotCacheValid_ = false;
 };
 
 }  // namespace striptool

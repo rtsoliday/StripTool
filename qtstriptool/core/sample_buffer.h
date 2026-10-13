@@ -33,12 +33,18 @@ public:
   bool empty() const { return size_ == 0; }
   std::optional<Sample> latest() const;
   std::vector<Sample> samples() const;
+  // Changes whenever the contents change. Values are unique across buffers,
+  // so a replaced buffer is never mistaken for an unchanged one.
+  std::uint64_t generation() const { return generation_; }
 
 private:
+  void touch();
+
   std::vector<Sample> storage_;
   std::size_t capacity_ = 1;
   std::size_t head_ = 0;
   std::size_t size_ = 0;
+  std::uint64_t generation_ = 0;
 };
 
 // Produces a chronological min/max envelope suitable for a pixel-width plot.

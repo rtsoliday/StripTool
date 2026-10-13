@@ -62,6 +62,8 @@ private:
   std::array<quint64, kMaximumCurves> channelIds_{};
   std::array<bool, kMaximumCurves> localChannels_{};
   std::array<std::string, kMaximumCurves> acquiredNames_{};
+  // Buffer generation last copied to the plot; 0 forces the next copy.
+  std::array<std::uint64_t, kMaximumCurves> refreshedGenerations_{};
   QHash<quint64, std::size_t> historyRequests_;
   QSet<quint64> automaticHistoryRequests_;
   QHash<quint64, TimeRange> historyRanges_;

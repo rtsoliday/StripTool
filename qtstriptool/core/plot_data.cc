@@ -54,9 +54,12 @@ std::vector<Sample> selectTraceSamples(
 
   std::vector<Sample> result;
   for (auto bucketStart = first; bucketStart != last;) {
-    const auto bucket = bucketOf(bucketStart->timestamp);
+    // Samples are sorted, so a bucket ends at the first sample at or past its
+    // upper boundary.
+    const auto bucketLimit = std::chrono::system_clock::time_point(
+        (bucketOf(bucketStart->timestamp) + 1) * bucketDuration);
     auto minimum = last, maximum = last, gap = last, bucketEnd = bucketStart;
-    for (; bucketEnd != last && bucketOf(bucketEnd->timestamp) == bucket; ++bucketEnd) {
+    for (; bucketEnd != last && bucketEnd->timestamp < bucketLimit; ++bucketEnd) {
       if (!plotable(*bucketEnd)) {
         if (gap == last) gap = bucketEnd;
         continue;
@@ -148,11 +151,19 @@ std::vector<Sample> joinHistoricalAndLive(const std::vector<Sample>& historical,
                                           const std::vector<Sample>& live) {
   std::vector<Sample> result;
   result.reserve(historical.size() + live.size());
-  std::size_t h = 0;
+  // Archived samples normally all precede the live ones; copy them in bulk.
+  const auto split = live.empty() ? historical.end()
+      : std::lower_bound(historical.begin(), historical.end(), live.front().timestamp,
+          [](const Sample& sample, const auto& time) { return sample.timestamp < time; });
+  result.insert(result.end(), historical.begin(), split);
+  std::size_t h = static_cast<std::size_t>(split - historical.begin());
   std::size_t l = 0;
   while (h < historical.size() || l < live.size()) {
-    if (h == historical.size()) result.push_back(live[l++]);
-    else if (l == live.size()) result.push_back(historical[h++]);
+    if (h == historical.size()) {
+      result.insert(result.end(), live.begin() + static_cast<std::ptrdiff_t>(l), live.end());
+      break;
+    }
+    if (l == live.size()) result.push_back(historical[h++]);
     else if (historical[h].timestamp < live[l].timestamp)
       result.push_back(historical[h++]);
     else if (live[l].timestamp < historical[h].timestamp)
