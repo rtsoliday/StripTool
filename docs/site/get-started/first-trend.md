@@ -25,9 +25,13 @@ Use **View > Auto Scale** to fit visible data. Use **View > Reset View** to retu
 
 <figure class="doc-shot">
   <img src="../assets/screenshots/graph-overview.png" alt="Graph window showing a blue step trace, value axis, legend, and navigation toolbar" />
-  <figcaption>An example graph session with illustrative CPU_Usage values. The toolbar along the bottom provides pan, zoom, auto-scale, auto-scroll, and pause.</figcaption>
+  <figcaption>An example graph session with illustrative CPU_Usage values. The toolbar along the bottom provides pan, zoom, auto-scale, reset, auto-scroll, and pause.</figcaption>
 </figure>
 
 Choose **File > Save As** to write a `.stp` configuration. Open it later with `qtstriptool configuration.stp` or **File > Open**. The file holds supported configuration settings; runtime annotations and sampled data are not saved in it.
+
+## Get help
+
+Press F1 or choose **Help > Help Topics** in either window to open the user guide built into the application. It works without a network connection, lists topics in a sidebar, and can search the whole guide. **Help > Keyboard Shortcuts** lists the keyboard and mouse controls, and **Help > Online Manual** opens this website, or the location set in [`STRIP_HELP_PATH`](../reference/environment).
 
 Continue with [curve controls](../operate/curves), [graph navigation](../operate/graph), or [troubleshooting](../operate/troubleshooting).

@@ -11,17 +11,20 @@ QString versionText() {
       .arg(applicationName(), applicationVersion(), qtVersion(), epicsVersion());
 }
 QString aboutText() {
-  return versionText() + QStringLiteral(
-      "\n\nQt StripTool\n"
-      "Robert Soliday (APS) - developed and maintains the Qt port\n"
-      "\nOriginal StripTool\n"
-      "Janet Anderson (APS) - early stripTool program\n"
-      "Christopher A. Larrieu (TJNAF) - designed and wrote later StripTool\n"
-      "Albert Kagarmanov (DESY) - Y-axis zoom, autoscaling, legend values, logarithmic scaling, and archived-data history\n"
-      "Kenneth Evans, Jr. (APS) - merged and maintained the unified version and wrote the user guide\n"
-      "\nOther contributors\n"
-      "Deb Kirstens - suggestions and code\n"
-      "Vladimir Romano - pixmap and bug fixes");
+  return QStringLiteral(
+      "<p>Live EPICS trends, archived data, and graph annotations.<br>"
+      "Developed at Argonne National Laboratory</p>"
+      "<p><b>Qt port development and maintenance</b><br>"
+      "Robert Soliday (APS) — <a href=\"mailto:soliday@anl.gov\">soliday@anl.gov</a></p>"
+      "<p><b>Original StripTool</b><br>"
+      "Janet Anderson (APS) — early stripTool program<br>"
+      "Christopher A. Larrieu (TJNAF) — later StripTool design and implementation<br>"
+      "Albert Kagarmanov (DESY) — Y-axis zoom, autoscaling, legend values, "
+      "logarithmic scaling, and archived-data history<br>"
+      "Kenneth Evans, Jr. (APS) — unified version, maintenance, and user guide</p>"
+      "<p><b>Other contributors</b><br>"
+      "Deb Kirstens — suggestions and code<br>"
+      "Vladimir Romano — pixmap and bug fixes</p>");
 }
 
 void setDefaultApplicationStyle() {

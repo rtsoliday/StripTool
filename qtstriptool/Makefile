@@ -14,7 +14,7 @@ SERVICES = services/runtime_capabilities.cc services/acquisition_manager.cc \
            services/file_workflow.cc services/export_service.cc \
            services/history_provider.cc
 UI = ui/main_window.cc ui/plot_widget.cc ui/controls_window.cc \
-     ui/history_dialog.cc ui/pv_drop.cc ui/motif_pv_drop.cc
+     ui/history_dialog.cc ui/help.cc ui/about_banner.cc ui/pv_drop.cc ui/motif_pv_drop.cc
 APP_SOURCES = $(CORE) $(SERVICES) $(UI)
 APP_OBJECTS = $(addprefix $(OBJ_DIR)/,$(APP_SOURCES:.cc=.$(OBJEXT)))
 MOC_HEADERS = services/channel_provider.h services/acquisition_manager.h \
@@ -102,7 +102,8 @@ $(PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(OBJ_DIR)/main.$(OBJEXT) $(RESOURCE_O
 $(OBJ_DIR)/%.$(OBJEXT): %.cc $(HEADERS) $(BUILD_FILES) | prepare-output
 	$(call compile_cxx,)
 
-$(RESOURCE_SOURCE): resources/qtstriptool.qrc resources/qtstriptool.svg | prepare-output
+$(RESOURCE_SOURCE): resources/qtstriptool.qrc resources/qtstriptool.svg \
+                    ../docs/qtstriptool-user-guide.md | prepare-output
 	$(RCC) $< -o $@
 
 $(RESOURCE_OBJECT): $(RESOURCE_SOURCE) $(BUILD_FILES)
@@ -175,6 +176,8 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                configurationWritesDiscoveredChannelMetadata \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
+           helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \
+           helpManualUsesSiteOverride \
            pvDropsAddCurvesOnBothScreens pvDropCapacityIsTransactionalAndReplotsExistingCurves \
            plotRendersModelTitle appearanceTitleEditsAndPersists \
            curveLimitEditorsFitLongValues \
@@ -256,7 +259,8 @@ test-visual: $(TEST_PROGRAM)
 	QT_QPA_PLATFORM=offscreen \
 	  QTSTRIPTOOL_VISUAL_OUTPUT=$(OBJ_DIR)/test-artifacts/plot-baseline.png \
   $(TEST_PROGRAM) plotWidgetRendersFixtureOffscreen mainAndControlsRenderOffscreen \
-    largeFontsExpandPlotMarginsAndLegendRows
+    largeFontsExpandPlotMarginsAndLegendRows \
+    helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff
 	@echo "Visual review image: $(OBJ_DIR)/test-artifacts/plot-baseline.png"
 
 test-qt-versions:

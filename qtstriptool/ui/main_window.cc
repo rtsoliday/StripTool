@@ -8,12 +8,12 @@
 #include "services/cpu_usage_provider.h"
 #include "ui/controls_window.h"
 #include "ui/history_dialog.h"
+#include "ui/help.h"
 #include "ui/plot_widget.h"
 #include "ui/pv_drop.h"
 #include <QAction>
 #include <QApplication>
 #include <QDateTime>
-#include <QDesktopServices>
 #include <QContextMenuEvent>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -30,7 +30,6 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
-#include <QUrl>
 #include <QtPrintSupport/QPrintDialog>
 #include <QtPrintSupport/QPrintPreviewDialog>
 #include <QtPrintSupport/QPrintPreviewWidget>
@@ -160,10 +159,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   showControlsAction->setObjectName(QStringLiteral("showControlsAction"));
   auto* helpMenu = menuBar()->addMenu(tr("&Help"));
   helpMenu->setObjectName(QStringLiteral("helpMenu"));
-  auto* aboutAction = helpMenu->addAction(tr("&About Qt StripTool"));
-  aboutAction->setObjectName(QStringLiteral("aboutAction"));
-  auto* helpAction = helpMenu->addAction(tr("&Help"));
-  helpAction->setObjectName(QStringLiteral("helpAction"));
+  populateHelpMenu(helpMenu, this);
   plotWidget_ = new PlotWidget(this);
   plotWidget_->setObjectName(QStringLiteral("plotArea"));
   plotWidget_->setModel(model_);
@@ -395,22 +391,6 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   statusBar()->showMessage(model_.filename.empty()
                                ? tr("Ready")
                                : tr("Loaded %1").arg(QString::fromStdString(model_.filename)));
-  connect(aboutAction, &QAction::triggered, this, [this] {
-    QMessageBox::about(this, tr("About Qt StripTool"), aboutText());
-  });
-  connect(helpAction, &QAction::triggered, this, [this] {
-    const QString configured = qEnvironmentVariable("STRIP_HELP_PATH");
-    if (!configured.isEmpty()) {
-      const QUrl supplied(configured);
-      const QUrl helpUrl = supplied.isValid() && supplied.scheme().size() > 1
-                               ? supplied
-                               : QUrl::fromLocalFile(QFileInfo(configured).absoluteFilePath());
-      if (QDesktopServices::openUrl(helpUrl)) return;
-    }
-    QMessageBox::information(this, tr("Qt StripTool Help"),
-        tr("Use the Controls window to connect curves and configure timing and appearance. "
-           "Use the graph View menu to pan, zoom, pause, and reset the display."));
-  });
   plotMenu_ = new QMenu(plotWidget_);
   plotMenu_->setObjectName(QStringLiteral("plotContextMenu"));
   plotMenu_->addAction(showControlsAction);

@@ -36,7 +36,7 @@ Useful environment variables are:
 |---|---|
 | `EPICS_CA_ADDR_LIST`, `EPICS_CA_AUTO_ADDR_LIST` and other EPICS CA variables | Used by EPICS Channel Access |
 | `STRIP_FILE_SEARCH_PATH` | Path-list used to find a bare startup `.stp` name |
-| `STRIP_HELP_PATH` | Local file or URL opened by **Help > Help** |
+| `STRIP_HELP_PATH` | Local file or URL opened by **Help > Online Manual** instead of the documentation website |
 | `QT_QPA_PLATFORM`, `QT_STYLE_OVERRIDE` and standard Qt variables | Interpreted by Qt |
 
 Legacy X resource and printer environment variables are not consumed; see the
@@ -44,8 +44,8 @@ known differences in the compatibility guide.
 
 ## Configure curves
 
-The Controls window opens at startup and is available later through
-**Window > Show Controls**.
+The Controls window opens at startup when no configuration file is given, and
+is always available through **Window > Show Controls**.
 
 1. Enter a PV in the **PV** field and select **Connect**, or enter a name in an
    unused curve row.
@@ -118,7 +118,8 @@ Click a legend entry to read that curve's value at the pointer location.
 
 Drag the empty plot with the left button to pan. Left click an annotation box
 to select it; hold the middle button on the box to move it. Right click the
-graph for controls, annotation, print, snapshot, export, and retry commands.
+graph for Show Controls, Auto Scroll, annotation, print, snapshot, export,
+Dismiss Graph, and Exit commands.
 **Annotate Here** creates a note at the clicked time and value. Double click
 an annotation to edit its text, or double click empty plot space to add one.
 Delete or Backspace removes the selected annotation. Annotations are runtime
@@ -172,6 +173,33 @@ requested again unless the PV is reconnected or the configuration is reloaded.
 Saving always writes the complete supported model. Legacy partial group
 load/save selection is not present. SDDS export is not built.
 
+## Get help
+
+The graph and Controls windows have the same **Help** menu:
+
+| Command | What it does |
+|---|---|
+| **Help Topics** (F1) | Opens this guide in a Help window. It works offline. From Controls, it opens at *Configure curves*. |
+| **Keyboard Shortcuts** | Opens the keyboard and mouse reference in the Help window. |
+| **Online Manual** | Opens the documentation website in your browser, or the file or URL in `STRIP_HELP_PATH` when that is set. |
+| **About Qt StripTool** | Shows the version, credits, and Qt and EPICS versions. **Open help** there opens this guide. |
+
+The Help window stays open while you work, and choosing Help again brings the
+same window forward. Pick a topic in the sidebar or just scroll; the sidebar
+follows along. The **Online manual** button opens the same place as
+**Help > Online Manual**.
+
+To search the guide, press Ctrl+F (Command+F on macOS) and type. Search
+ignores case, highlights every match, and wraps around at either end. Press
+Enter or F3 for the next match, Shift+Enter or Shift+F3 for the previous one,
+and Escape to close Help.
+
+A few other keys save trips to the mouse:
+
+- In Controls, Return in the PV field connects the PV, and Return in a
+  curve's Name, Minimum, or Maximum field applies **Modify**.
+- In the graph, Delete or Backspace removes the selected annotation.
+
 ## Launch-script and desktop migration
 
 Migrate one launcher at a time and preserve an explicit rollback command:
@@ -207,8 +235,9 @@ changing the executable name.
 - **Startup file is not found:** use an absolute path or inspect
   `STRIP_FILE_SEARCH_PATH`; directory-containing paths are not searched.
 - **Historical Range fails:** check the configured Archiver Appliance endpoint and network access; local CPU_Usage has no archive data.
-- **Help shows built-in guidance:** set `STRIP_HELP_PATH` to a reachable URL or
-  an existing local help file if site documentation is required.
+- **Help should open site documentation:** set `STRIP_HELP_PATH` to a
+  reachable URL or an existing local file; **Help > Online Manual** then opens
+  it. **Help Topics** always shows the guide built into the application.
 - **Visual or printer output differs from Motif:** Qt uses the active platform
   style, fonts, DPI, and print backend. Review the appearance guide before
   treating pixel differences as defects.

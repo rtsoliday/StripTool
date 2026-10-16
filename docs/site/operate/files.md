@@ -8,7 +8,7 @@ Use a `.stp` file to preserve curve definitions, timing, and appearance. Runtime
 
 ## Export samples
 
-**File > Export Text** and **Export CSV** write samples in the visible time range. Qt StripTool writes one row per curve sample, with timestamp, curve, value, status, and severity. The legacy dump layout uses a separate curve column for each timestamp, so check consumers before changing an automated export workflow. SDDS export is not built.
+**File > Export Text** and **Export CSV** write samples in the visible time range. Qt StripTool writes one row per curve sample, with timestamp, curve, value, status, and severity. Timestamps are UTC in ISO 8601 form with milliseconds, such as `2026-10-16T14:05:09.250Z`. Legacy StripTool dump files instead have one row per timestamp and a column for each curve, so check consumers before changing an automated export workflow. SDDS export is not built.
 
 ## Capture and print the graph
 

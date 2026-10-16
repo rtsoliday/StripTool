@@ -14,9 +14,10 @@ Strip.Curve.0.Name            example:pv
 
 | Group | Attributes | Meaning |
 | --- | --- | --- |
+| `Strip` | `Title` | Graph title, to the end of the line. Empty means no title. |
 | `Strip.Time` | `Timespan`, `NumSamples`, `SampleInterval`, `RefreshInterval` | History span, bounded samples, local CPU sample interval, and graph refresh interval. |
-| `Strip.Color` | `Background`, `Foreground`, `Grid`, `Color1`–`Color10` | Graph and curve RGB colors. |
-| `Strip.Option` | `GridXon`, `GridYon`, `AxisYcolorStat`, `GraphLineWidth` | Grid modes, colored Y axes, and trace width. |
+| `Strip.Color` | `Background`, `Foreground`, `Grid`, `Color1`–`Color10` | Graph and curve colors as three 16-bit red, green, and blue values (0–65535). |
+| `Strip.Option` | `GridXon`, `GridYon`, `AxisYcolorStat`, `GraphLineWidth` | Grid modes (0 none, 1 some, 2 all), colored Y axes (0 or 1), and trace width (0–10). |
 | `Strip.Curve.<index>` | `Name`, `Units`, `Comment`, `Precision`, `Min`, `Max`, `Scale`, `PlotStatus` | A curve at index 0 through 9. `Scale` is 0 for linear or 1 for base-10 log. |
 
 `Name` and `Units` are whitespace-delimited; `Comment` extends to the end of its line. Precision is limited to 0 through 20. If `NumSamples` is omitted, it is derived from the time span and sample interval. Unknown groups and fields are preserved across a load/save round trip; invalid known values cause the load to fail without replacing the current configuration. Versions newer than 1.2 are not supported.

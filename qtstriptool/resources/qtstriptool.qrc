@@ -2,4 +2,7 @@
   <qresource prefix="/icons">
     <file>qtstriptool.svg</file>
   </qresource>
+  <qresource prefix="/help">
+    <file alias="user-guide.md">../../docs/qtstriptool-user-guide.md</file>
+  </qresource>
 </RCC>

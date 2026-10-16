@@ -4,12 +4,14 @@ Qt StripTool has ten curve slots. The graph and Controls windows use the same co
 
 ## Curve rows
 
-Enter a name in an unused row or use the **PV** field and **Connect**. Each row controls plotting, linear or base-10 logarithmic scale, precision, minimum, maximum, and color. Select **Modify** to apply row edits. **Remove** frees the slot and stops acquisition.
+Enter a name in an unused row or type it in the **PV** field and select **Connect** (or press Return). Each row controls plotting, linear or base-10 logarithmic scale, precision, minimum, maximum, and color. Select **Modify** to apply row edits. **Remove** frees the slot and stops acquisition.
 
 <figure class="doc-shot">
   <img src="../assets/screenshots/controls-curves.png" alt="Controls window Curves tab with the CPU_Usage row, color and scale selectors, plotting checkbox, limits, Modify and Remove buttons, and Live status" />
   <figcaption>The Curves tab with the built-in CPU_Usage channel connected. The other nine slots are available for PVs.</figcaption>
 </figure>
+
+You can also drag PVs in from MEDM or QtEDM: hold the middle mouse button on a PV in a running display, drag it to the Controls or graph window, and release. Each distinct PV fills an unused slot and starts plotting. A PV that is already a curve is simply turned on for plotting. If the whole drop does not fit in the ten slots, nothing is added and the status bar says so. MEDM drops need the Linux X11 backend and a build with libxcb development files available; in a Wayland session, start Qt StripTool with `QT_QPA_PLATFORM=xcb`.
 
 **Auto Scale** is graph-wide and fits every plotted curve to its visible data. **Reset View** returns curves to the limits shown in Controls. A curve added later follows the active mode. For log curves, choose positive limits; non-positive samples cannot appear on a base-10 axis and create a gap.
 
@@ -22,7 +24,7 @@ The **Timing** tab sets history length, bounded sample count, the local `CPU_Usa
   <figcaption>Timing settings in the Controls window.</figcaption>
 </figure>
 
-The **Appearance** tab sets graph colors, grid density, colored Y axes, and line width. Each curve has its own color. The graph uses step traces for both linear and logarithmic curves.
+The **Appearance** tab sets the graph title, graph colors, grid density, colored Y axes, and line width. Each curve has its own color. The graph uses step traces for both linear and logarithmic curves.
 
 <figure class="doc-shot doc-shot--medium">
   <img src="../assets/screenshots/controls-appearance.png" alt="Controls window Appearance tab with title, foreground and background colors, grid options, colored axes, and line width" />

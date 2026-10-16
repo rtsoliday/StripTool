@@ -10,6 +10,7 @@
 #include "services/history_provider.h"
 #include "services/runtime_capabilities.h"
 #include "ui/controls_window.h"
+#include "ui/help.h"
 #include "ui/history_dialog.h"
 #include "ui/main_window.h"
 #include "ui/plot_widget.h"
@@ -20,6 +21,7 @@
 #include <QComboBox>
 #include <QContextMenuEvent>
 #include <QDoubleSpinBox>
+#include <QDialog>
 #include <QDragEnterEvent>
 #include <QMimeData>
 #include <QProcess>
@@ -30,6 +32,7 @@
 #include <QElapsedTimer>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
@@ -38,11 +41,15 @@
 #include <QPrintPreviewWidget>
 #include <QSignalSpy>
 #include <QScreen>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QSettings>
 #include <QScopeGuard>
 #include <QStyle>
 #include <QTabWidget>
+#include <QTextBrowser>
+#include <QtMath>
+#include <QTimer>
 #include <QTemporaryDir>
 #include <QUrlQuery>
 #include <QTest>
@@ -169,6 +176,174 @@ private slots:
     QVERIFY(window.findChild<QAction*>(QStringLiteral("graphOpenAction"))->isEnabled());
     QVERIFY(window.findChild<QAction*>(QStringLiteral("exportCsvAction"))->isEnabled());
     QVERIFY(window.controlsWindow());
+  }
+  void helpTopicsSearchAndWindowReuse() {
+    striptool::MainWindow window;
+    window.stopAcquisition();
+    window.show();
+    auto* helpAction = window.findChild<QAction*>(QStringLiteral("helpAction"));
+    QVERIFY(helpAction->shortcuts().contains(QKeySequence(Qt::Key_F1)));
+    helpAction->trigger();
+    auto* help = window.findChild<QDialog*>(QStringLiteral("helpWindow"));
+    QVERIFY(help);
+    QVERIFY(help->isVisible());
+    QVERIFY(!help->isModal());
+    auto* topics = help->findChild<QListWidget*>(QStringLiteral("helpTopics"));
+    auto* browser = help->findChild<QTextBrowser*>(QStringLiteral("helpBrowser"));
+    auto* find = help->findChild<QLineEdit*>(QStringLiteral("helpFind"));
+    auto* matches = help->findChild<QLabel*>(QStringLiteral("helpMatches"));
+    auto* next = help->findChild<QToolButton*>(QStringLiteral("helpNext"));
+    auto* previous = help->findChild<QToolButton*>(QStringLiteral("helpPrevious"));
+    QVERIFY(topics && browser && find && matches && next && previous);
+    QVERIFY(topics->count() >= 8);
+    QVERIFY(browser->toPlainText().contains(QStringLiteral("QTSTRIPTOOL_ARCHIVER_URL")));
+    QVERIFY(!next->isEnabled());
+    const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
+    if (!output.isEmpty()) {
+      QApplication::processEvents();
+      const auto directory = std::filesystem::path(output.toStdString()).parent_path();
+      QVERIFY(help->grab().save(QString::fromStdString((directory / "help-topics.png").string())));
+    }
+    // Search traverses the complete guide, rather than just the current topic.
+    find->setText(QStringLiteral("ARCHIVER"));
+    const auto selections = browser->extraSelections();
+    QVERIFY(selections.size() > 2);
+    QVERIFY(next->isEnabled());
+    const auto initial = browser->textCursor().selectionStart();
+    next->click();
+    QVERIFY(browser->textCursor().selectionStart() != initial);
+    previous->click();
+    QCOMPARE(browser->textCursor().selectionStart(), initial);
+    find->setFocus();
+    QTest::keyClick(find, Qt::Key_Return);
+    QVERIFY(help->isVisible());
+    QVERIFY(browser->textCursor().selectionStart() != initial);
+    QTest::keyClick(find, Qt::Key_Return, Qt::ShiftModifier);
+    QCOMPARE(browser->textCursor().selectionStart(), initial);
+    for (int i = 0; i < selections.size(); ++i) next->click();
+    QCOMPARE(browser->textCursor().selectionStart(), initial);
+    find->setText(QStringLiteral("archiver"));
+    QCOMPARE(browser->extraSelections().size(), selections.size());
+    find->setText(QStringLiteral("no-such-help-phrase-123456"));
+    QCOMPARE(matches->text(), QStringLiteral("No matches"));
+    QVERIFY(browser->extraSelections().isEmpty());
+    QVERIFY(!browser->textCursor().hasSelection());
+    QVERIFY(!previous->isEnabled());
+    find->clear();
+    QVERIFY(matches->text().isEmpty());
+
+    window.findChild<QAction*>(QStringLiteral("keyboardShortcutsAction"))->trigger();
+    QCOMPARE(window.findChild<QDialog*>(QStringLiteral("helpWindow")), help);
+    QCOMPARE(topics->currentItem()->data(Qt::UserRole).toString(), QStringLiteral("keyboard-shortcuts"));
+    // A list after a Markdown heading keeps only its lead-in bold.
+    const auto mouseText = browser->document()->find(QStringLiteral("drag empty plot space"));
+    QVERIFY(!mouseText.isNull());
+    QVERIFY(mouseText.charFormat().fontWeight() < QFont::DemiBold);
+    topics->setCurrentRow(2);
+    QVERIFY(browser->verticalScrollBar()->value() > 0);
+    browser->verticalScrollBar()->setValue(0);
+    QCOMPARE(topics->currentRow(), 0);
+    help->activateWindow();
+    QTest::qWait(20);
+    QTest::keyClick(browser, Qt::Key_F, Qt::ControlModifier);
+    QTRY_VERIFY(find->hasFocus());
+    find->setText(QStringLiteral("archiver"));
+    const auto shortcutStart = browser->textCursor().position();
+    QTest::keyClick(find, Qt::Key_F3);
+    QVERIFY(browser->textCursor().position() != shortcutStart);
+    QTest::keyClick(find, Qt::Key_F3, Qt::ShiftModifier);
+    QCOMPARE(browser->textCursor().position(), shortcutStart);
+    QTest::keyClick(find, Qt::Key_Escape);
+    QVERIFY(!help->isVisible());
+    helpAction->trigger();
+    QCOMPARE(window.findChildren<QDialog*>(QStringLiteral("helpWindow")).size(), 1);
+    QVERIFY(help->isVisible());
+    help->close();
+
+    // The Controls window has the same menu and opens its relevant topic.
+    auto* controls = window.controlsWindow();
+    controls->findChild<QAction*>(QStringLiteral("controlsHelpAction"))->trigger();
+    auto* controlHelp = controls->findChild<QDialog*>(QStringLiteral("helpWindow"));
+    QVERIFY(controlHelp && controlHelp->isVisible());
+    QCOMPARE(controlHelp->findChild<QListWidget*>(QStringLiteral("helpTopics"))
+                 ->currentItem()->data(Qt::UserRole).toString(), QStringLiteral("configure-curves"));
+    QVERIFY(controls->findChild<QAction*>(QStringLiteral("controlsKeyboardShortcutsAction")));
+    QVERIFY(controls->findChild<QAction*>(QStringLiteral("controlsOnlineManualAction")));
+    controlHelp->findChild<QPushButton*>(QStringLiteral("helpClose"))->click();
+    QVERIFY(!controlHelp->isVisible());
+  }
+  void aboutDialogCreditsAndHelpHandoff() {
+    striptool::MainWindow window;
+    window.stopAcquisition();
+    for (QWidget* owner : {static_cast<QWidget*>(&window),
+                           static_cast<QWidget*>(window.controlsWindow())}) {
+      QString credits, footer, title;
+      bool bannerAnimating = false;
+      bool lastCreditVisible = false;
+      bool creditsFitWithoutGap = false;
+      bool imageSaved = true;
+      const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
+      QTimer::singleShot(0, owner, [&] {
+        auto* dialog = owner->findChild<QDialog*>(QStringLiteral("aboutDialog"));
+        if (!dialog) return;
+        if (auto* browser = dialog->findChild<QTextBrowser*>(QStringLiteral("aboutCredits")))
+          credits = browser->toPlainText();
+        if (auto* label = dialog->findChild<QLabel*>(QStringLiteral("aboutFooter"))) footer = label->text();
+        if (auto* label = dialog->findChild<QLabel*>(QStringLiteral("aboutTitle"))) title = label->text();
+        if (auto* timer = dialog->findChild<QTimer*>(QStringLiteral("aboutAnimationTimer")))
+          bannerAnimating = timer->isActive();
+        if (!output.isEmpty()) {
+          const auto directory = std::filesystem::path(output.toStdString()).parent_path();
+          imageSaved = dialog->grab().save(QString::fromStdString((directory / "about.png").string()));
+        }
+        if (auto* browser = dialog->findChild<QTextBrowser*>(QStringLiteral("aboutCredits"))) {
+          // The dialog is sized to its credits, not left with a large blank area.
+          creditsFitWithoutGap = browser->viewport()->height()
+              <= qCeil(browser->document()->size().height()) + 40;
+          const auto last = browser->document()->find(QStringLiteral("Vladimir Romano"));
+          browser->setTextCursor(last);
+          browser->ensureCursorVisible();
+          lastCreditVisible = !last.isNull()
+              && browser->cursorRect(last).top() >= 0
+              && browser->cursorRect(last).bottom() <= browser->viewport()->height();
+        }
+        if (auto* open = dialog->findChild<QPushButton*>(QStringLiteral("aboutOpenHelp"))) open->click();
+        else dialog->reject();
+      });
+      const QString action = owner == &window ? QStringLiteral("aboutAction")
+          : QStringLiteral("controlsAboutAction");
+      owner->findChild<QAction*>(action)->trigger();
+      QCOMPARE(title, striptool::applicationName());
+      for (const auto& name : {"Robert Soliday", "Janet Anderson", "Christopher A. Larrieu",
+                               "Albert Kagarmanov", "Kenneth Evans", "Deb Kirstens", "Vladimir Romano"})
+        QVERIFY(credits.contains(QLatin1String(name)));
+      QVERIFY(footer.contains(striptool::qtVersion()));
+      QVERIFY(footer.contains(striptool::epicsVersion()));
+      QVERIFY(bannerAnimating);
+      QVERIFY(lastCreditVisible);
+      QVERIFY(creditsFitWithoutGap);
+      QVERIFY(imageSaved);
+      auto* help = owner->findChild<QDialog*>(QStringLiteral("helpWindow"));
+      QVERIFY(help && help->isVisible());
+      QVERIFY(!QApplication::activeModalWidget());
+      help->close();
+    }
+  }
+  void helpManualUsesSiteOverride() {
+    const bool wasSet = qEnvironmentVariableIsSet("STRIP_HELP_PATH");
+    const QByteArray original = qgetenv("STRIP_HELP_PATH");
+    const auto restore = qScopeGuard([&] {
+      if (wasSet) qputenv("STRIP_HELP_PATH", original);
+      else qunsetenv("STRIP_HELP_PATH");
+    });
+    qunsetenv("STRIP_HELP_PATH");
+    QCOMPARE(striptool::helpManualUrl(), QUrl(QStringLiteral("https://ops.aps.anl.gov/manuals/QtStripTool/")));
+    qputenv("STRIP_HELP_PATH", "https://example.org/site-guide#curves");
+    QCOMPARE(striptool::helpManualUrl(), QUrl(QStringLiteral("https://example.org/site-guide#curves")));
+    qputenv("STRIP_HELP_PATH", "site help/index.html");
+    QCOMPARE(striptool::helpManualUrl(), QUrl::fromLocalFile(QFileInfo(QStringLiteral("site help/index.html")).absoluteFilePath()));
+    qputenv("STRIP_HELP_PATH", "");
+    QVERIFY(striptool::helpManualUrl().scheme() == QStringLiteral("https"));
   }
   void pvDropsAddCurvesOnBothScreens() {
     striptool::MainWindow window;

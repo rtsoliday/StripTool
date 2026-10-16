@@ -27,7 +27,7 @@ sibling or APS location. The build uses the host architecture reported by
 EPICS Base.
 
 Qt StripTool additionally requires a C++17 compiler and either Qt 5.15 or Qt 6
-development files for Core, Gui, Widgets, PrintSupport, and Test. Unix builds
+development files for Core, Gui, Widgets, Network, PrintSupport, and Test. Unix builds
 normally discover Qt with `pkg-config`; Qt 6 may also be discovered with
 `qmake6`. Select a major version explicitly with `QT_VERSION=5` or
 `QT_VERSION=6`.

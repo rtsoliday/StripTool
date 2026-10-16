@@ -4,7 +4,7 @@
 | --- | --- |
 | `EPICS_CA_ADDR_LIST`, `EPICS_CA_AUTO_ADDR_LIST`, and other EPICS CA variables | Used by EPICS Channel Access for PV discovery and connections. |
 | `STRIP_FILE_SEARCH_PATH` | Platform path-list used to find a bare startup `.stp` filename. |
-| `STRIP_HELP_PATH` | Local file or URL opened by **Help > Help**. If it cannot open, the application shows brief built-in guidance. |
+| `STRIP_HELP_PATH` | Local file or URL opened by **Help > Online Manual** instead of the documentation website. **Help Topics** (F1) always shows the guide built into the application. |
 | `QTSTRIPTOOL_ARCHIVER_URL` | Overrides the EPICS Archiver Appliance retrieval root or `data/getData.json` endpoint. |
 | `QT_QPA_PLATFORM`, `QT_STYLE_OVERRIDE`, and other standard Qt variables | Interpreted by Qt for platform and appearance behavior. |
 

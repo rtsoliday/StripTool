@@ -1,4 +1,5 @@
 #include "ui/controls_window.h"
+#include "ui/help.h"
 #include "ui/pv_drop.h"
 
 #include "core/application.h"
@@ -100,8 +101,8 @@ ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
 
   auto* helpMenu = menuBar()->addMenu(tr("&Help"));
   helpMenu->setObjectName(QStringLiteral("controlsHelpMenu"));
-  auto* about = helpMenu->addAction(tr("&About Qt StripTool"));
-  about->setObjectName(QStringLiteral("controlsAboutAction"));
+  populateHelpMenu(helpMenu, this, QStringLiteral("controls"),
+                   QStringLiteral("configure-curves"));
 
   auto* tabs = new QTabWidget(this);
   tabs->setObjectName(QStringLiteral("controlsTabs"));
@@ -126,9 +127,6 @@ ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
     reloadFromModel();
     emit modelChanged();
     emit acquisitionConfigurationChanged();
-  });
-  connect(about, &QAction::triggered, this, [this] {
-    QMessageBox::about(this, tr("About Qt StripTool"), aboutText());
   });
   reloadFromModel();
 }
