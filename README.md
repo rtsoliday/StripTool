@@ -32,6 +32,14 @@ normally discover Qt with `pkg-config`; Qt 6 may also be discovered with
 `qmake6`. Select a major version explicitly with `QT_VERSION=5` or
 `QT_VERSION=6`.
 
+On Linux, the build prefers `/usr/bin/pkg-config` so an active Conda
+environment does not select Conda's Qt through its `pkg-config` wrapper.
+This also applies inside `rhel8-shell`, where `/usr` refers to the container.
+To select another installation, set `PKG_CONFIG` and, if needed,
+`PKG_CONFIG_PATH` explicitly, for example `make -j4 PKG_CONFIG=/path/to/pkg-config`.
+Run `make clean` before switching between host and container builds or Qt
+installations, then rebuild in the selected shell.
+
 Legacy StripTool additionally requires Motif and X11 development files,
 including Xm, X11, Xmu, and Xpm. It is not built on Windows. Typical Linux
 package names include `qtbase5-dev` (or the distribution's Qt 6 base
