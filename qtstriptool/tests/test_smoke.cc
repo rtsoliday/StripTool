@@ -9,6 +9,7 @@
 #include "services/file_workflow.h"
 #include "services/history_provider.h"
 #include "services/runtime_capabilities.h"
+#include "ui/about_banner.h"
 #include "ui/controls_window.h"
 #include "ui/help.h"
 #include "ui/history_dialog.h"
@@ -328,6 +329,34 @@ private slots:
       QVERIFY(!QApplication::activeModalWidget());
       help->close();
     }
+  }
+  void aboutBannerClickScrollsMessage() {
+    striptool::AboutBanner banner;
+    banner.resize(banner.sizeHint());
+    banner.show();
+    QVERIFY(banner.message().isEmpty());
+    QTest::mouseClick(&banner, Qt::LeftButton);
+    const QString first = banner.message();
+    QCOMPARE(first, QStringLiteral("Happy trending!"));
+    // Clicking again does not interrupt a message that is still scrolling.
+    QTest::mouseClick(&banner, Qt::LeftButton);
+    QCOMPARE(banner.message(), first);
+    QTest::qWait(900);
+    const QImage image = banner.grab().toImage();
+    QVERIFY(!image.isNull());
+    const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
+    if (!output.isEmpty()) {
+      const auto directory = std::filesystem::path(output.toStdString()).parent_path();
+      QVERIFY(image.save(QString::fromStdString((directory / "about-banner-message.png").string())));
+    }
+    QCOMPARE(banner.message(), first);
+    // Hiding ends the message; the next click shows the next one.
+    banner.hide();
+    QVERIFY(banner.message().isEmpty());
+    banner.show();
+    QTest::mouseClick(&banner, Qt::LeftButton);
+    QVERIFY(!banner.message().isEmpty());
+    QVERIFY(banner.message() != first);
   }
   void helpManualUsesSiteOverride() {
     const bool wasSet = qEnvironmentVariableIsSet("STRIP_HELP_PATH");

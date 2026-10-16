@@ -177,7 +177,7 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \
-           helpManualUsesSiteOverride \
+           aboutBannerClickScrollsMessage helpManualUsesSiteOverride \
            pvDropsAddCurvesOnBothScreens pvDropCapacityIsTransactionalAndReplotsExistingCurves \
            plotRendersModelTitle appearanceTitleEditsAndPersists \
            curveLimitEditorsFitLongValues \
@@ -260,7 +260,8 @@ test-visual: $(TEST_PROGRAM)
 	  QTSTRIPTOOL_VISUAL_OUTPUT=$(OBJ_DIR)/test-artifacts/plot-baseline.png \
   $(TEST_PROGRAM) plotWidgetRendersFixtureOffscreen mainAndControlsRenderOffscreen \
     largeFontsExpandPlotMarginsAndLegendRows \
-    helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff
+    helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \
+    aboutBannerClickScrollsMessage
 	@echo "Visual review image: $(OBJ_DIR)/test-artifacts/plot-baseline.png"
 
 test-qt-versions:
