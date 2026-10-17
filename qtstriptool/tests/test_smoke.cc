@@ -1357,6 +1357,21 @@ private slots:
     QCOMPARE(model.timing.timespanSeconds, 300U);
     std::filesystem::remove_all(root);
   }
+  void exportReportsWriteFailures() {
+    // /dev/full accepts open() but every write fails with ENOSPC.
+    if (!QFileInfo::exists(QStringLiteral("/dev/full"))) QSKIP("/dev/full is unavailable");
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "export:full";
+    model.curves[0].nameSet = true;
+    striptool::CurveSamples samples;
+    samples[0].push_back({std::chrono::system_clock::now(), 1.0, 0, 0});
+    std::string error;
+    QVERIFY(!striptool::ExportService::writeTextFile("/dev/full", model, samples, &error));
+    QVERIFY(!error.empty());
+    error.clear();
+    QVERIFY(!striptool::ExportService::writeCsvFile("/dev/full", model, samples, &error));
+    QVERIFY(!error.empty());
+  }
   void exportsTextAndCsvData() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "pv,\"quoted\"";
