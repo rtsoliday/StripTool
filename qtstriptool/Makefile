@@ -259,7 +259,8 @@ test-report: all $(TEST_PROGRAM)
 test-ioc: $(IOC_TEST_PROGRAM)
 	QT_QPA_PLATFORM=offscreen \
 	  QTSTRIPTOOL_TEST_IOC_DB="$(CURDIR)/tests/reconnect.db" \
-	  $(IOC_TEST_PROGRAM) automaticallyReconnectsAfterIocRestart
+	  $(IOC_TEST_PROGRAM) automaticallyReconnectsAfterIocRestart \
+	  refreshesMetadataAfterIocRestart
 	QT_QPA_PLATFORM=offscreen QTSTRIPTOOL_TEST_PV="$(TEST_PV)" \
 	  QTSTRIPTOOL_TEST_DESC="$(TEST_DESC)" $(IOC_TEST_PROGRAM) \
 	  receivesMetadataAndSampleFromIoc shutsDownWithAnActiveSubscription

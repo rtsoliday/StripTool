@@ -150,13 +150,14 @@ void ChannelAccessProvider::connectionCallback(connection_handler_args args) {
   if (args.op == CA_OP_CONN_UP) {
     state->owner->queueConnection(state->id, ConnectionState::Connected,
                                   QStringLiteral("Connected"));
-    if (!state->subscription) {
-      ca_get_callback(DBR_CTRL_DOUBLE, state->channel, controlCallback, state);
+    // Units and limits may have changed while the IOC was down, so read them
+    // on every connection. CA restores the subscription itself.
+    ca_get_callback(DBR_CTRL_DOUBLE, state->channel, controlCallback, state);
+    if (!state->subscription)
       ca_create_subscription(DBR_STS_DOUBLE, 1, state->channel,
                              DBE_VALUE | DBE_ALARM, valueCallback, state,
                              &state->subscription);
-      ca_flush_io();
-    }
+    ca_flush_io();
   } else {
     state->owner->queueConnection(state->id, ConnectionState::Disconnected,
                                   QStringLiteral("Connection lost"));

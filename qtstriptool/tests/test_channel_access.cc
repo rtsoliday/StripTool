@@ -4,9 +4,11 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QFile>
 #include <QProcess>
 #include <QSignalSpy>
 #include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QTest>
 
 namespace {
@@ -83,6 +85,64 @@ private slots:
     stopIoc(ioc);
     provider.disconnectChannel(id);
     QCOMPARE(provider.retainedStateCount(), std::size_t(0));
+  }
+
+  void refreshesMetadataAfterIocRestart() {
+    const QString softIoc = QStandardPaths::findExecutable(QStringLiteral("softIoc"));
+    if (softIoc.isEmpty()) QSKIP("softIoc is not available on PATH");
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto writeDatabase = [&directory](const QString& name, const char* units,
+                                            const char* high) {
+      const QString path = directory.filePath(name);
+      QFile file(path);
+      if (!file.open(QIODevice::WriteOnly)) return QString();
+      file.write(QStringLiteral("record(ai, \"QTST:METADATA\") {\n"
+                                "    field(EGU, \"%1\")\n    field(HOPR, \"%2\")\n"
+                                "    field(LOPR, \"0\")\n    field(PINI, \"YES\")\n}\n")
+                     .arg(QLatin1String(units), QLatin1String(high)).toUtf8());
+      return path;
+    };
+    const QString before = writeDatabase(QStringLiteral("before.db"), "V", "10");
+    const QString after = writeDatabase(QStringLiteral("after.db"), "mV", "10000");
+    QVERIFY(!before.isEmpty() && !after.isEmpty());
+
+    const int port = 15000 + int((QCoreApplication::applicationPid() + 1) % 10000);
+    qputenv("EPICS_CA_AUTO_ADDR_LIST", "NO");
+    qputenv("EPICS_CA_SERVER_PORT", QByteArray::number(port));
+    qputenv("EPICS_CA_ADDR_LIST", "127.0.0.1:" + QByteArray::number(port));
+
+    QProcess ioc;
+    IocGuard iocGuard(ioc);
+    ioc.setProgram(softIoc);
+    ioc.setArguments({QStringLiteral("-S"), QStringLiteral("-d"), before});
+    ioc.start();
+    QVERIFY2(ioc.waitForStarted(5000), qPrintable(ioc.errorString()));
+
+    striptool::ChannelAccessProvider provider;
+    QSignalSpy connections(&provider, &striptool::ChannelProvider::connectionChanged);
+    QSignalSpy metadata(&provider, &striptool::ChannelProvider::metadataChanged);
+    const auto id = provider.connectChannel(QStringLiteral("QTST:METADATA"));
+    const auto latestUnits = [&metadata] {
+      return metadata.isEmpty() ? std::string()
+          : qvariant_cast<striptool::ChannelMetadata>(metadata.last().at(1)).units;
+    };
+    QTRY_COMPARE_WITH_TIMEOUT(latestUnits(), std::string("V"), 15000);
+
+    stopIoc(ioc);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        observedState(connections, striptool::ConnectionState::Disconnected), 15000);
+    connections.clear();
+    ioc.setArguments({QStringLiteral("-S"), QStringLiteral("-d"), after});
+    ioc.start();
+    QVERIFY2(ioc.waitForStarted(5000), qPrintable(ioc.errorString()));
+    QTRY_VERIFY_WITH_TIMEOUT(
+        observedState(connections, striptool::ConnectionState::Connected), 15000);
+    QTRY_COMPARE_WITH_TIMEOUT(latestUnits(), std::string("mV"), 5000);
+    QCOMPARE(*qvariant_cast<striptool::ChannelMetadata>(metadata.last().at(1)).displayMaximum,
+             10000.0);
+    stopIoc(ioc);
+    provider.disconnectChannel(id);
   }
 
   void receivesMetadataAndSampleFromIoc() {
