@@ -1531,6 +1531,20 @@ private slots:
              std::chrono::duration_cast<std::chrono::system_clock::duration>(
                  std::chrono::nanoseconds::max()));
   }
+  void traceSelectionHandlesClockLimits() {
+    using Clock = std::chrono::system_clock;
+    const auto maximum = Clock::time_point::max();
+    const auto minimum = Clock::time_point::min();
+    for (const auto origin : {maximum - Clock::duration(100), minimum}) {
+      const std::vector<striptool::Sample> samples{
+          {origin, 1.0}, {origin + Clock::duration(99), 2.0}};
+      const auto selected = striptool::selectTraceSamples(
+          samples, origin, origin + Clock::duration(100), Clock::duration(90));
+      QCOMPARE(selected.size(), samples.size());
+      QCOMPARE(selected.front().timestamp, samples.front().timestamp);
+      QCOMPARE(selected.back().timestamp, samples.back().timestamp);
+    }
+  }
   void activeHistoryRequestCanBeDestroyedSafely() {
     auto provider = std::make_unique<striptool::TestHistoryProvider>();
     const auto now = std::chrono::system_clock::now();

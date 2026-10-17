@@ -54,12 +54,11 @@ std::vector<Sample> selectTraceSamples(
 
   std::vector<Sample> result;
   for (auto bucketStart = first; bucketStart != last;) {
-    // Samples are sorted, so a bucket ends at the first sample at or past its
-    // upper boundary.
-    const auto bucketLimit = std::chrono::system_clock::time_point(
-        (bucketOf(bucketStart->timestamp) + 1) * bucketDuration);
+    // Compare bucket indices rather than constructing the upper boundary:
+    // that boundary can overflow for the last representable clock bucket.
+    const auto bucketIndex = bucketOf(bucketStart->timestamp);
     auto minimum = last, maximum = last, gap = last, bucketEnd = bucketStart;
-    for (; bucketEnd != last && bucketEnd->timestamp < bucketLimit; ++bucketEnd) {
+    for (; bucketEnd != last && bucketOf(bucketEnd->timestamp) == bucketIndex; ++bucketEnd) {
       if (!plotable(*bucketEnd)) {
         if (gap == last) gap = bucketEnd;
         continue;

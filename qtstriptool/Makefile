@@ -154,6 +154,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              decimationPreservesChronologyAndExtrema \
              denseDecimationRetainsStepTransitionsAndSpikes \
              traceSelectionIsStableAsViewScrolls \
+             traceSelectionHandlesClockLimits \
              logDecimationKeepsNonPositiveGap \
              acquisitionTracksReconnectMetadataAndTimestamps \
              nonFiniteDisplayLimitsFallBackToFiniteRange \
