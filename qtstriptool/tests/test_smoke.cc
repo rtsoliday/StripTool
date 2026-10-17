@@ -1759,6 +1759,34 @@ private slots:
     QCOMPARE(loaded.curves[0].minimum, curve.minimum);
     QCOMPARE(loaded.curves[0].maximum, curve.maximum);
   }
+  void configurationOmitsDiscoveredUnitsThatAreNotOneWord() {
+    // An IOC EGU such as "deg C" must not make the saved file unreadable.
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "metadata:temperature";
+    model.curves[0].nameSet = true;
+    model.curves[0].units = "deg C";
+    model.curves[0].unitsDiscovered = true;
+    model.curves[1].name = "metadata:current";
+    model.curves[1].nameSet = true;
+    model.curves[1].units = "mA";
+    model.curves[1].unitsDiscovered = true;
+
+    std::ostringstream output;
+    QVERIFY(striptool::writeConfiguration(output, model));
+    const auto text = output.str();
+    QVERIFY(text.find("Strip.Curve.0.Units") == std::string::npos);
+    QVERIFY(text.find("Strip.Curve.1.Units") != std::string::npos);
+
+    auto loaded = striptool::makeDefaultModel();
+    std::istringstream input(text);
+    const auto result = striptool::readConfiguration(input, loaded);
+    QVERIFY2(result.success, result.diagnostics.empty() ? ""
+                                 : result.diagnostics.front().message.c_str());
+    QCOMPARE(QString::fromStdString(loaded.curves[0].name),
+             QStringLiteral("metadata:temperature"));
+    QVERIFY(!loaded.curves[0].unitsSet);
+    QCOMPARE(QString::fromStdString(loaded.curves[1].units), QStringLiteral("mA"));
+  }
   void followsLegacySearchOrder() {
     const auto root = std::filesystem::temp_directory_path() / "qtstriptool-search-test";
     const auto current = root / "current";

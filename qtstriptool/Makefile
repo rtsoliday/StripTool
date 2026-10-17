@@ -174,6 +174,7 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                appliesLayersInOrder writerRejectsInvalidModels \
                configurationRoundTripsFullDoublePrecision \
                configurationWritesDiscoveredChannelMetadata \
+               configurationOmitsDiscoveredUnitsThatAreNotOneWord \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \

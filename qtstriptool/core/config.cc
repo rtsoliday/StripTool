@@ -62,6 +62,12 @@ bool checkLength(const std::string& value, std::size_t maximum) {
   return value.size() <= maximum;
 }
 
+// Name and Units values are single whitespace-delimited words.
+bool isWord(const std::string& value, std::size_t maximum) {
+  return !value.empty() && value.find_first_of(" \t\r\n") == std::string::npos &&
+         checkLength(value, maximum);
+}
+
 std::vector<std::string> components(const std::string& key) {
   std::vector<std::string> result;
   std::size_t begin = 0;
@@ -372,7 +378,10 @@ bool writeConfiguration(std::ostream& output, const StripToolModel& model,
     if (!curve.nameSet) continue;
     const std::string prefix = "Strip.Curve." + std::to_string(i) + ".";
     writeField(output, prefix + "Name", curve.name);
-    if (curve.unitsSet || curve.unitsDiscovered)
+    // Channel units such as "deg C" cannot be read back as one word. They are
+    // not saved; the channel supplies them again when it connects.
+    if (curve.unitsSet ||
+        (curve.unitsDiscovered && isWord(curve.units, kMaximumUnitsLength)))
       writeField(output, prefix + "Units", curve.units);
     if (curve.commentSet || curve.commentDiscovered)
       writeField(output, prefix + "Comment", curve.comment);
