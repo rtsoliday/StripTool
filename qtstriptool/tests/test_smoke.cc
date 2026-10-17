@@ -59,6 +59,7 @@
 #include <QTcpSocket>
 #include <QToolButton>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -77,6 +78,16 @@ struct ChannelAccessProviderTestAccess {
   }
   static void metadata(ChannelAccessProvider& p, ChannelId id, ChannelMetadata metadata) {
     p.queueMetadata(id, std::move(metadata));
+  }
+  // Delivers a DBR_CTRL_DOUBLE reply through the real CA callback.
+  static void control(ChannelAccessProvider& p, ChannelId id, const dbr_ctrl_double& value) {
+    event_handler_args args{};
+    args.usr = p.active_.value(id);
+    args.type = DBR_CTRL_DOUBLE;
+    args.count = 1;
+    args.status = ECA_NORMAL;
+    args.dbr = &value;
+    ChannelAccessProvider::controlCallback(args);
   }
 };
 }
@@ -2026,6 +2037,32 @@ private slots:
     QCOMPARE(acquisition.metadata(id).connection, striptool::ConnectionState::Disconnected);
     provider.publishConnection(id, striptool::ConnectionState::Connected);
     QCOMPARE(acquisition.metadata(id).connection, striptool::ConnectionState::Connected);
+  }
+  void nonFiniteDisplayLimitsFallBackToFiniteRange() {
+    striptool::ChannelAccessProvider provider;
+    striptool::AcquisitionManager acquisition(&provider);
+    const auto id = acquisition.addChannel(QStringLiteral("QTST:LIMITS:NONFINITE"), 100);
+    using Access = striptool::ChannelAccessProviderTestAccess;
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+    struct Case {
+      double lowDisplay, highDisplay, lowControl, highControl, value, low, high;
+    };
+    for (const Case& c : {Case{-5, 5, 0, 1, 0, -5, 5},          // finite: unchanged
+                          Case{0, nan, 1, 4, 2, 1, 4},          // NaN display limit
+                          Case{-inf, inf, nan, 0, 10, 9, 11},   // no usable limits
+                          Case{nan, nan, nan, nan, nan, -100, 100}}) {
+      dbr_ctrl_double control{};
+      std::strcpy(control.units, "mm");
+      control.lower_disp_limit = c.lowDisplay;
+      control.upper_disp_limit = c.highDisplay;
+      control.lower_ctrl_limit = c.lowControl;
+      control.upper_ctrl_limit = c.highControl;
+      control.value = c.value;
+      Access::control(provider, id, control);
+      QTRY_VERIFY(acquisition.metadata(id).displayMinimum == c.low &&
+                  acquisition.metadata(id).displayMaximum == c.high);
+    }
   }
   void acquisitionShutdownDisconnectsActiveChannels() {
     FakeChannelProvider provider;

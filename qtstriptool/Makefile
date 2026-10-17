@@ -156,6 +156,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              traceSelectionIsStableAsViewScrolls \
              logDecimationKeepsNonPositiveGap \
              acquisitionTracksReconnectMetadataAndTimestamps \
+             nonFiniteDisplayLimitsFallBackToFiniteRange \
              acquisitionShutdownDisconnectsActiveChannels \
              samplingAndRefreshCadencesRemainIndependent staleStatusKeepsUnchangedValuePlotable \
              disconnectedChannelDoesNotRepeatOldSamples \

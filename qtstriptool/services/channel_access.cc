@@ -176,17 +176,22 @@ void ChannelAccessProvider::controlCallback(event_handler_args args) {
   metadata.connection = ConnectionState::Connected;
   metadata.units = control->units;
   metadata.precision = control->precision;
+  // A NaN or infinite limit would reach the curve limits, which then cannot
+  // be plotted or saved.
+  const auto usable = [](double low, double high) {
+    return std::isfinite(low) && std::isfinite(high) && low < high;
+  };
   double low = control->lower_disp_limit;
   double high = control->upper_disp_limit;
-  if (high <= low) {
+  if (!usable(low, high)) {
     low = control->lower_ctrl_limit;
     high = control->upper_ctrl_limit;
   }
-  if (high <= low) {
-    if (control->value == 0.0) { low = -100.0; high = 100.0; }
-    else { low = control->value - std::abs(control->value / 10.0);
-           high = control->value + std::abs(control->value / 10.0); }
+  if (!usable(low, high)) {
+    low = control->value - std::abs(control->value / 10.0);
+    high = control->value + std::abs(control->value / 10.0);
   }
+  if (!usable(low, high)) { low = -100.0; high = 100.0; }
   metadata.displayMinimum = low;
   metadata.displayMaximum = high;
   state->owner->queueMetadata(state->id, metadata);
