@@ -91,7 +91,7 @@ endif
 
 include ../Makefile.build
 
-.PHONY: all test test-core test-config test-ui test-performance test-report \
+.PHONY: all test test-core test-config test-ui test-performance test-report test-memory \
         test-ioc test-visual test-qt-versions clean distclean install-program \
         prepare-output
 all: install-program
@@ -226,7 +226,15 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 
-test: test-core test-config test-ui test-performance
+MEMORY_TESTS = caInboxPreservesOrderedSamples caInboxOverflow caInboxByteLimitAndRetirement \
+               sampleStorageShrinksAndReleases boundedArchiveHistoryAndStorageRelease \
+               archiveParserRejectsOversizedResponses archiveDownloadByteLimit \
+               archiveAggregateBudgetCancellationAndTimeout archiveWorkerParsingAndSampleLimit
+
+test-memory: all $(TEST_PROGRAM)
+	QT_QPA_PLATFORM=offscreen $(TEST_PROGRAM) $(MEMORY_TESTS)
+
+test: test-core test-config test-ui test-performance test-memory
 
 test-core: all $(TEST_PROGRAM)
 	QT_QPA_PLATFORM=offscreen $(TEST_PROGRAM) $(CORE_TESTS)

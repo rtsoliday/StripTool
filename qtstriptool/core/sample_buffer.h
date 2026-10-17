@@ -30,6 +30,7 @@ public:
 
   std::size_t size() const { return size_; }
   std::size_t capacity() const { return capacity_; }
+  std::size_t reservedBytes() const { return storage_.capacity() * sizeof(Sample); }
   bool empty() const { return size_ == 0; }
   std::optional<Sample> latest() const;
   std::vector<Sample> samples() const;

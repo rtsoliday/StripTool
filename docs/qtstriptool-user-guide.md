@@ -136,10 +136,27 @@ runtime or external conversion command is required. Archived scalar numeric
 values retain their archive timestamps, status, and severity. `CPU_Usage` is a
 local live-only channel and is not sent to the Archiver.
 
+Archive responses are limited to 8 MiB and 100,000 data entries each. Up to ten
+requests share a 32 MiB response-buffer budget, including responses waiting for
+the background parser. A request exceeding a limit fails through the usual
+history error handling; choose a smaller historical range to retry.
+
+Each curve retains at most 65,536 archived samples or 2 MiB of raw archive
+samples, whichever is smaller. Further history is reduced across the loaded
+time span, preserving extrema and connection gaps within the point budget.
+An **Archive history reduced** notice identifies the loss of fine detail.
+Clearing data or removing a curve releases its sample storage and clears that
+curve's reduction notice. These archive limits are separate from live samples.
+
 Channel Access values are held as step lines until another monitor update or an
 actual disconnect/error is received. A quiet PV may be marked **Stale** in the
 Controls window, but silence alone does not end its plotted line because CA
 monitors are not required to repeat unchanged values.
+
+CA updates use a bounded GUI inbox. If incoming updates outrun processing, the
+graph records a gap and the status bar reports lost observations; delivery then
+continues from the latest channel state. Updates within the budget retain their
+order. The CPU sample interval does not throttle CA monitor delivery.
 
 When a Channel Access PV is added, qtstriptool also attempts a background
 Archiver request for the configured History length (five minutes by default).

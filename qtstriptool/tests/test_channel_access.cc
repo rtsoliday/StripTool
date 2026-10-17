@@ -63,7 +63,7 @@ private slots:
     striptool::ChannelAccessProvider provider;
     QSignalSpy connections(&provider, &striptool::ChannelProvider::connectionChanged);
     QSignalSpy samples(&provider, &striptool::ChannelProvider::sampleReceived);
-    provider.connectChannel(QStringLiteral("QTST:RECONNECT"));
+    const auto id = provider.connectChannel(QStringLiteral("QTST:RECONNECT"));
     QTRY_VERIFY_WITH_TIMEOUT(
         observedState(connections, striptool::ConnectionState::Connected), 15000);
     QTRY_VERIFY_WITH_TIMEOUT(samples.count() > 0, 5000);
@@ -81,6 +81,8 @@ private slots:
         observedState(connections, striptool::ConnectionState::Connected), 15000);
     QTRY_VERIFY_WITH_TIMEOUT(samples.count() > 0, 5000);
     stopIoc(ioc);
+    provider.disconnectChannel(id);
+    QCOMPARE(provider.retainedStateCount(), std::size_t(0));
   }
 
   void receivesMetadataAndSampleFromIoc() {

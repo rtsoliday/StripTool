@@ -27,6 +27,7 @@ signals:
                        const striptool::ChannelMetadata& metadata);
   void descriptionReceived(striptool::ChannelId id, const QString& description);
   void sampleReceived(striptool::ChannelId id, const striptool::Sample& sample);
+  void dataLoss(striptool::ChannelId id, const QString& message);
 };
 
 }  // namespace striptool

@@ -35,6 +35,10 @@ public:
   void clearSamples();
   const std::vector<Sample>& curveSamples(std::size_t curve) const;
   void joinHistoricalSamples(std::size_t curve, const std::vector<Sample>& samples);
+  static constexpr std::size_t kMaximumHistorySamples = 65536;
+  static constexpr std::size_t kHistoryMemoryLimit = 2 * 1024 * 1024;
+  bool historyReduced(std::size_t curve) const;
+  std::size_t retainedSampleBytes(std::size_t curve) const;
 
   bool autoScroll() const { return autoScroll_; }
   bool autoScaleEnabled() const { return autoScaleEnabled_; }
@@ -74,6 +78,7 @@ signals:
                              int curveIndex);
   void annotationSelectionChanged(int index);
   void annotationsChanged();
+  void historyReductionChanged();
   void autoScrollChanged(bool enabled);
   // Emitted when zoom, pan, drag or reset changes the visible time range;
   // live scrolling, which only moves it forward, does not emit it.
@@ -127,6 +132,7 @@ private:
   StripToolModel model_ = makeDefaultModel();
   std::array<std::vector<Sample>, kMaximumCurves> liveSamples_;
   std::array<std::vector<Sample>, kMaximumCurves> historicalSamples_;
+  std::array<bool, kMaximumCurves> historyReduced_{};
   // Widest legend value line shown per curve; plotRect() only ever grows it.
   mutable std::array<QString, kMaximumCurves> widestLegendValue_;
   std::array<std::vector<Sample>, kMaximumCurves> samples_;

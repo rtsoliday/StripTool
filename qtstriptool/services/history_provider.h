@@ -10,6 +10,9 @@
 #include <QSet>
 #include <QString>
 #include <QUrl>
+#include <QTimer>
+#include <future>
+#include <memory>
 #include <vector>
 
 class QNetworkAccessManager;
@@ -20,9 +23,12 @@ Q_DECLARE_METATYPE(std::vector<striptool::Sample>)
 namespace striptool {
 
 using HistoryRequestId = quint64;
+inline constexpr qint64 kMaximumHistoryResponseBytes = 8 * 1024 * 1024;
+inline constexpr std::size_t kMaximumHistoryResponseSamples = 100000;
 
 std::vector<Sample> parseArchiverJson(const QByteArray& content,
-                                      QString* error = nullptr);
+                                      QString* error = nullptr,
+                                      std::size_t maximumSamples = kMaximumHistoryResponseSamples);
 
 class HistoryProvider : public QObject {
   Q_OBJECT
@@ -61,15 +67,43 @@ public:
 
   explicit ArchiverHistoryProvider(QString retrievalRoot = {},
                                    QObject* parent = nullptr);
+  ~ArchiverHistoryProvider() override;
   HistoryRequestId request(const QString& channel, TimeRange range) override;
   void cancel(HistoryRequestId id) override;
   QString retrievalRoot() const { return retrievalRoot_; }
+  // Bounds include downloads waiting for or undergoing parsing. Parsing uses
+  // one worker, so full JSON documents cannot multiply with the curve count.
+  qint64 maximumResponseBytes = kMaximumHistoryResponseBytes;
+  qint64 maximumBufferedBytes = 32 * 1024 * 1024;
+  std::size_t maximumSamples = kMaximumHistoryResponseSamples;
+  int maximumRequests = 10, requestTimeoutMs = 120000;
+  qint64 bufferedBytes() const { return bufferedBytes_; }
+  int pendingRequestCount() const { return pending_.size(); }
 
 private:
   QNetworkAccessManager* network_ = nullptr;
   QString retrievalRoot_;
   HistoryRequestId nextId_ = 1;
-  QHash<HistoryRequestId, QPointer<QNetworkReply>> pending_;
+  struct Request {
+    QPointer<QNetworkReply> reply;
+    QString channel;
+    QByteArray content;
+    qint64 bytes = 0;
+    bool downloaded = false, cancelled = false;
+  };
+  struct Parsed { std::vector<Sample> samples; QString error; };
+  QHash<HistoryRequestId, std::shared_ptr<Request>> pending_;
+  qint64 bufferedBytes_ = 0;
+  std::future<Parsed> parsing_;
+  HistoryRequestId parsingId_ = 0;
+  std::shared_ptr<Request> parsingRequest_;
+  QTimer parseTimer_;
+  bool pumping_ = false;
+  bool readReply(HistoryRequestId);
+  void release(const std::shared_ptr<Request>&);
+  void fail(HistoryRequestId, const QString&);
+  void pumpParser();
+  void pumpParserNow();
 };
 
 // Deterministic provider for UI/service tests and offline demonstrations.

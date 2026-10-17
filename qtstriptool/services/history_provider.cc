@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <exception>
 
 namespace striptool {
 
@@ -25,7 +26,13 @@ const int registeredHistoryTypes = [] {
 }();
 }
 
-std::vector<Sample> parseArchiverJson(const QByteArray& content, QString* error) {
+std::vector<Sample> parseArchiverJson(const QByteArray& content, QString* error,
+                                      std::size_t maximumSamples) {
+  maximumSamples = std::min(maximumSamples, kMaximumHistoryResponseSamples);
+  if (content.size() > kMaximumHistoryResponseBytes) {
+    if (error) *error = QObject::tr("response exceeded the history byte limit");
+    return {};
+  }
   QJsonParseError parseError;
   const QJsonDocument document = QJsonDocument::fromJson(content, &parseError);
   if (parseError.error != QJsonParseError::NoError || !document.isArray()) {
@@ -36,9 +43,15 @@ std::vector<Sample> parseArchiverJson(const QByteArray& content, QString* error)
     return {};
   }
   std::vector<Sample> samples;
+  std::size_t entries = 0;
   for (const auto& entryValue : document.array()) {
     if (!entryValue.isObject()) continue;
     const QJsonArray data = entryValue.toObject().value(QStringLiteral("data")).toArray();
+    if (std::size_t(data.size()) > maximumSamples - entries) {
+      if (error) *error = QObject::tr("response exceeded the history sample limit");
+      return {};
+    }
+    entries += std::size_t(data.size());
     samples.reserve(samples.size() + static_cast<std::size_t>(data.size()));
     for (const auto& sampleValue : data) {
       if (!sampleValue.isObject()) continue;
@@ -105,6 +118,20 @@ ArchiverHistoryProvider::ArchiverHistoryProvider(QString retrievalRoot,
                          ? configuredRetrievalRoot()
                          : retrievalRoot.trimmed()) {
   while (retrievalRoot_.endsWith(QLatin1Char('/'))) retrievalRoot_.chop(1);
+  parseTimer_.setInterval(10);
+  connect(&parseTimer_, &QTimer::timeout, this, [this] { pumpParser(); });
+}
+
+ArchiverHistoryProvider::~ArchiverHistoryProvider() {
+  parseTimer_.stop();
+  for (const auto& request : pending_)
+    if (request->reply) {
+      request->reply->disconnect(this);
+      request->reply->abort();
+    }
+  // The one bounded parser owns only bytes and plain result values, never this
+  // QObject. A close waits for it without exposing destroyed GUI state.
+  if (parsing_.valid()) parsing_.wait();
 }
 
 QUrl ArchiverHistoryProvider::requestUrl(const QString& retrievalRoot,
@@ -147,6 +174,12 @@ QUrl ArchiverHistoryProvider::requestUrl(const QString& retrievalRoot,
 HistoryRequestId ArchiverHistoryProvider::request(const QString& channel,
                                                   TimeRange range) {
   const HistoryRequestId id = nextId_++;
+  if (pending_.size() >= maximumRequests) {
+    QMetaObject::invokeMethod(this, [this, id] {
+      emit requestFailed(id, tr("The concurrent archive request limit was reached."));
+    }, Qt::QueuedConnection);
+    return id;
+  }
   if (channel.trimmed().isEmpty() || !range.isValid() || range.start == range.end) {
     QMetaObject::invokeMethod(this, [this, id] {
       emit requestFailed(id, tr("The Archiver request has an invalid PV or time range."));
@@ -168,35 +201,140 @@ HistoryRequestId ArchiverHistoryProvider::request(const QString& channel,
   request.setTransferTimeout(120000);
 #endif
   auto* reply = network_->get(request);
-  pending_.insert(id, reply);
-  connect(reply, &QNetworkReply::finished, this, [this, id, channel, reply] {
-    if (!pending_.remove(id)) { reply->deleteLater(); return; }
+  reply->setReadBufferSize(64 * 1024);
+  auto state = std::make_shared<Request>();
+  state->reply = reply;
+  state->channel = channel;
+  pending_.insert(id, state);
+  connect(reply, &QNetworkReply::readyRead, this, [this, id] { readReply(id); });
+  connect(reply, &QNetworkReply::metaDataChanged, this, [this, id, reply] {
+    if (reply->header(QNetworkRequest::ContentLengthHeader).toLongLong() >
+        std::min(maximumResponseBytes, kMaximumHistoryResponseBytes))
+      fail(id, tr("EPICS Archiver response exceeded the history byte limit."));
+  });
+  auto* timeout = new QTimer(reply);
+  timeout->setSingleShot(true);
+  connect(timeout, &QTimer::timeout, this, [this, id] {
+    fail(id, tr("EPICS Archiver request timed out."));
+  });
+  timeout->start(std::max(1, requestTimeoutMs));
+  connect(reply, &QNetworkReply::finished, this, [this, id, reply] {
+    const auto state = pending_.value(id);
+    if (!state) { reply->deleteLater(); return; }
+    if (!readReply(id)) return;
     if (reply->error() != QNetworkReply::NoError) {
-      emit requestFailed(id, tr("EPICS Archiver request for %1 failed: %2")
-                                 .arg(channel, reply->errorString()));
-      reply->deleteLater();
+      fail(id, tr("EPICS Archiver request for %1 failed: %2")
+                   .arg(state->channel, reply->errorString()));
       return;
     }
-    QString parseError;
-    auto samples = parseArchiverJson(reply->readAll(), &parseError);
-    if (!parseError.isEmpty()) {
-      emit requestFailed(id, tr("EPICS Archiver returned invalid JSON for %1: %2")
-                                 .arg(channel, parseError));
-      reply->deleteLater();
-      return;
-    }
-    emit resultReady(id, channel, std::move(samples));
+    state->downloaded = true;
+    state->reply = nullptr;
     reply->deleteLater();
+    pumpParser();
   });
   return id;
 }
 
+bool ArchiverHistoryProvider::readReply(HistoryRequestId id) {
+  const auto state = pending_.value(id);
+  if (!state || !state->reply) return false;
+  while (state->reply->bytesAvailable() > 0) {
+    const auto chunk = state->reply->read(64 * 1024);
+    if (chunk.isEmpty()) break;
+    if (chunk.size() > std::min(maximumResponseBytes, kMaximumHistoryResponseBytes) - state->bytes ||
+        chunk.size() > maximumBufferedBytes - bufferedBytes_) {
+      fail(id, tr("EPICS Archiver response exceeded the history byte/buffer limit."));
+      return false;
+    }
+    state->content += chunk;
+    state->bytes += chunk.size();
+    bufferedBytes_ += chunk.size();
+  }
+  return true;
+}
+
+void ArchiverHistoryProvider::release(const std::shared_ptr<Request>& state) {
+  state->cancelled = true;
+  if (state != parsingRequest_) {
+    bufferedBytes_ -= state->bytes;
+    state->bytes = 0;
+    state->content.clear();
+  }
+  if (auto reply = state->reply) {
+    state->reply = nullptr;
+    reply->disconnect(this);
+    reply->abort();
+    reply->deleteLater();
+  }
+}
+
+void ArchiverHistoryProvider::fail(HistoryRequestId id, const QString& message) {
+  const auto state = pending_.take(id);
+  if (!state) return;
+  release(state);
+  QPointer<ArchiverHistoryProvider> guard(this);
+  emit requestFailed(id, message);
+  if (guard) pumpParser();
+}
+
 void ArchiverHistoryProvider::cancel(HistoryRequestId id) {
-  auto reply = pending_.take(id);
-  if (!reply) return;
-  reply->abort();
-  reply->deleteLater();
+  const auto state = pending_.take(id);
+  if (!state) return;
+  release(state);
+  QPointer<ArchiverHistoryProvider> guard(this);
   emit requestCancelled(id);
+  if (guard) pumpParser();
+}
+
+void ArchiverHistoryProvider::pumpParser() {
+  if (pumping_) return;
+  pumping_ = true;
+  QPointer<ArchiverHistoryProvider> guard(this);
+  pumpParserNow();
+  if (guard) pumping_ = false;
+}
+
+void ArchiverHistoryProvider::pumpParserNow() {
+  if (parsing_.valid()) {
+    if (parsing_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    auto parsed = parsing_.get();
+    const auto id = parsingId_;
+    auto state = std::move(parsingRequest_);
+    parsingId_ = 0;
+    bufferedBytes_ -= state->bytes;
+    state->bytes = 0;
+    if (!state->cancelled && pending_.remove(id)) {
+      QPointer<ArchiverHistoryProvider> guard(this);
+      if (parsed.error.isEmpty()) emit resultReady(id, state->channel, std::move(parsed.samples));
+      else emit requestFailed(id, tr("EPICS Archiver returned invalid JSON for %1: %2")
+                                     .arg(state->channel, parsed.error));
+      if (!guard) return;
+    }
+  }
+  for (auto it = pending_.cbegin(); it != pending_.cend(); ++it) {
+    const auto& state = it.value();
+    if (!state->downloaded) continue;
+    parsingId_ = it.key();
+    parsingRequest_ = state;
+    auto content = std::move(state->content);
+    const auto limit = std::min(maximumSamples, kMaximumHistoryResponseSamples);
+    try {
+      parsing_ = std::async(std::launch::async, [content = std::move(content), limit] {
+        Parsed result;
+        try { result.samples = parseArchiverJson(content, &result.error, limit); }
+        catch (const std::exception&) { result.error = QStringLiteral("History parsing failed"); }
+        return result;
+      });
+    } catch (const std::exception&) {
+      parsingRequest_.reset(); parsingId_ = 0;
+      parseTimer_.start();
+      fail(it.key(), tr("Unable to start the history parser."));
+      return;
+    }
+    parseTimer_.start();
+    return;
+  }
+  parseTimer_.stop();
 }
 
 void TestHistoryProvider::setSamples(const QString& channel,

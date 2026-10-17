@@ -6,6 +6,11 @@ not production benchmarks and should not be quoted as operational capacity.
 
 ## Automated regression target
 
+Short memory regression checks can be run with `make -C qtstriptool test-memory`.
+They cover bounded CA callback bursts, overflow gaps, retired channel cleanup,
+archive reduction and response limits, cancellation, and storage release. The
+HTTP checks use a local loopback server; no operational Archiver is required.
+
 Run:
 
 ```sh

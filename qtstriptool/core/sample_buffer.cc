@@ -21,12 +21,16 @@ void SampleBuffer::setCapacity(std::size_t requestedSamples,
   const std::size_t memoryCapacity = memoryLimit / sizeof(Sample);
   const std::size_t newCapacity = std::max<std::size_t>(
       1, std::min(requestedSamples, std::max<std::size_t>(1, memoryCapacity)));
-  auto current = samples();
-  if (current.size() > newCapacity)
-    current.erase(current.begin(), current.end() - static_cast<std::ptrdiff_t>(newCapacity));
+  if (newCapacity == capacity_ && generation_ != 0) return;
+  // Copy only the retained tail into an exactly sized allocation. Erasing the
+  // front of the old vector would keep its former (possibly large) capacity.
+  const auto retained = std::min(size_, newCapacity);
+  std::vector<Sample> current;
+  current.reserve(newCapacity);
+  for (std::size_t i = 0; i < retained; ++i)
+    current.push_back(storage_[(head_ + capacity_ - retained + i) % capacity_]);
   capacity_ = newCapacity;
   storage_ = std::move(current);
-  storage_.reserve(capacity_);
   size_ = storage_.size();
   head_ = size_ == capacity_ ? 0 : size_;
   touch();
@@ -34,6 +38,9 @@ void SampleBuffer::setCapacity(std::size_t requestedSamples,
 
 void SampleBuffer::append(Sample sample) {
   touch();
+  // clear() releases storage; reserve explicitly on reuse so geometric vector
+  // growth cannot exceed the configured memory limit.
+  if (storage_.capacity() < capacity_) storage_.reserve(capacity_);
   if (storage_.size() < capacity_) {
     storage_.push_back(sample);
     size_ = storage_.size();
@@ -46,7 +53,7 @@ void SampleBuffer::append(Sample sample) {
 }
 
 void SampleBuffer::clear() {
-  storage_.clear();
+  std::vector<Sample>().swap(storage_);
   head_ = 0;
   size_ = 0;
   touch();

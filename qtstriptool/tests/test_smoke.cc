@@ -4,6 +4,7 @@
 #include "core/model.h"
 #include "core/sample_buffer.h"
 #include "services/acquisition_manager.h"
+#include "services/channel_access.h"
 #include "services/cpu_usage_provider.h"
 #include "services/export_service.h"
 #include "services/file_workflow.h"
@@ -54,14 +55,63 @@
 #include <QTemporaryDir>
 #include <QUrlQuery>
 #include <QTest>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QToolButton>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <sstream>
+#include <thread>
+
+namespace striptool {
+// Inject protocol callbacks without a network server; production ingress and
+// GUI delivery still run through the actual provider.
+struct ChannelAccessProviderTestAccess {
+  static void sample(ChannelAccessProvider& p, ChannelId id, double value) {
+    p.queueSample(id, {std::chrono::system_clock::now(), value, 0, 0});
+  }
+  static void connection(ChannelAccessProvider& p, ChannelId id, ConnectionState state) {
+    p.queueConnection(id, state, QStringLiteral("test"));
+  }
+  static void metadata(ChannelAccessProvider& p, ChannelId id, ChannelMetadata metadata) {
+    p.queueMetadata(id, std::move(metadata));
+  }
+};
+}
 
 namespace {
+class HistoryHttpServer final : public QTcpServer {
+public:
+  std::function<void(QTcpSocket*)> respond;
+  HistoryHttpServer() {
+    listen(QHostAddress::LocalHost);
+    connect(this, &QTcpServer::newConnection, this, [this] {
+      while (hasPendingConnections()) {
+        auto* socket = nextPendingConnection();
+        auto received = std::make_shared<QByteArray>();
+        auto sent = std::make_shared<bool>(false);
+        connect(socket, &QTcpSocket::readyRead, socket, [this, socket, received, sent] {
+          *received += socket->readAll();
+          if (!*sent && received->contains("\r\n\r\n")) {
+            *sent = true;
+            if (respond) respond(socket);
+          }
+        });
+        connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+      }
+    });
+  }
+  QString root() const { return QStringLiteral("http://127.0.0.1:%1").arg(serverPort()); }
+  static void send(QTcpSocket* socket, const QByteArray& body, bool length = true, bool close = true) {
+    QByteArray headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n";
+    if (length) headers += "Content-Length: " + QByteArray::number(body.size()) + "\r\n";
+    socket->write(headers + "\r\n" + body);
+    socket->flush();
+    if (close) socket->disconnectFromHost();
+  }
+};
 std::filesystem::path fixture(const char* name) {
   return std::filesystem::path("../tests/fixtures/config") / name;
 }
@@ -141,6 +191,235 @@ private:
 class SmokeTests final : public QObject {
   Q_OBJECT
 private slots:
+  void caInboxPreservesOrderedSamples() {
+    striptool::ChannelAccessProvider provider;
+    striptool::AcquisitionManager acquisition(&provider);
+    const auto id = acquisition.addChannel(QStringLiteral("QTST:MEMORY:ORDER"), 2000);
+    using Access = striptool::ChannelAccessProviderTestAccess;
+    Access::connection(provider, id, striptool::ConnectionState::Connected);
+    QTRY_COMPARE(acquisition.metadata(id).connection, striptool::ConnectionState::Connected);
+    std::thread producer([&] {
+      for (int i = 0; i < 1000; ++i) Access::sample(provider, id, i == 500 ? 10000 : i);
+    });
+    producer.join();
+    QVERIFY(provider.pendingUpdateCount() <= provider.kMaximumPendingUpdates);
+    QVERIFY(provider.pendingUpdateBytes() <= provider.kMaximumPendingBytes);
+    QTRY_COMPARE(acquisition.buffer(id)->size(), std::size_t(1000));
+    const auto samples = acquisition.buffer(id)->samples();
+    for (int i = 0; i < 1000; ++i) QCOMPARE(samples[i].value, double(i == 500 ? 10000 : i));
+    QCOMPARE(provider.pendingUpdateBytes(), std::size_t(0));
+  }
+  void caInboxOverflow_data() {
+    QTest::addColumn<bool>("disconnected");
+    QTest::newRow("connected") << false;
+    QTest::newRow("disconnected") << true;
+  }
+  void caInboxOverflow() {
+    QFETCH(bool, disconnected);
+    striptool::ChannelAccessProvider provider;
+    striptool::AcquisitionManager acquisition(&provider);
+    const auto id = acquisition.addChannel(QStringLiteral("QTST:MEMORY:OVERFLOW"), 100);
+    using Access = striptool::ChannelAccessProviderTestAccess;
+    Access::connection(provider, id, striptool::ConnectionState::Connected);
+    QTRY_COMPARE(acquisition.metadata(id).connection, striptool::ConnectionState::Connected);
+    QSignalSpy lost(&provider, &striptool::ChannelProvider::dataLoss);
+    const int count = int(provider.kMaximumPendingUpdates) * 2;
+    std::thread producer([&] {
+      for (int i = 0; i < count; ++i) Access::sample(provider, id, i);
+      if (disconnected) Access::connection(provider, id, striptool::ConnectionState::Disconnected);
+      striptool::ChannelMetadata metadata;
+      metadata.connection = striptool::ConnectionState::Connected; // A stale CTRL response.
+      Access::metadata(provider, id, metadata);
+    });
+    producer.join();
+    QVERIFY(provider.pendingUpdateCount() <= provider.kMaximumPendingUpdates);
+    QVERIFY(provider.pendingUpdateBytes() <= provider.kMaximumPendingBytes);
+    QTRY_COMPARE(lost.count(), 1);
+    const auto samples = acquisition.buffer(id)->samples();
+    QVERIFY(!samples.empty());
+    QVERIFY(!samples.front().plotable);
+    QCOMPARE(acquisition.metadata(id).connection, disconnected ? striptool::ConnectionState::Disconnected
+                                                             : striptool::ConnectionState::Connected);
+    if (disconnected) QVERIFY(!samples.back().plotable);
+    else { QVERIFY(samples.back().plotable); QCOMPARE(samples.back().value, double(count - 1)); }
+    Access::sample(provider, id, 99);
+    QTRY_COMPARE(acquisition.buffer(id)->latest()->value, 99.0);
+  }
+  void caInboxByteLimitAndRetirement() {
+    striptool::ChannelAccessProvider provider;
+    striptool::AcquisitionManager acquisition(&provider);
+    const auto id = acquisition.addChannel(QStringLiteral("QTST:MEMORY:BYTES"));
+    QCoreApplication::processEvents();
+    QSignalSpy lost(&provider, &striptool::ChannelProvider::dataLoss);
+    for (int i = 0; i < 3000; ++i) {
+      striptool::ChannelMetadata metadata;
+      metadata.description.assign(1024, 'x');
+      striptool::ChannelAccessProviderTestAccess::metadata(provider, id, std::move(metadata));
+    }
+    QVERIFY(provider.pendingUpdateBytes() <= provider.kMaximumPendingBytes);
+    QTRY_COMPARE(lost.count(), 1);
+    connect(&provider, &striptool::ChannelProvider::dataLoss, &acquisition,
+            [&](striptool::ChannelId channel, const QString&) { acquisition.removeChannel(channel); });
+    for (std::size_t i = 0; i <= provider.kMaximumPendingUpdates; ++i)
+      striptool::ChannelAccessProviderTestAccess::sample(provider, id, double(i));
+    QTRY_COMPARE(provider.retainedStateCount(), std::size_t(0));
+    QCOMPARE(provider.pendingUpdateBytes(), std::size_t(0));
+    for (int i = 0; i < 200; ++i) {
+      const auto channel = provider.connectChannel(QStringLiteral("QTST:MEMORY:RETIRED"));
+      QCOMPARE(provider.retainedStateCount(), std::size_t(1));
+      provider.disconnectChannel(channel);
+      QCOMPARE(provider.retainedStateCount(), std::size_t(0));
+    }
+    QCOMPARE(provider.pendingUpdateCount(), std::size_t(0));
+  }
+  void sampleStorageShrinksAndReleases() {
+    striptool::SampleBuffer buffer(10000);
+    const auto start = std::chrono::system_clock::time_point{};
+    for (int i = 0; i < 12000; ++i) buffer.append({start + std::chrono::seconds(i), double(i)});
+    buffer.setCapacity(3);
+    QCOMPARE(buffer.size(), std::size_t(3));
+    QCOMPARE(buffer.samples().front().value, 11997.0);
+    QCOMPARE(buffer.latest()->value, 11999.0);
+    QVERIFY(buffer.reservedBytes() <= 3 * sizeof(striptool::Sample));
+    buffer.clear();
+    QCOMPARE(buffer.reservedBytes(), std::size_t(0));
+    for (int i = 0; i < 8; ++i) buffer.append({start, double(i)});
+    QCOMPARE(buffer.size(), std::size_t(3));
+    QCOMPARE(buffer.latest()->value, 7.0);
+    QVERIFY(buffer.reservedBytes() <= 3 * sizeof(striptool::Sample));
+  }
+  void boundedArchiveHistoryAndStorageRelease() {
+    striptool::MainWindow window;
+    auto* plot = window.plotWidget();
+    auto* notice = window.findChild<QLabel*>(QStringLiteral("historyReductionNotice"));
+    QVERIFY(notice && notice->isHidden());
+    const auto maximum = plot->kMaximumHistorySamples;
+    const auto start = std::chrono::system_clock::time_point{};
+    std::vector<striptool::Sample> history;
+    for (std::size_t i = 0; i < 4 * maximum; ++i)
+      history.push_back({start + std::chrono::seconds(i), 0.0});
+    history[maximum / 2].plotable = false;
+    history[maximum].value = 10000;
+    history[2 * maximum].value = -10000;
+    plot->joinHistoricalSamples(0, history);
+    QVERIFY(plot->historyReduced(0));
+    QVERIFY(!notice->isHidden());
+    const auto& retained = plot->curveSamples(0);
+    QVERIFY(retained.size() <= maximum);
+    QCOMPARE(retained.front().timestamp, history.front().timestamp);
+    QCOMPARE(retained.back().timestamp, history.back().timestamp);
+    QVERIFY(std::any_of(retained.begin(), retained.end(), [](const auto& s) { return s.value == 10000; }));
+    QVERIFY(std::any_of(retained.begin(), retained.end(), [](const auto& s) { return s.value == -10000; }));
+    QVERIFY(std::any_of(retained.begin(), retained.end(), [](const auto& s) { return !s.plotable; }));
+    const auto copy = retained;
+    for (int i = 0; i < 5; ++i) plot->joinHistoricalSamples(0, copy);
+    QVERIFY(plot->retainedSampleBytes(0) <= 2 * maximum * sizeof(striptool::Sample));
+    plot->clearCurveSamples(0);
+    QCOMPARE(plot->retainedSampleBytes(0), std::size_t(0));
+    QVERIFY(!plot->historyReduced(0));
+    QVERIFY(notice->isHidden());
+    plot->setCurveSamples(0, std::vector<striptool::Sample>(10000));
+    plot->setCurveSamples(0, std::vector<striptool::Sample>(2));
+    QVERIFY(plot->retainedSampleBytes(0) <= 4 * sizeof(striptool::Sample));
+    plot->setCurveSamples(0, {});
+    QCOMPARE(plot->retainedSampleBytes(0), std::size_t(0));
+  }
+  void archiveParserRejectsOversizedResponses() {
+    QString error;
+    QVERIFY(striptool::parseArchiverJson(
+        QByteArray(int(striptool::kMaximumHistoryResponseBytes + 1), ' '), &error).empty());
+    QVERIFY(error.contains("byte limit"));
+    const QByteArray json = R"([{"data":[{"secs":1,"nanos":0,"val":1},{"secs":2,"nanos":0,"val":2},{}]}])";
+    QVERIFY(striptool::parseArchiverJson(json, &error, 2).empty());
+    QVERIFY(error.contains("sample limit"));
+    QCOMPARE(striptool::parseArchiverJson(json, &error, 3).size(), std::size_t(2));
+    QVERIFY(error.isEmpty());
+  }
+  void archiveDownloadByteLimit_data() {
+    QTest::addColumn<bool>("contentLength");
+    QTest::newRow("advertised-size") << true;
+    QTest::newRow("streamed-size") << false;
+  }
+  void archiveDownloadByteLimit() {
+    QFETCH(bool, contentLength);
+    HistoryHttpServer server;
+    QVERIFY(server.isListening());
+    server.respond = [=](QTcpSocket* socket) {
+      HistoryHttpServer::send(socket, QByteArray(4096, 'x'), contentLength);
+    };
+    striptool::ArchiverHistoryProvider provider(server.root());
+    provider.maximumResponseBytes = 1024;
+    QSignalSpy failed(&provider, &striptool::HistoryProvider::requestFailed);
+    QSignalSpy ready(&provider, &striptool::HistoryProvider::resultReady);
+    const auto now = std::chrono::system_clock::now();
+    provider.request(QStringLiteral("test"), {now - std::chrono::hours(1), now});
+    QTRY_COMPARE(failed.count(), 1);
+    QVERIFY(failed[0][1].toString().contains("limit"));
+    QCOMPARE(ready.count(), 0);
+    QCOMPARE(provider.pendingRequestCount(), 0);
+    QCOMPARE(provider.bufferedBytes(), qint64(0));
+  }
+  void archiveAggregateBudgetCancellationAndTimeout() {
+    HistoryHttpServer server;
+    QVERIFY(server.isListening());
+    server.respond = [](QTcpSocket* socket) {
+      HistoryHttpServer::send(socket, QByteArray(700, ' '), false, false);
+    };
+    striptool::ArchiverHistoryProvider provider(server.root());
+    provider.maximumResponseBytes = 2048;
+    provider.maximumBufferedBytes = 1000;
+    provider.maximumRequests = 2;
+    QSignalSpy failed(&provider, &striptool::HistoryProvider::requestFailed);
+    QSignalSpy cancelled(&provider, &striptool::HistoryProvider::requestCancelled);
+    const auto now = std::chrono::system_clock::now();
+    const striptool::TimeRange range{now - std::chrono::hours(1), now};
+    const auto a = provider.request(QStringLiteral("a"), range);
+    const auto b = provider.request(QStringLiteral("b"), range);
+    provider.request(QStringLiteral("c"), range);
+    QTRY_COMPARE(failed.count(), 2); // Concurrent-request limit, then shared byte budget.
+    QVERIFY(provider.bufferedBytes() <= provider.maximumBufferedBytes);
+    QCOMPARE(provider.pendingRequestCount(), 1);
+    provider.cancel(a); provider.cancel(b);
+    QCOMPARE(cancelled.count(), 1);
+    QCOMPARE(provider.bufferedBytes(), qint64(0));
+    provider.requestTimeoutMs = 30;
+    provider.request(QStringLiteral("timeout"), range);
+    QTRY_COMPARE(failed.count(), 3);
+    QVERIFY(failed.last()[1].toString().contains("timed out"));
+    QCOMPARE(provider.pendingRequestCount(), 0);
+    QCOMPARE(provider.bufferedBytes(), qint64(0));
+  }
+  void archiveWorkerParsingAndSampleLimit() {
+    HistoryHttpServer server;
+    QVERIFY(server.isListening());
+    const QByteArray body = R"([{"data":[{"secs":1,"nanos":0,"val":1},{"secs":2,"nanos":0,"val":2}]}])";
+    server.respond = [=](QTcpSocket* socket) { HistoryHttpServer::send(socket, body); };
+    striptool::ArchiverHistoryProvider provider(server.root());
+    QSignalSpy failed(&provider, &striptool::HistoryProvider::requestFailed);
+    QSignalSpy ready(&provider, &striptool::HistoryProvider::resultReady);
+    const auto now = std::chrono::system_clock::now();
+    const striptool::TimeRange range{now - std::chrono::hours(1), now};
+    provider.maximumSamples = 1;
+    provider.request(QStringLiteral("sample-limit"), range);
+    QTRY_COMPARE(failed.count(), 1);
+    QVERIFY(failed[0][1].toString().contains("sample limit"));
+    QCOMPARE(provider.bufferedBytes(), qint64(0));
+    provider.maximumSamples = 10;
+    provider.request(QStringLiteral("valid"), range);
+    QTRY_COMPARE(ready.count(), 1);
+    const auto samples = qvariant_cast<std::vector<striptool::Sample>>(ready[0][2]);
+    QCOMPARE(samples.size(), std::size_t(2));
+    QCOMPARE(samples.back().value, 2.0);
+    QCOMPARE(provider.pendingRequestCount(), 0);
+    QCOMPARE(provider.bufferedBytes(), qint64(0));
+    auto closing = std::make_unique<striptool::ArchiverHistoryProvider>(server.root());
+    bool delivered = false;
+    connect(closing.get(), &striptool::HistoryProvider::resultReady, &server,
+            [&] { delivered = true; closing.reset(); });
+    closing->request(QStringLiteral("close-in-result-handler"), range);
+    QTRY_VERIFY(delivered);
+    QVERIFY(!closing);
+  }
   void metadataIsConfigured() {
     QCOMPARE(QApplication::applicationName(), QStringLiteral("qtstriptool"));
     QCOMPARE(QApplication::organizationName(), QStringLiteral("EPICS"));

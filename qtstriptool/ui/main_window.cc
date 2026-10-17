@@ -18,6 +18,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
+#include <QLabel>
 #include <QMessageBox>
 #include <QMenu>
 #include <QMenuBar>
@@ -164,6 +165,18 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   plotWidget_->setObjectName(QStringLiteral("plotArea"));
   plotWidget_->setModel(model_);
   plotWidget_->resetView();
+  auto* historyNotice = new QLabel(tr("Archive history reduced"), this);
+  historyNotice->setObjectName(QStringLiteral("historyReductionNotice"));
+  historyNotice->setToolTip(tr("Archived samples were reduced to bound memory. Spikes and gaps "
+                              "are retained within the reduction budget; fine detail may be omitted."));
+  statusBar()->addPermanentWidget(historyNotice);
+  historyNotice->hide();
+  connect(plotWidget_, &PlotWidget::historyReductionChanged, this, [this, historyNotice] {
+    bool reduced = false;
+    for (std::size_t i = 0; i < kMaximumCurves; ++i)
+      reduced |= plotWidget_->historyReduced(i);
+    historyNotice->setVisible(reduced);
+  });
   setCentralWidget(plotWidget_);
   historyExtensionTimer_ = new QTimer(this);
   historyExtensionTimer_->setSingleShot(true);
@@ -664,6 +677,8 @@ void MainWindow::startAcquisition() {
   if (channelAccess_) return;
   acquisitionRunning_ = true;
   channelAccess_ = std::make_unique<ChannelAccessProvider>();
+  connect(channelAccess_.get(), &ChannelProvider::dataLoss, this,
+          [this](ChannelId, const QString& message) { statusBar()->showMessage(message, 10000); });
   cpuUsage_ = std::make_unique<CpuUsageProvider>();
   channelAcquisition_ = std::make_unique<AcquisitionManager>(channelAccess_.get());
   cpuAcquisition_ = std::make_unique<AcquisitionManager>(cpuUsage_.get());

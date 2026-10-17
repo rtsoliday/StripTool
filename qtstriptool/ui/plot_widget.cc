@@ -148,8 +148,11 @@ void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples)
   if (!std::is_sorted(samples.begin(), samples.end(), earlier))
     std::sort(samples.begin(), samples.end(), earlier);
   liveSamples_[curve] = std::move(samples);
-  if (historicalSamples_[curve].empty()) samples_[curve] = liveSamples_[curve];
-  else samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
+  if (historicalSamples_[curve].empty()) {
+    if (liveSamples_[curve].empty() || samples_[curve].capacity() / 2 > liveSamples_[curve].size())
+      std::vector<Sample>(liveSamples_[curve]).swap(samples_[curve]);
+    else samples_[curve] = liveSamples_[curve];
+  } else samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
   if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
     if (!samples_[curve].empty()) {
       const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
@@ -199,10 +202,14 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
 
 void PlotWidget::clearCurveSamples(std::size_t curve) {
   if (curve >= samples_.size()) return;
-  liveSamples_[curve].clear();
-  historicalSamples_[curve].clear();
+  std::vector<Sample>().swap(liveSamples_[curve]);
+  std::vector<Sample>().swap(historicalSamples_[curve]);
   widestLegendValue_[curve].clear();
-  samples_[curve].clear();
+  std::vector<Sample>().swap(samples_[curve]);
+  if (historyReduced_[curve]) {
+    historyReduced_[curve] = false;
+    emit historyReductionChanged();
+  }
   automaticRanges_[curve].reset();
   automaticRangeStale_[curve] = false;
   verticalRanges_[curve].reset();
@@ -228,10 +235,31 @@ void PlotWidget::joinHistoricalSamples(std::size_t curve,
   std::sort(ordered.begin(), ordered.end(), [](const auto& left, const auto& right) {
     return left.timestamp < right.timestamp;
   });
-  historicalSamples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], ordered);
+  const auto maximum = std::min(kMaximumHistorySamples, kHistoryMemoryLimit / sizeof(Sample));
+  const bool reduceIncoming = ordered.size() > maximum;
+  if (reduceIncoming) ordered = decimateSamples(ordered, maximum);
+  auto merged = joinHistoricalAndLive(historicalSamples_[curve], ordered);
+  const bool reduced = reduceIncoming || merged.size() > maximum;
+  if (merged.size() > maximum) merged = decimateSamples(merged, maximum);
+  else if (merged.capacity() > maximum) std::vector<Sample>(merged).swap(merged);
+  historicalSamples_[curve] = std::move(merged);
   samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
+  if (reduced && !historyReduced_[curve]) {
+    historyReduced_[curve] = true;
+    emit historyReductionChanged();
+  }
   if (dragMode_ == DragMode::None) updateAutoRange();
   redraw();
+}
+
+bool PlotWidget::historyReduced(std::size_t curve) const {
+  return curve < historyReduced_.size() && historyReduced_[curve];
+}
+
+std::size_t PlotWidget::retainedSampleBytes(std::size_t curve) const {
+  if (curve >= samples_.size()) return 0;
+  return (liveSamples_[curve].capacity() + historicalSamples_[curve].capacity() +
+          samples_[curve].capacity()) * sizeof(Sample);
 }
 
 ValueRange PlotWidget::valueRange(std::size_t curve) const {
