@@ -1445,10 +1445,19 @@ private slots:
     QVERIFY(invalid.empty());
     QVERIFY(!error.isEmpty());
 
-    qputenv("QTSTRIPTOOL_ARCHIVER_URL", QByteArrayLiteral("http://example.invalid/archive/"));
-    QCOMPARE(striptool::ArchiverHistoryProvider::configuredRetrievalRoot(),
-             QStringLiteral("http://example.invalid/archive/"));
-    qunsetenv("QTSTRIPTOOL_ARCHIVER_URL");
+    {
+      // Restore the caller's URL: unsetting it would send later tests'
+      // archive requests to the operational default.
+      const bool wasSet = qEnvironmentVariableIsSet("QTSTRIPTOOL_ARCHIVER_URL");
+      const QByteArray original = qgetenv("QTSTRIPTOOL_ARCHIVER_URL");
+      const auto restore = qScopeGuard([&] {
+        if (wasSet) qputenv("QTSTRIPTOOL_ARCHIVER_URL", original);
+        else qunsetenv("QTSTRIPTOOL_ARCHIVER_URL");
+      });
+      qputenv("QTSTRIPTOOL_ARCHIVER_URL", QByteArrayLiteral("http://example.invalid/archive/"));
+      QCOMPARE(striptool::ArchiverHistoryProvider::configuredRetrievalRoot(),
+               QStringLiteral("http://example.invalid/archive/"));
+    }
 
     const auto start = std::chrono::system_clock::time_point{
         std::chrono::milliseconds(946684800123)};
