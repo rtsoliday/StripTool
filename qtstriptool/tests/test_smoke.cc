@@ -1501,6 +1501,25 @@ private slots:
                  {start, start + std::chrono::seconds(1)}).path(),
              QStringLiteral("/retrieval/data/getData.json"));
   }
+  void exportsPreEpochTimestamps() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    striptool::CurveSamples samples;
+    for (const int milliseconds : {-1001, -1, 0, 1, 1001})
+      samples[0].push_back({std::chrono::system_clock::time_point{
+                               std::chrono::milliseconds(milliseconds)}, 1.0});
+    std::ostringstream text, csv;
+    QVERIFY(striptool::ExportService::writeText(text, model, samples));
+    QVERIFY(striptool::ExportService::writeCsv(csv, model, samples));
+    for (const auto* timestamp : {"1969-12-31T23:59:58.999Z",
+                                 "1969-12-31T23:59:59.999Z",
+                                 "1970-01-01T00:00:00.000Z",
+                                 "1970-01-01T00:00:00.001Z",
+                                 "1970-01-01T00:00:01.001Z"}) {
+      QVERIFY(text.str().find(timestamp) != std::string::npos);
+      QVERIFY(csv.str().find(timestamp) != std::string::npos);
+    }
+  }
   void archiverRejectsOutOfRangeTimestamps() {
     const QByteArray response = R"([{"data":[
       {"secs":9223372037,"nanos":0,"val":1},

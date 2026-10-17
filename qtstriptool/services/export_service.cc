@@ -11,9 +11,12 @@ namespace striptool {
 namespace {
 
 std::string timestamp(const std::chrono::system_clock::time_point& value) {
-  const auto seconds = std::chrono::system_clock::to_time_t(value);
+  const auto wholeSeconds = std::chrono::floor<std::chrono::seconds>(
+      value.time_since_epoch());
+  const auto seconds = std::chrono::system_clock::to_time_t(
+      std::chrono::system_clock::time_point(wholeSeconds));
   const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
-      value.time_since_epoch()).count() % 1000;
+      value.time_since_epoch() - wholeSeconds).count();
   std::tm utc{};
 #ifdef _WIN32
   gmtime_s(&utc, &seconds);
