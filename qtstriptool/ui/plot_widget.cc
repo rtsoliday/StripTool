@@ -24,6 +24,18 @@ qint64 milliseconds(std::chrono::system_clock::time_point time) {
              time.time_since_epoch()).count();
 }
 
+double epochSeconds(std::chrono::system_clock::time_point time) {
+  return std::chrono::duration<double>(time.time_since_epoch()).count();
+}
+
+// Time points are 64-bit nanosecond counts, about ±292 years around 1970. A
+// view within ±146 years also has a duration that fits, so zoom and pan steps
+// that would leave that span are ignored rather than overflowing.
+bool representableView(double startSeconds, double endSeconds) {
+  constexpr double limit = 146.0 * 365.25 * 24 * 3600;
+  return std::abs(startSeconds) < limit && std::abs(endSeconds) < limit;
+}
+
 bool labelsAreDistinct(const QStringList& labels) {
   for (int i = 1; i < labels.size(); ++i)
     if (labels[i] == labels[i - 1]) return false;
@@ -327,6 +339,9 @@ void PlotWidget::setVisibleTimeRange(TimeRange range) {
 
 void PlotWidget::pan(double fractionOfWindow) {
   const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
+  const double span = std::chrono::duration<double>(duration).count();
+  const double start = epochSeconds(visibleTimeRange_.start) + span * fractionOfWindow;
+  if (!representableView(start, start + span)) return;
   const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
       std::chrono::duration<double>(
           std::chrono::duration<double>(duration).count() * fractionOfWindow));
@@ -353,6 +368,9 @@ void PlotWidget::zoomAt(double factor, const QPointF& position, bool keepAutoScr
   const double fraction = std::clamp(
       (position.x() - area.left()) / area.width(), 0.0, 1.0);
   const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
+  const double span = std::chrono::duration<double>(duration).count();
+  const double start = epochSeconds(visibleTimeRange_.start) + span * fraction * (1.0 - factor);
+  if (!representableView(start, start + span * factor)) return;
   const auto scaledDuration = std::chrono::duration_cast<
       std::chrono::system_clock::duration>(
           std::chrono::duration<double>(
@@ -1163,6 +1181,9 @@ void PlotWidget::updateDrag(const QPoint& position) {
       if (panMoved_) {
         const double fraction = -double(position.x() - dragStart_.x()) / area.width();
         const auto duration = dragRange_.end - dragRange_.start;
+        const double span = std::chrono::duration<double>(duration).count();
+        const double start = epochSeconds(dragRange_.start) + span * fraction;
+        if (!representableView(start, start + span)) return;
         const auto shift = std::chrono::duration_cast<std::chrono::system_clock::duration>(
             std::chrono::duration<double>(std::chrono::duration<double>(duration).count() * fraction));
         visibleTimeRange_ = {dragRange_.start + shift, dragRange_.end + shift};

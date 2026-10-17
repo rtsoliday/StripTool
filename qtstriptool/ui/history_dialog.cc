@@ -21,6 +21,10 @@ HistoryDialog::HistoryDialog(QWidget* parent) : QDialog(parent) {
   to_->setObjectName(QStringLiteral("historyTo"));
   to_->setCalendarPopup(true);
   to_->setDisplayFormat(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+  // Plot times are 64-bit nanosecond counts; a year such as 2600 would wrap.
+  for (auto* editor : {from_, to_})
+    editor->setDateTimeRange(QDateTime::fromSecsSinceEpoch(0),
+                             QDateTime::fromSecsSinceEpoch(4102444800));  // 2100-01-01
   form->addRow(tr("From:"), from_);
   form->addRow(tr("To:"), to_);
   layout->addLayout(form);

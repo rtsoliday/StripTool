@@ -1519,6 +1519,30 @@ private slots:
     QCOMPARE(dialog.selectedRange().start, start);
     QCOMPARE(dialog.selectedRange().end, end);
   }
+  void extremeZoomPanAndDatesKeepTimeRangesValid() {
+    // Nanosecond time points overflow about 292 years from 1970.
+    striptool::PlotWidget plot;
+    plot.resize(900, 600);
+    for (int i = 0; i < 40; ++i) {
+      plot.zoom(2.0);
+      QVERIFY(plot.visibleTimeRange().start < plot.visibleTimeRange().end);
+    }
+    for (const double step : {-0.5, 0.5}) {
+      for (int i = 0; i < 40; ++i) {
+        plot.pan(step);
+        QVERIFY(plot.visibleTimeRange().start < plot.visibleTimeRange().end);
+      }
+    }
+    striptool::HistoryDialog dialog;
+    dialog.findChild<QDateTimeEdit*>(QStringLiteral("historyFrom"))
+        ->setDateTime(QDateTime(QDate(2599, 12, 31), QTime(0, 0)));
+    dialog.findChild<QDateTimeEdit*>(QStringLiteral("historyTo"))
+        ->setDateTime(QDateTime(QDate(2600, 1, 1), QTime(0, 0)));
+    const auto range = dialog.selectedRange();
+    QVERIFY(range.start <= range.end);
+    QVERIFY(range.end <= std::chrono::system_clock::from_time_t(4102444800));
+    QVERIFY(range.end > std::chrono::system_clock::from_time_t(4000000000));
+  }
   void mainWindowFileExportAndSnapshotEntryPointsWork() {
     const auto root = std::filesystem::temp_directory_path() /
                       "qtstriptool-main-workflow-test";

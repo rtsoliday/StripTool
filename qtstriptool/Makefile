@@ -195,6 +195,7 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            legendShowsFullValueAndLimits \
            largeFontsExpandPlotMarginsAndLegendRows \
            mainAndControlWindowsShareOneModel historyDialogRoundTripsRange \
+           extremeZoomPanAndDatesKeepTimeRangesValid \
            mainWindowFileExportAndSnapshotEntryPointsWork iconResourceIsEmbedded \
            printPreviewHasUsefulInitialGeometry \
            plotWidgetSupportsViewAndAnnotationOperations \
