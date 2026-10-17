@@ -854,6 +854,27 @@ private slots:
     QVERIFY(!model.curves[0].nameSet);
     QCOMPARE(acquisition.count(), 3);
   }
+  void typedTimingValuesApplyOnceWhenEntered() {
+    // Intermediate values such as the "9" of "9000" must not resize buffers.
+    auto model = striptool::makeDefaultModel();
+    striptool::ControlsWindow controls(&model);
+    QSignalSpy acquisition(&controls,
+                           &striptool::ControlsWindow::acquisitionConfigurationChanged);
+    for (const auto& [name, typed] :
+         {std::pair{QStringLiteral("sampleCount"), QStringLiteral("9000")},
+          std::pair{QStringLiteral("timespanSeconds"), QStringLiteral("3600")}}) {
+      auto* editor = controls.findChild<QSpinBox*>(name);
+      QVERIFY(editor);
+      acquisition.clear();
+      editor->selectAll();
+      QTest::keyClicks(editor, typed);
+      QCOMPARE(acquisition.count(), 0);
+      QTest::keyClick(editor, Qt::Key_Return);
+      QCOMPARE(acquisition.count(), 1);
+    }
+    QCOMPARE(model.timing.numberOfSamples, 9000);
+    QCOMPARE(model.timing.timespanSeconds, 3600U);
+  }
   void plotRendersModelTitle() {
     auto model = striptool::makeDefaultModel();
     model.title = "Beam Study";

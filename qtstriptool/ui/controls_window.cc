@@ -228,6 +228,11 @@ QWidget* ControlsWindow::createTimingPage() {
   sampleCount_ = new QSpinBox(page);
   sampleCount_->setObjectName(QStringLiteral("sampleCount"));
   sampleCount_->setRange(1, 65536);
+  // Apply a typed value once it is entered, like the interval editors. Each
+  // keystroke would otherwise restart acquisition, and an intermediate sample
+  // count such as the "9" of "9000" discards all but the newest samples.
+  timespan_->setKeyboardTracking(false);
+  sampleCount_->setKeyboardTracking(false);
   sampleInterval_ = valueEditor(page);
   sampleInterval_->setObjectName(QStringLiteral("sampleInterval"));
   sampleInterval_->setRange(0.01, 1e9);

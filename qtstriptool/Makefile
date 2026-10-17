@@ -178,6 +178,7 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                configurationOmitsDiscoveredUnitsThatAreNotOneWord \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
+           typedTimingValuesApplyOnceWhenEntered \
            helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \
            aboutBannerClickScrollsMessage helpManualUsesSiteOverride \
            pvDropsAddCurvesOnBothScreens pvDropCapacityIsTransactionalAndReplotsExistingCurves \
