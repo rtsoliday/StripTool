@@ -1533,7 +1533,9 @@ private slots:
     auto model = striptool::makeDefaultModel();
     model.curves[0].nameSet = true;
     striptool::CurveSamples samples;
-    samples[0].push_back({std::chrono::system_clock::time_point::min(), 1.0});
+    for (const auto time : {std::chrono::system_clock::time_point::min(),
+                            std::chrono::system_clock::time_point::max()})
+      samples[0].push_back({time, 1.0});
     std::ostringstream text, csv;
     QVERIFY(striptool::ExportService::writeText(text, model, samples));
     QVERIFY(striptool::ExportService::writeCsv(csv, model, samples));
@@ -1541,6 +1543,15 @@ private slots:
         "-?\\d{4,}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z"));
     QVERIFY(timestamp.match(QString::fromStdString(text.str())).hasMatch());
     QVERIFY(timestamp.match(QString::fromStdString(csv.str())).hasMatch());
+    for (const auto& sample : samples[0]) {
+      const auto milliseconds = std::chrono::floor<std::chrono::milliseconds>(
+          sample.timestamp.time_since_epoch()).count();
+      const auto expected = QDateTime::fromMSecsSinceEpoch(milliseconds).toUTC()
+          .toString(QStringLiteral("yyyy-MM-dd'T'HH:mm:ss.zzz'Z'")).toStdString();
+      QVERIFY(!expected.empty());
+      QVERIFY(text.str().find(expected) != std::string::npos);
+      QVERIFY(csv.str().find(expected) != std::string::npos);
+    }
   }
   void archiverRejectsOutOfRangeTimestamps() {
     const QByteArray response = R"([{"data":[

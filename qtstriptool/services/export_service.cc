@@ -6,11 +6,22 @@
 #include <iomanip>
 #include <ostream>
 #include <sstream>
+#ifdef _WIN32
+#include <QDateTime>
+#endif
 
 namespace striptool {
 namespace {
 
 std::string timestamp(const std::chrono::system_clock::time_point& value) {
+#ifdef _WIN32
+  // The Windows CRT calendar conversion cannot cover system_clock's full
+  // range. Qt can, including dates before the Unix epoch and beyond year 9999.
+  const auto milliseconds = std::chrono::floor<std::chrono::milliseconds>(
+      value.time_since_epoch()).count();
+  return QDateTime::fromMSecsSinceEpoch(milliseconds).toUTC()
+      .toString(QStringLiteral("yyyy-MM-dd'T'HH:mm:ss.zzz'Z'")).toStdString();
+#else
   const auto wholeSeconds = std::chrono::floor<std::chrono::seconds>(
       value.time_since_epoch());
   // Converting the floored second back to a time_point can underflow at the
@@ -20,15 +31,12 @@ std::string timestamp(const std::chrono::system_clock::time_point& value) {
       value.time_since_epoch()).count() % 1000;
   if (milliseconds < 0) milliseconds += 1000;
   std::tm utc{};
-#ifdef _WIN32
-  gmtime_s(&utc, &seconds);
-#else
   gmtime_r(&seconds, &utc);
-#endif
   std::ostringstream result;
   result << std::put_time(&utc, "%Y-%m-%dT%H:%M:%S") << '.'
          << std::setfill('0') << std::setw(3) << milliseconds << 'Z';
   return result.str();
+#endif
 }
 
 std::string csvQuote(const std::string& value) {
