@@ -41,6 +41,7 @@
 #include <QPushButton>
 #include <QPrintPreviewDialog>
 #include <QPrintPreviewWidget>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QScreen>
 #include <QScrollBar>
@@ -1527,6 +1528,19 @@ private slots:
       QVERIFY(text.str().find(timestamp) != std::string::npos);
       QVERIFY(csv.str().find(timestamp) != std::string::npos);
     }
+  }
+  void exportsClockMinimumWithoutOverflow() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    striptool::CurveSamples samples;
+    samples[0].push_back({std::chrono::system_clock::time_point::min(), 1.0});
+    std::ostringstream text, csv;
+    QVERIFY(striptool::ExportService::writeText(text, model, samples));
+    QVERIFY(striptool::ExportService::writeCsv(csv, model, samples));
+    const QRegularExpression timestamp(QStringLiteral(
+        "-?\\d{4,}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z"));
+    QVERIFY(timestamp.match(QString::fromStdString(text.str())).hasMatch());
+    QVERIFY(timestamp.match(QString::fromStdString(csv.str())).hasMatch());
   }
   void archiverRejectsOutOfRangeTimestamps() {
     const QByteArray response = R"([{"data":[

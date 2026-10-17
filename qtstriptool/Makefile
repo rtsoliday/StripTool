@@ -173,7 +173,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              archiverRejectsOutOfRangeTimestamps \
              archiverRequestsIdentifyApplicationVersion \
              activeHistoryRequestCanBeDestroyedSafely exportReportsWriteFailures \
-             exportsTextAndCsvData exportsPreEpochTimestamps
+             exportsTextAndCsvData exportsPreEpochTimestamps exportsClockMinimumWithoutOverflow
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \
                preservesUnknownFieldsAcrossRoundTrip \
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \

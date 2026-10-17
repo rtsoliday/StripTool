@@ -13,10 +13,12 @@ namespace {
 std::string timestamp(const std::chrono::system_clock::time_point& value) {
   const auto wholeSeconds = std::chrono::floor<std::chrono::seconds>(
       value.time_since_epoch());
-  const auto seconds = std::chrono::system_clock::to_time_t(
-      std::chrono::system_clock::time_point(wholeSeconds));
-  const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
-      value.time_since_epoch() - wholeSeconds).count();
+  // Converting the floored second back to a time_point can underflow at the
+  // clock minimum. Supported system clocks and time_t use the Unix epoch.
+  const auto seconds = static_cast<std::time_t>(wholeSeconds.count());
+  auto milliseconds = std::chrono::floor<std::chrono::milliseconds>(
+      value.time_since_epoch()).count() % 1000;
+  if (milliseconds < 0) milliseconds += 1000;
   std::tm utc{};
 #ifdef _WIN32
   gmtime_s(&utc, &seconds);
