@@ -179,6 +179,7 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \
                appliesLayersInOrder writerRejectsInvalidModels \
                configurationRoundTripsFullDoublePrecision \
+               configurationReportsCloseFailures \
                configurationWritesDiscoveredChannelMetadata \
                configurationOmitsDiscoveredUnitsThatAreNotOneWord \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles

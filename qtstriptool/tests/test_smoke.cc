@@ -1501,6 +1501,14 @@ private slots:
                  {start, start + std::chrono::seconds(1)}).path(),
              QStringLiteral("/retrieval/data/getData.json"));
   }
+  void configurationReportsCloseFailures() {
+    if (!QFileInfo::exists(QStringLiteral("/dev/full")))
+      QSKIP("/dev/full is unavailable");
+    std::string error;
+    QVERIFY(!striptool::writeConfigurationFile(
+        "/dev/full", striptool::makeDefaultModel(), &error));
+    QVERIFY(error.find("unable to write") != std::string::npos);
+  }
   void exportsPreEpochTimestamps() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].nameSet = true;

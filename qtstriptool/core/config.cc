@@ -411,6 +411,7 @@ bool writeConfigurationFile(const std::filesystem::path& path,
     return false;
   }
   output << serialized.str();
+  output.close();
   if (!output) {
     if (error) *error = "unable to write " + path.string();
     return false;
