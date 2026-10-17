@@ -312,12 +312,12 @@ ConfigResult readConfiguration(std::istream& input, StripToolModel& model) {
 ConfigResult readConfigurationFile(const std::filesystem::path& path,
                                    StripToolModel& model) {
   std::ifstream input(path);
-  if (!input) return fail(0, "unable to open " + path.string());
+  if (!input) return fail(0, "unable to open " + path.u8string());
   StripToolModel candidate = model;
-  candidate.title = path.filename().string();
+  candidate.title = path.filename().u8string();
   ConfigResult result = readConfiguration(input, candidate);
   if (result.success) {
-    candidate.filename = path.string();
+    candidate.filename = path.u8string();
     model = std::move(candidate);
   }
   return result;
@@ -407,13 +407,13 @@ bool writeConfigurationFile(const std::filesystem::path& path,
   if (!writeConfiguration(serialized, model, error)) return false;
   std::ofstream output(path);
   if (!output) {
-    if (error) *error = "unable to open " + path.string();
+    if (error) *error = "unable to open " + path.u8string();
     return false;
   }
   output << serialized.str();
   output.close();
   if (!output) {
-    if (error) *error = "unable to write " + path.string();
+    if (error) *error = "unable to write " + path.u8string();
     return false;
   }
   return true;
@@ -456,7 +456,7 @@ std::filesystem::path findConfigurationFile(
   std::string directory;
   while (std::getline(paths, directory, separator)) {
     if (directory.empty()) continue;
-    const auto candidate = std::filesystem::path(directory) / name;
+    const auto candidate = std::filesystem::u8path(directory) / name;
     if (exists(candidate)) return candidate;
   }
   return {};
@@ -468,7 +468,7 @@ std::filesystem::path findStartupConfiguration(
     const std::string& searchPath) {
   if (!explicitName.empty())
     if (const auto explicitFile =
-            findConfigurationFile(explicitName, workingDirectory, searchPath);
+            findConfigurationFile(std::filesystem::u8path(explicitName), workingDirectory, searchPath);
         !explicitFile.empty())
       return explicitFile;
   const auto defaultFile = workingDirectory / "StripTool.stp";

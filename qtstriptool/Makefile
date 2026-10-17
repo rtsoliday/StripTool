@@ -200,7 +200,7 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            largeFontsExpandPlotMarginsAndLegendRows \
            mainAndControlWindowsShareOneModel historyDialogRoundTripsRange \
            extremeZoomPanAndDatesKeepTimeRangesValid \
-           mainWindowFileExportAndSnapshotEntryPointsWork iconResourceIsEmbedded \
+           mainWindowFileExportAndSnapshotEntryPointsWork unicodeFilePathsRoundTrip iconResourceIsEmbedded \
            printPreviewHasUsefulInitialGeometry \
            plotWidgetSupportsViewAndAnnotationOperations \
            liveAndHistoricalTracesRenderAsStepsWithoutCrossingGaps \

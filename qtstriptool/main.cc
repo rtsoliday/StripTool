@@ -35,12 +35,13 @@ int main(int argc, char** argv) {
     return 1;
   }
   const QString explicitName = parser.positionalArguments().value(0);
+  const auto workingDirectory = std::filesystem::u8path(QDir::currentPath().toStdString());
   auto model = striptool::makeDefaultModel();
   const auto explicitConfiguration = explicitName.isEmpty()
                                          ? std::filesystem::path{}
                                          : striptool::findConfigurationFile(
-                                               explicitName.toStdString(),
-                                               QDir::currentPath().toStdString(),
+                                               std::filesystem::u8path(explicitName.toStdString()),
+                                               workingDirectory,
                                                qEnvironmentVariable(
                                                    "STRIP_FILE_SEARCH_PATH")
                                                    .toStdString());
@@ -49,7 +50,7 @@ int main(int argc, char** argv) {
                         << "; trying StripTool.stp\n";
   }
   const auto configuration = striptool::findStartupConfiguration(
-      explicitName.toStdString(), QDir::currentPath().toStdString(),
+      explicitName.toStdString(), workingDirectory,
       qEnvironmentVariable("STRIP_FILE_SEARCH_PATH").toStdString());
   bool loaded = false;
   if (!configuration.empty()) {
@@ -63,7 +64,7 @@ int main(int argc, char** argv) {
     }
   }
   if (!loaded && !explicitName.isEmpty()) {
-    const auto fallback = std::filesystem::path(QDir::currentPath().toStdString()) /
+    const auto fallback = workingDirectory /
                           "StripTool.stp";
     std::error_code checkError;
     const bool sameFile = !configuration.empty() &&

@@ -53,14 +53,14 @@ bool writeFile(const std::filesystem::path& path, Writer writer,
                std::string* error) {
   std::ofstream output(path);
   if (!output) {
-    if (error) *error = "unable to open " + path.string();
+    if (error) *error = "unable to open " + path.u8string();
     return false;
   }
   // The last buffered block is written by close(); a full disk can fail there.
   const bool written = writer(output);
   output.close();
   if (!written || !output) {
-    if (error) *error = "unable to write " + path.string();
+    if (error) *error = "unable to write " + path.u8string();
     return false;
   }
   return true;

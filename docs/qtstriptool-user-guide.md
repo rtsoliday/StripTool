@@ -174,6 +174,8 @@ requested again unless the PV is reconnected or the configuration is reloaded.
 
 ## Open, save, export, and print
 
+Configuration and data-export files support non-ASCII file and folder names.
+
 - **File > Open**, **Save**, and **Save As** read and write Motif-readable
   `StripConfig 1.2` files. Open Recent is stored with Qt application settings.
 - **Restore Defaults** in Controls replaces the current model with compiled

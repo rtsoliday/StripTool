@@ -1731,6 +1731,32 @@ private slots:
     QVERIFY(zoomFactor >= 0.25);
     QVERIFY(imageSaved);
   }
+  void unicodeFilePathsRoundTrip() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString folder = directory.filePath(QStringLiteral("\u6e2c\u5b9a-\u00e9"));
+    QVERIFY(QDir().mkpath(folder));
+    const QString path = folder + QStringLiteral("/\u6e2c\u5b9a.stp");
+    striptool::MainWindow window;
+    QString error;
+    QVERIFY2(window.saveConfiguration(path, &error), qPrintable(error));
+    QVERIFY(QFileInfo::exists(path));
+    QCOMPARE(window.model().filename, path.toStdString());
+    QVERIFY2(window.openConfiguration(path, &error), qPrintable(error));
+    QCOMPARE(window.model().filename, path.toStdString());
+    const auto nativePath = std::filesystem::u8path(path.toStdString());
+    QCOMPARE(striptool::findStartupConfiguration(
+                 QFileInfo(path).fileName().toStdString(),
+                 std::filesystem::u8path(folder.toStdString()), {}), nativePath);
+    QCOMPARE(striptool::findConfigurationFile(
+                 nativePath.filename(), std::filesystem::path{}, folder.toStdString()), nativePath);
+    for (const bool csv : {false, true}) {
+      const auto output = folder + (csv ? QStringLiteral("/\u6e2c\u5b9a.csv")
+                                        : QStringLiteral("/\u6e2c\u5b9a.txt"));
+      QVERIFY2(window.exportData(output, csv, &error), qPrintable(error));
+      QVERIFY(QFileInfo::exists(output));
+    }
+  }
   void mainWindowExportsOnlyVisibleSamples() {
     QTemporaryDir temporary;
     QVERIFY(temporary.isValid());

@@ -567,7 +567,7 @@ void MainWindow::applyModel() {
 }
 
 bool MainWindow::openConfiguration(const QString& path, QString* error) {
-  const auto result = FileWorkflow::open(path.toStdString(), model_);
+  const auto result = FileWorkflow::open(std::filesystem::u8path(path.toStdString()), model_);
   if (!result.success) {
     if (error)
       *error = result.diagnostics.empty()
@@ -583,7 +583,7 @@ bool MainWindow::openConfiguration(const QString& path, QString* error) {
 
 bool MainWindow::saveConfiguration(const QString& path, QString* error) {
   std::string detail;
-  if (!FileWorkflow::save(path.toStdString(), model_, &detail)) {
+  if (!FileWorkflow::save(std::filesystem::u8path(path.toStdString()), model_, &detail)) {
     if (error) *error = QString::fromStdString(detail);
     return false;
   }
@@ -608,8 +608,9 @@ bool MainWindow::exportData(const QString& path, bool csv, QString* error) const
     samples[i].assign(first, last);
   }
   std::string detail;
-  const bool ok = csv ? ExportService::writeCsvFile(path.toStdString(), model_, samples, &detail)
-                      : ExportService::writeTextFile(path.toStdString(), model_, samples, &detail);
+  const auto outputPath = std::filesystem::u8path(path.toStdString());
+  const bool ok = csv ? ExportService::writeCsvFile(outputPath, model_, samples, &detail)
+                      : ExportService::writeTextFile(outputPath, model_, samples, &detail);
   if (!ok && error) *error = QString::fromStdString(detail);
   return ok;
 }
