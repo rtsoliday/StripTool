@@ -17,6 +17,7 @@
 #include <chrono>
 #include <cmath>
 #include <exception>
+#include <limits>
 
 namespace striptool {
 
@@ -63,14 +64,34 @@ std::vector<Sample> parseArchiverJson(const QByteArray& content, QString* error,
       const QJsonValue nanosValue = item.value(QStringLiteral("nanos"));
       if (!value.isDouble() || !secsValue.isDouble() || !nanosValue.isDouble())
         continue;  // qtstriptool supports scalar numeric PVs.
-      const qint64 secs = secsValue.toVariant().toLongLong();
-      const qint64 nanos = nanosValue.toVariant().toLongLong();
+      const double seconds = secsValue.toDouble();
+      const double nanoseconds = nanosValue.toDouble();
       const double number = value.toDouble();
-      if (!std::isfinite(number) || nanos < 0 || nanos >= 1000000000) continue;
+      // Validate before converting or multiplying: QVariant rounds fractional
+      // timestamps and chrono's seconds-to-nanoseconds conversion can overflow.
+      // Use the common 64-bit nanosecond range even on microsecond-clock hosts.
+      constexpr qint64 billion = 1000000000;
+      constexpr auto minimum = std::numeric_limits<std::int64_t>::min();
+      constexpr auto maximum = std::numeric_limits<std::int64_t>::max();
+      constexpr auto minimumSeconds = minimum / billion - 1;
+      constexpr auto maximumSeconds = maximum / billion;
+      if (!std::isfinite(number) || !std::isfinite(seconds) ||
+          std::trunc(seconds) != seconds || seconds < minimumSeconds ||
+          seconds > maximumSeconds || !std::isfinite(nanoseconds) ||
+          std::trunc(nanoseconds) != nanoseconds || nanoseconds < 0 ||
+          nanoseconds >= billion) continue;
+      const auto secs = static_cast<qint64>(seconds);
+      const auto nanos = static_cast<qint64>(nanoseconds);
+      if ((secs == minimumSeconds && nanos < billion + minimum % billion) ||
+          (secs == maximumSeconds && nanos > maximum % billion)) continue;
+      // For negative seconds, multiply the next second and subtract the
+      // remaining fraction so the intermediate product also fits at the limit.
+      const auto ticks = secs < 0 ? (secs + 1) * billion + nanos - billion
+                                  : secs * billion + nanos;
       Sample sample;
       sample.timestamp = std::chrono::system_clock::time_point{
           std::chrono::duration_cast<std::chrono::system_clock::duration>(
-              std::chrono::seconds(secs) + std::chrono::nanoseconds(nanos))};
+              std::chrono::nanoseconds(ticks))};
       sample.value = number;
       sample.status = static_cast<std::uint16_t>(std::clamp(
           item.value(QStringLiteral("status")).toInt(), 0, 65535));

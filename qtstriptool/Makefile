@@ -168,6 +168,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              noHistoryProviderReportsFailureAndCancellation \
              testHistoryProviderReturnsSelectedOwnedSamples \
              archiverHistoryProviderRetrievesNativeJson \
+             archiverRejectsOutOfRangeTimestamps \
              archiverRequestsIdentifyApplicationVersion \
              activeHistoryRequestCanBeDestroyedSafely exportReportsWriteFailures \
              exportsTextAndCsvData

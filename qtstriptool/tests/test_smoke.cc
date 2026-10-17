@@ -1501,6 +1501,36 @@ private slots:
                  {start, start + std::chrono::seconds(1)}).path(),
              QStringLiteral("/retrieval/data/getData.json"));
   }
+  void archiverRejectsOutOfRangeTimestamps() {
+    const QByteArray response = R"([{"data":[
+      {"secs":9223372037,"nanos":0,"val":1},
+      {"secs":-9223372037,"nanos":0,"val":2},
+      {"secs":1e100,"nanos":0,"val":3},
+      {"secs":1.5,"nanos":0,"val":4},
+      {"secs":1,"nanos":0.5,"val":5},
+      {"secs":9223372036,"nanos":854775808,"val":6},
+      {"secs":-9223372037,"nanos":145224191,"val":7},
+      {"secs":9223372036,"nanos":854775807,"val":8},
+      {"secs":-9223372037,"nanos":145224192,"val":9},
+      {"secs":-1,"nanos":999999999,"val":10}
+    ]}])";
+    QString error;
+    const auto samples = striptool::parseArchiverJson(response, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(samples.size(), std::size_t(3));
+    QCOMPARE(samples[0].value, 9.0);
+    QCOMPARE(samples[0].timestamp.time_since_epoch(),
+             std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                 std::chrono::nanoseconds::min()));
+    QCOMPARE(samples[1].value, 10.0);
+    QCOMPARE(samples[1].timestamp.time_since_epoch(),
+             std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                 std::chrono::nanoseconds(-1)));
+    QCOMPARE(samples[2].value, 8.0);
+    QCOMPARE(samples[2].timestamp.time_since_epoch(),
+             std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                 std::chrono::nanoseconds::max()));
+  }
   void activeHistoryRequestCanBeDestroyedSafely() {
     auto provider = std::make_unique<striptool::TestHistoryProvider>();
     const auto now = std::chrono::system_clock::now();
