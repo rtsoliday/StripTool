@@ -1357,6 +1357,26 @@ private slots:
     QCOMPARE(model.timing.timespanSeconds, 300U);
     std::filesystem::remove_all(root);
   }
+  void archiverRequestsIdentifyApplicationVersion() {
+    QTcpServer server;
+    QVERIFY(server.listen(QHostAddress::LocalHost));
+    QByteArray received;
+    connect(&server, &QTcpServer::newConnection, &server, [&server, &received] {
+      auto* socket = server.nextPendingConnection();
+      connect(socket, &QTcpSocket::readyRead, socket,
+              [socket, &received] { received += socket->readAll(); });
+    });
+    striptool::ArchiverHistoryProvider provider(
+        QStringLiteral("http://127.0.0.1:%1").arg(server.serverPort()));
+    const auto now = std::chrono::system_clock::now();
+    const auto id = provider.request(QStringLiteral("test:agent"),
+                                     {now - std::chrono::minutes(1), now});
+    QTRY_VERIFY(received.contains("\r\n\r\n"));
+    const QByteArray agent =
+        "User-Agent: qtstriptool/" + striptool::applicationVersion().toLatin1() + "\r\n";
+    QVERIFY2(received.contains(agent), received.constData());
+    provider.cancel(id);
+  }
   void exportReportsWriteFailures() {
     // /dev/full accepts open() but every write fails with ENOSPC.
     if (!QFileInfo::exists(QStringLiteral("/dev/full"))) QSKIP("/dev/full is unavailable");

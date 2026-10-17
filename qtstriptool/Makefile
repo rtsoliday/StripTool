@@ -168,6 +168,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              noHistoryProviderReportsFailureAndCancellation \
              testHistoryProviderReturnsSelectedOwnedSamples \
              archiverHistoryProviderRetrievesNativeJson \
+             archiverRequestsIdentifyApplicationVersion \
              activeHistoryRequestCanBeDestroyedSafely exportReportsWriteFailures \
              exportsTextAndCsvData
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \

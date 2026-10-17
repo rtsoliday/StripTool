@@ -1,5 +1,7 @@
 #include "services/history_provider.h"
 
+#include "core/application.h"
+
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -196,7 +198,8 @@ HistoryRequestId ArchiverHistoryProvider::request(const QString& channel,
   }
 
   QNetworkRequest request(url);
-  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("qtstriptool/0.1"));
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QStringLiteral("qtstriptool/") + applicationVersion());
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
   request.setTransferTimeout(120000);
 #endif
