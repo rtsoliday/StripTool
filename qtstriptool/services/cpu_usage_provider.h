@@ -23,7 +23,11 @@ private:
   ChannelId nextId_ = 1;
   QSet<ChannelId> active_;
   QTimer timer_;
+#ifdef _WIN32
+  double lastCpuSeconds_ = 0.0;
+#else
   std::clock_t lastCpu_ = std::clock();
+#endif
   std::chrono::steady_clock::time_point lastWall_ = std::chrono::steady_clock::now();
 };
 

@@ -2,10 +2,31 @@
 
 #include <QTimer>
 #include <algorithm>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace striptool {
+#ifdef _WIN32
+namespace {
+double processCpuSeconds() {
+  FILETIME created{}, exited{}, kernel{}, user{};
+  if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))
+    return 0.0;
+  const auto seconds = [](FILETIME time) {
+    return (double(time.dwHighDateTime) * 4294967296.0 + time.dwLowDateTime) / 1e7;
+  };
+  return seconds(kernel) + seconds(user);
+}
+}
+#endif
 
 CpuUsageProvider::CpuUsageProvider(QObject* parent) : ChannelProvider(parent) {
+#ifdef _WIN32
+  // MSVC's clock() measures elapsed wall time, so an idle process would
+  // otherwise appear to consume 100% CPU.
+  lastCpuSeconds_ = processCpuSeconds();
+#endif
   timer_.setInterval(1000);
   connect(&timer_, &QTimer::timeout, this, &CpuUsageProvider::sampleNow);
 }
@@ -50,11 +71,17 @@ std::chrono::milliseconds CpuUsageProvider::sampleInterval() const {
 }
 
 void CpuUsageProvider::sampleNow() {
+#ifdef _WIN32
+  const auto cpu = processCpuSeconds();
+  const double cpuSeconds = cpu - lastCpuSeconds_;
+  lastCpuSeconds_ = cpu;
+#else
   const auto cpu = std::clock();
-  const auto wall = std::chrono::steady_clock::now();
   const double cpuSeconds = static_cast<double>(cpu - lastCpu_) / CLOCKS_PER_SEC;
-  const double wallSeconds = std::chrono::duration<double>(wall - lastWall_).count();
   lastCpu_ = cpu;
+#endif
+  const auto wall = std::chrono::steady_clock::now();
+  const double wallSeconds = std::chrono::duration<double>(wall - lastWall_).count();
   lastWall_ = wall;
   const double percentage = wallSeconds > 0.0
                                 ? std::clamp(100.0 * cpuSeconds / wallSeconds, 0.0, 100.0)

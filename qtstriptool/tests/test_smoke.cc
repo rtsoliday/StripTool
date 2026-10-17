@@ -2357,6 +2357,20 @@ private slots:
     QVERIFY(sample.value >= 0.0 && sample.value <= 100.0);
     provider.disconnectChannel(id);
   }
+  void cpuUsageExcludesIdleWallTime() {
+    striptool::CpuUsageProvider provider;
+    provider.setSampleInterval(std::chrono::hours(1));
+    const auto id = provider.connectChannel(QStringLiteral("CPU_Usage"));
+    QSignalSpy samples(&provider, &striptool::ChannelProvider::sampleReceived);
+    provider.sampleNow();
+    // Sleep without processing events so this measures a truly idle interval.
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    provider.sampleNow();
+    QCOMPARE(samples.count(), 2);
+    const auto sample = qvariant_cast<striptool::Sample>(samples.last().at(1));
+    QVERIFY2(sample.value < 50.0, "Sleeping must not count as process CPU time");
+    provider.disconnectChannel(id);
+  }
   void plotDataSelectionAndHistoryJoinAreToolkitNeutral() {
     const auto base = std::chrono::system_clock::time_point{};
     std::vector<striptool::Sample> live{

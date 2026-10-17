@@ -163,7 +163,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              disconnectedChannelDoesNotRepeatOldSamples \
              disconnectedIntervalsSurviveDecimation \
              denseGapsRetainDataWithoutJoiningDisconnectedSegments \
-             cpuUsageIsASeparateLocalProvider \
+             cpuUsageIsASeparateLocalProvider cpuUsageExcludesIdleWallTime \
              plotDataSelectionAndHistoryJoinAreToolkitNeutral \
              visibleRangeIncludesCrossingSegments \
              extremeFiniteSamplesKeepRangesAndLabelsFinite \
