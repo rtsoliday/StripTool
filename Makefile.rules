@@ -806,7 +806,11 @@ ifeq ($(OS),Windows)
 QT_VERSION ?= 6
 QT_DIR ?= C:/Qt/6.11.2/msvc2022_64
 QT_DIR := $(subst \,/,$(QT_DIR))
-HAVE_QT := $(if $(wildcard $(QT_DIR)/include/QtWidgets/QtWidgets),1)
+# Headers alone do not identify the major version: test-qt-versions must not
+# mistake a Qt 6 installation for Qt 5 and then link nonexistent Qt5 libraries.
+QT_WINDOWS_MODULES = Core Gui Widgets Network PrintSupport Test
+QT_WINDOWS_LIBRARIES := $(foreach module,$(QT_WINDOWS_MODULES),$(wildcard $(QT_DIR)/lib/Qt$(QT_VERSION)$(module).lib))
+HAVE_QT := $(if $(and $(wildcard $(QT_DIR)/include/QtWidgets/QtWidgets),$(filter 6,$(words $(QT_WINDOWS_LIBRARIES)))),1)
 QT_CFLAGS = /DQT_NO_DEBUG /DQT_CORE_LIB /DQT_GUI_LIB /DQT_WIDGETS_LIB /DQT_NETWORK_LIB /DQT_PRINTSUPPORT_LIB \
             /I"$(QT_DIR)/include" /I"$(QT_DIR)/include/QtCore" \
             /I"$(QT_DIR)/include/QtGui" /I"$(QT_DIR)/include/QtWidgets" \
