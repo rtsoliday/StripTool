@@ -1564,6 +1564,36 @@ private slots:
       QCOMPARE(selected.back().timestamp, samples.back().timestamp);
     }
   }
+  void extremeFiniteSamplesKeepRangesAndLabelsFinite() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(960, 600);
+    plot.setModel(model);
+    const auto now = std::chrono::system_clock::now();
+    for (const double value : {std::numeric_limits<double>::max(),
+                               std::numeric_limits<double>::lowest()}) {
+      plot.setCurveSamples(0, {{now, value}});
+      const auto range = plot.valueRange(0);
+      QVERIFY(std::isfinite(range.minimum) && std::isfinite(range.maximum));
+      QVERIFY(range.minimum < range.maximum);
+      QVERIFY(range.minimum <= value && range.maximum >= value);
+      const auto labels = plot.yAxisLabels(0);
+      QCOMPARE(labels.size(), 6);
+      for (int i = 1; i < labels.size(); ++i) QVERIFY(labels[i] != labels[i - 1]);
+    }
+    plot.setCurveSamples(0, {{now - std::chrono::seconds(1),
+                              std::numeric_limits<double>::lowest()},
+                             {now, std::numeric_limits<double>::max()}});
+    const auto labels = plot.yAxisLabels(0);
+    for (int i = 0; i < labels.size(); ++i) {
+      QVERIFY(!labels[i].contains(QStringLiteral("nan"), Qt::CaseInsensitive));
+      QVERIFY(!labels[i].contains(QStringLiteral("inf"), Qt::CaseInsensitive));
+      if (i) QVERIFY(labels[i] != labels[i - 1]);
+    }
+    QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    plot.render(&image);
+  }
   void activeHistoryRequestCanBeDestroyedSafely() {
     auto provider = std::make_unique<striptool::TestHistoryProvider>();
     const auto now = std::chrono::system_clock::now();

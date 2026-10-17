@@ -7,6 +7,16 @@
 #include <limits>
 
 namespace striptool {
+namespace {
+ValueRange padConstantRange(ValueRange range) {
+  if (range.minimum == range.maximum) {
+    const double padding = range.minimum == 0.0 ? 1.0 : std::abs(range.minimum) * 0.05;
+    range.minimum = std::max(std::numeric_limits<double>::lowest(), range.minimum - padding);
+    range.maximum = std::min(std::numeric_limits<double>::max(), range.maximum + padding);
+  }
+  return range;
+}
+}
 
 std::vector<Sample> selectSamples(
     const std::vector<Sample>& samples,
@@ -101,12 +111,7 @@ std::optional<ValueRange> sampleValueRange(const std::vector<Sample>& samples,
     range.maximum = std::max(range.maximum, value);
   }
   if (!std::isfinite(range.minimum)) return std::nullopt;
-  if (range.minimum == range.maximum) {
-    const double padding = range.minimum == 0.0 ? 1.0 : std::abs(range.minimum) * 0.05;
-    range.minimum -= padding;
-    range.maximum += padding;
-  }
-  return range;
+  return padConstantRange(range);
 }
 
 std::optional<ValueRange> visibleSampleValueRange(
@@ -138,12 +143,7 @@ std::optional<ValueRange> visibleSampleValueRange(
   }
 
   if (!std::isfinite(range.minimum)) return std::nullopt;
-  if (range.minimum == range.maximum) {
-    const double padding = range.minimum == 0.0 ? 1.0 : std::abs(range.minimum) * 0.05;
-    range.minimum -= padding;
-    range.maximum += padding;
-  }
-  return range;
+  return padConstantRange(range);
 }
 
 std::vector<Sample> joinHistoricalAndLive(const std::vector<Sample>& historical,

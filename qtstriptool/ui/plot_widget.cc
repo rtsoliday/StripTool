@@ -51,6 +51,20 @@ QString fixedLabel(double value, int decimals) {
   return label == QStringLiteral("-0") ? QStringLiteral("0") : label;
 }
 
+double rangeValue(const ValueRange& range, double fraction) {
+  const double span = range.maximum - range.minimum;
+  return std::isfinite(span) ? range.maximum - span * fraction
+      : range.maximum * (1.0 - fraction) + range.minimum * fraction;
+}
+
+double rangeOffset(const ValueRange& range, double value, double pixels) {
+  const double offset = value - range.minimum;
+  const double span = range.maximum - range.minimum;
+  return std::isfinite(offset) && std::isfinite(span) ? pixels * offset / span
+      : pixels * ((value / 2.0 - range.minimum / 2.0) /
+          (range.maximum / 2.0 - range.minimum / 2.0));
+}
+
 QStringList axisLabels(const ValueRange& range, ScaleMode scale, int divisions) {
   QStringList labels;
   if (!range.isValid() || divisions < 1) return labels;
@@ -66,9 +80,12 @@ QStringList axisLabels(const ValueRange& range, ScaleMode scale, int divisions) 
   for (int candidate = 4; candidate <= 17; ++candidate) {
     labels.clear();
     for (int tick = 0; tick <= divisions; ++tick) {
-      double plotted = range.maximum - span * tick / divisions;
+      double plotted = std::isfinite(span) ? range.maximum - span * tick / divisions
+          : rangeValue(range, double(tick) / divisions);
       // A tick at a zero crossing can carry arithmetic residue such as 1e-17.
-      if (std::abs(plotted) < span * 1e-9) plotted = 0.0;
+      const double zeroTolerance = std::isfinite(span) ? span * 1e-9
+          : range.maximum * 1e-9 - range.minimum * 1e-9;
+      if (std::abs(plotted) < zeroTolerance) plotted = 0.0;
       const double value = scale == ScaleMode::Log10 ? std::pow(10.0, plotted)
                                                      : plotted;
       labels.push_back(fixed ? fixedLabel(value, std::clamp(candidate - 1 - exponent, 0, 20))
@@ -708,9 +725,7 @@ std::optional<double> PlotWidget::valueAt(const QPoint& position) const {
   const ValueRange range = valueRange(index);
   const QRectF area = plotRect();
   if (!range.isValid() || area.height() <= 0) return std::nullopt;
-  const double plotted = range.maximum -
-      (position.y() - area.top()) / area.height() *
-          (range.maximum - range.minimum);
+  const double plotted = rangeValue(range, (position.y() - area.top()) / area.height());
   const double value = model_.curves[index].scale == ScaleMode::Log10
                            ? std::pow(10.0, plotted) : plotted;
   return std::isfinite(value) ? std::optional<double>(value) : std::nullopt;
@@ -739,8 +754,7 @@ QRectF PlotWidget::annotationRect(std::size_t index, const QRectF& area) const {
     const ValueRange range = valueRange(curve);
     const double plotted = plotValue(*annotation.value, model_.curves[curve].scale);
     if (range.isValid() && std::isfinite(plotted))
-      y = area.bottom() - area.height() *
-          (plotted - range.minimum) / (range.maximum - range.minimum);
+      y = area.bottom() - rangeOffset(range, plotted, area.height());
   }
   const QFontMetrics metrics(font());
   const QString text = QString::fromStdString(annotation.text);
@@ -806,8 +820,7 @@ std::optional<QPointF> PlotWidget::mapSample(const Sample& sample,
   if (end <= begin || !sample.plotable || !range.isValid() || !std::isfinite(value))
     return std::nullopt;
   return QPointF(area.left() + area.width() * double(time - begin) / double(end - begin),
-                 area.bottom() - area.height() * (value - range.minimum) /
-                                     (range.maximum - range.minimum));
+                 area.bottom() - rangeOffset(range, value, area.height()));
 }
 
 QRectF PlotWidget::currentPlotRect() const {
@@ -1118,9 +1131,7 @@ void PlotWidget::mouseMoveEvent(QMouseEvent* event) {
     double value = std::numeric_limits<double>::quiet_NaN();
     if (curveIndex >= 0) {
       const auto range = valueRange(static_cast<std::size_t>(curveIndex));
-      const double plotted = range.maximum -
-          (event->pos().y() - area.top()) / area.height() *
-              (range.maximum - range.minimum);
+      const double plotted = rangeValue(range, (event->pos().y() - area.top()) / area.height());
       value = model_.curves[static_cast<std::size_t>(curveIndex)].scale == ScaleMode::Log10
                   ? std::pow(10.0, plotted) : plotted;
     }

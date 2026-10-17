@@ -166,6 +166,7 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              cpuUsageIsASeparateLocalProvider \
              plotDataSelectionAndHistoryJoinAreToolkitNeutral \
              visibleRangeIncludesCrossingSegments \
+             extremeFiniteSamplesKeepRangesAndLabelsFinite \
              noHistoryProviderReportsFailureAndCancellation \
              testHistoryProviderReturnsSelectedOwnedSamples \
              archiverHistoryProviderRetrievesNativeJson \
