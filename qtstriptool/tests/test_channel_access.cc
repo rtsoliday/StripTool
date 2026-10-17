@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QProcess>
 #include <QSignalSpy>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
@@ -196,6 +197,11 @@ private slots:
 int main(int argc, char** argv) {
   QApplication application(argc, argv);
   striptool::configureApplication(application);
+  QTemporaryDir settingsDirectory;
+  if (!settingsDirectory.isValid()) return 1;
+  QSettings::setDefaultFormat(QSettings::IniFormat);
+  QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
+  QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, settingsDirectory.path());
   qRegisterMetaType<striptool::ChannelId>("striptool::ChannelId");
   qRegisterMetaType<striptool::ChannelMetadata>();
   qRegisterMetaType<striptool::Sample>();

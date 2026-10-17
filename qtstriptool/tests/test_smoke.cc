@@ -1673,9 +1673,6 @@ private slots:
     const auto root = std::filesystem::temp_directory_path() /
                       "qtstriptool-main-workflow-test";
     std::filesystem::create_directories(root);
-    QSettings::setDefaultFormat(QSettings::IniFormat);
-    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
-                       QString::fromStdString(root.string()));
     striptool::MainWindow window;
     window.resize(640, 480);
     window.show();
@@ -3730,6 +3727,13 @@ int main(int argc, char** argv) {
   striptool::setDefaultApplicationStyle();
   QApplication application(argc, argv);
   striptool::configureApplication(application);
+  // Every test, including an individually selected test, must leave the
+  // operator's recent files and preferences alone.
+  QTemporaryDir settingsDirectory;
+  if (!settingsDirectory.isValid()) return 1;
+  QSettings::setDefaultFormat(QSettings::IniFormat);
+  QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
+  QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, settingsDirectory.path());
   SmokeTests tests;
   return QTest::qExec(&tests, argc, argv);
 }
