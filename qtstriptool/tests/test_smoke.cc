@@ -2684,13 +2684,19 @@ private slots:
     const auto gridMismatch = [&plot](int linesPerTick) -> QString {
       QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
       plot.render(&image);
-      int left = 0, top = 0;
-      while (!plot.isInPlot(QPoint(left, plot.height() / 2))) ++left;
-      int right = left;
-      while (plot.isInPlot(QPoint(right + 1, plot.height() / 2))) ++right;
-      while (!plot.isInPlot(QPoint(plot.width() / 2, top))) ++top;
-      int bottom = top;
-      while (plot.isInPlot(QPoint(plot.width() / 2, bottom + 1))) ++bottom;
+      // Large legends and footers can place the widget's centre outside the
+      // plot. Find an interior point with a bounded scan before finding edges.
+      QPoint inside(-1, -1);
+      for (int y = 0; y < plot.height() && inside.x() < 0;
+           y += std::max(1, plot.height() / 20))
+        for (int x = 0; x < plot.width(); x += std::max(1, plot.width() / 20))
+          if (plot.isInPlot(QPoint(x, y))) { inside = QPoint(x, y); break; }
+      if (inside.x() < 0) return QStringLiteral("No plot area found");
+      int left = inside.x(), right = left, top = inside.y(), bottom = top;
+      while (left > 0 && plot.isInPlot(QPoint(left - 1, inside.y()))) --left;
+      while (right + 1 < plot.width() && plot.isInPlot(QPoint(right + 1, inside.y()))) ++right;
+      while (top > 0 && plot.isInPlot(QPoint(inside.x(), top - 1))) --top;
+      while (bottom + 1 < plot.height() && plot.isInPlot(QPoint(inside.x(), bottom + 1))) ++bottom;
       const auto check = [&](bool vertical, int divisions) -> QString {
         const int from = vertical ? left : top, to = vertical ? right : bottom;
         const int acrossFrom = vertical ? top : left, acrossTo = vertical ? bottom : right;
@@ -2732,9 +2738,12 @@ private slots:
     model.graph.xGrid = model.graph.yGrid = striptool::GridMode::Some;
     plot.setModel(model);
     QFont font = plot.font();
-    font.setPointSize(18);
+    // A point size maps to different pixel heights on offscreen platforms.
+    // Use a large pixel font and the minimum layout height to exercise fewer
+    // ticks while keeping the grid-alignment assertions unchanged.
+    font.setPixelSize(32);
     plot.setFont(font);
-    plot.resize(960, 300);
+    plot.resize(960, plot.minimumHeight());
     plot.setVisibleTimeRange({end - std::chrono::hours(2), end});
     QVERIFY(plot.valueAxisDivisions() < 5);
     mismatch = gridMismatch(1);
