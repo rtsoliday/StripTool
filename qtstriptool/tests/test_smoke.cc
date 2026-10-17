@@ -2728,6 +2728,11 @@ private slots:
     model.curves[0].maximum = 220;
     model.curves[0].minimumSet = model.curves[0].maximumSet = true;
     striptool::PlotWidget plot;
+    // Exercise value-driven growth beyond the minimum legend width. Small
+    // platform fonts can fit every value below that floor, hiding this case.
+    QFont font = plot.font();
+    font.setPixelSize(24);
+    plot.setFont(font);
     plot.resize(960, 400);
     plot.setModel(model);
     plot.resetVerticalView();
