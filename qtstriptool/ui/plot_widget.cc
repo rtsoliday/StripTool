@@ -449,7 +449,11 @@ void PlotWidget::panY(double fractionOfRange) {
   for (const auto index : plottedCurves()) {
     const ValueRange range = valueRange(index);
     if (!range.isValid()) continue;
-    const double shift = (range.maximum - range.minimum) * fractionOfRange;
+    // Halve first only when the span overflows; doubling the fraction rather
+    // than the halved span keeps that product finite.
+    const double span = range.maximum - range.minimum;
+    const double shift = std::isfinite(span) ? span * fractionOfRange
+        : (range.maximum / 2.0 - range.minimum / 2.0) * (2.0 * fractionOfRange);
     const ValueRange moved{range.minimum + shift, range.maximum + shift};
     if (std::isfinite(moved.minimum) && std::isfinite(moved.maximum) &&
         moved.isValid()) verticalRanges_[index] = moved;
@@ -468,7 +472,10 @@ void PlotWidget::zoomY(double factor) {
     const ValueRange range = valueRange(index);
     if (!range.isValid()) continue;
     const double center = range.minimum / 2.0 + range.maximum / 2.0;
-    const double half = (range.maximum - range.minimum) * factor / 2.0;
+    // Halve first only when the span overflows, keeping tiny spans exact.
+    const double span = range.maximum - range.minimum;
+    const double half = std::isfinite(span) ? span * factor / 2.0
+        : (range.maximum / 2.0 - range.minimum / 2.0) * factor;
     const ValueRange zoomed{center - half, center + half};
     if (std::isfinite(zoomed.minimum) && std::isfinite(zoomed.maximum) &&
         zoomed.isValid()) verticalRanges_[index] = zoomed;

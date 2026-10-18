@@ -3637,6 +3637,77 @@ private slots:
                                           .arg(nearest).arg(farthest).arg(expected)));
       }
   }
+  void extremeRangeYZoomAndPanMoveTheView() {
+    // [-1e308, 1e308] is finite, but its span overflows a double. Y zoom and
+    // pan must still scale and shift it, from configured limits and from an
+    // automatic range, instead of leaving it unchanged.
+    const auto now = std::chrono::system_clock::now();
+    for (const bool automatic : {false, true})
+      for (const bool zoomFirst : {true, false}) {
+        const QString context = QStringLiteral("%1 range, %2 first")
+                                    .arg(automatic ? QStringLiteral("automatic")
+                                                   : QStringLiteral("configured"))
+                                    .arg(zoomFirst ? QStringLiteral("zoom")
+                                                   : QStringLiteral("pan"));
+        auto model = striptool::makeDefaultModel();
+        model.curves[0].name = "extreme:test";
+        model.curves[0].nameSet = true;
+        if (!automatic) {
+          model.curves[0].minimum = -1e308;
+          model.curves[0].maximum = 1e308;
+        }
+        striptool::PlotWidget plot;
+        plot.resize(800, 500);
+        plot.setModel(model);
+        if (automatic) {
+          plot.setCurveSamples(0, {{now - std::chrono::seconds(1), -1e308, 0, 0},
+                                   {now, 1e308, 0, 0}});
+          plot.setVisibleTimeRange({now - std::chrono::seconds(10),
+                                    now + std::chrono::seconds(10)});
+          QVERIFY2(plot.autoScaleEnabled(), qPrintable(context));
+        } else {
+          plot.resetVerticalView();
+        }
+        auto range = plot.valueRange(0);
+        QVERIFY2(range.minimum == -1e308 && range.maximum == 1e308,
+                 qPrintable(context));
+        if (zoomFirst) {
+          plot.zoomY(0.5);
+          range = plot.valueRange(0);
+          QVERIFY2(qFuzzyCompare(range.minimum, -5e307) &&
+                       qFuzzyCompare(range.maximum, 5e307),
+                   qPrintable(context + QStringLiteral(", zoomed to [%1, %2]")
+                                            .arg(range.minimum).arg(range.maximum)));
+        } else {
+          plot.panY(0.05);
+          range = plot.valueRange(0);
+          QVERIFY2(qFuzzyCompare(range.minimum, -9e307) &&
+                       qFuzzyCompare(range.maximum, 1.1e308),
+                   qPrintable(context + QStringLiteral(", panned to [%1, %2]")
+                                            .arg(range.minimum).arg(range.maximum)));
+          // The panned span still overflows; zooming it keeps its center.
+          plot.zoomY(0.5);
+          range = plot.valueRange(0);
+          QVERIFY2(qFuzzyCompare(range.minimum, -4e307) &&
+                       qFuzzyCompare(range.maximum, 6e307),
+                   qPrintable(context + QStringLiteral(", zoomed to [%1, %2]")
+                                            .arg(range.minimum).arg(range.maximum)));
+        }
+        QVERIFY2(!plot.autoScaleEnabled(), qPrintable(context));
+        // Zooming out past DBL_MAX is still rejected and keeps the view.
+        const auto kept = plot.valueRange(0);
+        plot.zoomY(1e300);
+        range = plot.valueRange(0);
+        QVERIFY2(range.minimum == kept.minimum && range.maximum == kept.maximum,
+                 qPrintable(context));
+        // The next update keeps the manual range instead of the configured one.
+        plot.setCurveSamples(0, {{now, 0.0, 0, 0}});
+        range = plot.valueRange(0);
+        QVERIFY2(range.minimum == kept.minimum && range.maximum == kept.maximum,
+                 qPrintable(context + QStringLiteral(", after update [%1, %2]")
+                                          .arg(range.minimum).arg(range.maximum)));
+      }
+  }
   void mouseWheelZoomKeepsPointerTimestampFixed() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "wheel:test";

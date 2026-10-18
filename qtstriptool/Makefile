@@ -252,7 +252,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            legendValueKeepsSixSignificantDigits \
            subnormalConstantCurvesKeepValidRangesAndLabels \
            farOffScaleSpikesKeepBothStepEdges \
-           hugeFiniteSamplesDrawInsidePlot
+           hugeFiniteSamplesDrawInsidePlot \
+           extremeRangeYZoomAndPanMoveTheView
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 
