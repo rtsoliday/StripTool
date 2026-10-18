@@ -117,9 +117,9 @@ initial time window and automatic archive backfill; `-sampleCount` sets the
 maximum live samples per curve. A bare configuration
 name is searched in the current directory and then `STRIP_FILE_SEARCH_PATH`.
 With no configuration argument, or if the given file cannot be loaded,
-`qtstriptool` loads `StripTool.stp` from the current directory if it exists
-and otherwise starts with compiled defaults; **File > Save** then writes back
-to that `StripTool.stp`.
+`qtstriptool` loads `StripTool.stp` from the current directory if it exists,
+and **File > Save** then writes back to it; otherwise it starts with compiled
+defaults.
 
 ## Install and package Qt StripTool
 
