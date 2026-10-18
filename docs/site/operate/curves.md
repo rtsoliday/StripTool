@@ -13,7 +13,7 @@ Enter a name in an unused row or type it in the **PV** field and select **Connec
 
 You can also drag PVs in from MEDM or QtEDM: hold the middle mouse button on a PV in a running display, drag it to the Controls or graph window, and release. Each distinct PV fills an unused slot and starts plotting. A PV that is already a curve is simply turned on for plotting. If the whole drop does not fit in the ten slots, nothing is added and the status bar says so. MEDM drops need the Linux X11 backend and a build with libxcb development files available; in a Wayland session, start Qt StripTool with `QT_QPA_PLATFORM=xcb`.
 
-**Auto Scale** is graph-wide and fits every plotted curve to its visible data. **Reset View** returns curves to the limits shown in Controls. A curve added later follows the active mode. For log curves, choose positive limits; non-positive samples cannot appear on a base-10 axis and create a gap.
+**Auto Scale** is graph-wide, on by default, and fits every plotted curve to its visible data. Zooming or panning the value axis turns it off; select **Auto Scale** again to resume fitting. Unchecking **Auto Scale** or choosing **Reset View** returns curves to the limits shown in Controls. A curve added later follows the active mode. For log curves, choose positive limits; non-positive samples cannot appear on a base-10 axis and create a gap.
 
 ## Timing and appearance
 

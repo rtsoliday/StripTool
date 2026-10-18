@@ -21,7 +21,7 @@ If the PV is quiet, its last value can remain visible as a step line. A **Stale*
 
 ## Explore and save
 
-Use **View > Auto Scale** to fit visible data. Use **View > Reset View** to return to configured curve limits. The time axis shows relative offsets above local clock time, choosing seconds, minutes, hours, or days for the visible duration. The rightmost relative label is zero.
+**View > Auto Scale** is on by default, so the value axis already fits the visible data. Zooming or panning the value axis turns it off; choose **View > Auto Scale** again to resume fitting. Choosing it while it is checked, or choosing **View > Reset View**, turns it off and returns to configured curve limits. The time axis shows relative offsets above local clock time, choosing seconds, minutes, hours, or days for the visible duration. The rightmost relative label is zero.
 
 <figure class="doc-shot">
   <img src="../assets/screenshots/graph-overview.png" alt="Graph window showing a blue step trace, value axis, legend, and navigation toolbar" />

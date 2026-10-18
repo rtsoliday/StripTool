@@ -12,9 +12,9 @@ Move the pointer over the plot to update the location readout. Click a legend en
 
 ## Navigate
 
-The **View** menu can pause time scrolling, toggle auto-scroll, pan in time or value, zoom either axis, auto-scale, reset, clear data, and force a replot. The toolbar has arrows for panning, `X+`/`X−` for time zoom, and `Y+`/`Y−` for value zoom. Right click a toolbar Pan or Zoom button for a smaller step. Drag empty plot space with the left button to pan.
+The **View** menu can pause time scrolling, toggle auto-scroll, pan in time or value, zoom either axis, toggle auto-scale, reset, clear data, and force a replot. The toolbar has arrows for panning, `X+`/`X−` for time zoom, and `Y+`/`Y−` for value zoom. Right click a toolbar Pan or Zoom button for a smaller step. Drag empty plot space with the left button to pan.
 
-Vertical zoom uses logarithmic units for Log 10 curves. **Auto Scale** fits visible data; **Reset View** restores configured limits and the time view.
+Vertical zoom uses logarithmic units for Log 10 curves. **Auto Scale** is on by default and keeps the value axis fitted to visible data. Zooming or panning the value axis turns it off, starting from the fitted range; select **Auto Scale** again to resume fitting. Unchecking **Auto Scale** restores configured limits. **Reset View** also turns it off, restoring configured limits and the time view.
 
 Enabling **Auto Scroll** preserves the current visible duration and moves its right edge to now. Toolbar time zoom keeps auto-scroll enabled and anchors the right edge. Mouse-wheel zoom fixes the timestamp under the pointer and disables auto-scroll. **Pause** holds the view; resuming preserves its duration. **Reset View** restores the configured History length.
 

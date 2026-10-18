@@ -86,10 +86,13 @@ X11 backend and a build with libxcb development files available. In a Wayland
 session, launch qtstriptool with `QT_QPA_PLATFORM=xcb` to receive MEDM drops
 through XWayland. The runtime does not require Motif.
 
-Y-axis scaling is graph-wide. **Auto Scale** fits every plotted curve to its
-visible data, including curves added while that mode is active. **Reset View**
-returns every curve to the Minimum and Maximum shown in Controls; curves added
-afterward also use their configured or provider-supplied limits.
+Y-axis scaling is graph-wide. **Auto Scale** is on by default and fits every
+plotted curve to its visible data, including curves added while that mode is
+active. Zooming or panning the value axis turns it off, starting from the
+fitted range; select **Auto Scale** again to resume fitting. Unchecking
+**Auto Scale** or choosing **Reset View** returns every curve to the Minimum
+and Maximum shown in Controls; curves added afterward also use their
+configured or provider-supplied limits.
 
 `CPU_Usage` is a local pseudo-curve and does not open a Channel Access
 subscription. Channel Access curves record monitor updates as they arrive,
@@ -102,7 +105,7 @@ samples create a gap and cannot be plotted on a base-10 scale.
 ## Work with the graph
 
 The View menu can pause time scrolling, enable or disable auto-scroll, pan in time or
-value, zoom either axis, auto-scale configured curves, reset both axes, and
+value, zoom either axis, toggle auto-scale (on by default), reset both axes, and
 force a replot. Moving the pointer over the plot updates the location readout.
 Each X-axis tick has two labels: an offset relative to the right edge above,
 and local clock time below. The rightmost relative label is always 0; earlier
