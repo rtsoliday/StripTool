@@ -127,19 +127,19 @@ $(OBJ_DIR)/moc_history_provider.cc: services/history_provider.h | prepare-output
 $(OBJ_DIR)/moc_history_dialog.cc: ui/history_dialog.h | prepare-output
 	$(MOC) $(MOC_CPPFLAGS) $(MOC_QT_CFLAGS) $< -o $@
 
-$(OBJ_DIR)/moc_%.$(OBJEXT): $(OBJ_DIR)/moc_%.cc
+$(OBJ_DIR)/moc_%.$(OBJEXT): $(OBJ_DIR)/moc_%.cc $(BUILD_FILES)
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(CXXFLAGS) $(if $(filter Windows,$(OS)),/c $< /Fo$@,-MMD -MP -c $< -o $@)
 
 $(OBJ_DIR)/test_smoke.moc: tests/test_smoke.cc $(HEADERS) | prepare-output
 	$(MOC) $(MOC_CPPFLAGS) $(MOC_QT_CFLAGS) $< -o $@
 
-$(OBJ_DIR)/tests/test_smoke.$(OBJEXT): tests/test_smoke.cc $(OBJ_DIR)/test_smoke.moc $(HEADERS)
+$(OBJ_DIR)/tests/test_smoke.$(OBJEXT): tests/test_smoke.cc $(OBJ_DIR)/test_smoke.moc $(HEADERS) $(BUILD_FILES)
 	$(call compile_cxx,$(QT_TEST_CFLAGS))
 
 $(OBJ_DIR)/test_channel_access.moc: tests/test_channel_access.cc $(HEADERS) | prepare-output
 	$(MOC) $(MOC_CPPFLAGS) $(MOC_QT_CFLAGS) $< -o $@
 
-$(OBJ_DIR)/tests/test_channel_access.$(OBJEXT): tests/test_channel_access.cc $(OBJ_DIR)/test_channel_access.moc $(HEADERS)
+$(OBJ_DIR)/tests/test_channel_access.$(OBJEXT): tests/test_channel_access.cc $(OBJ_DIR)/test_channel_access.moc $(HEADERS) $(BUILD_FILES)
 	$(call compile_cxx,$(QT_TEST_CFLAGS))
 
 $(TEST_PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(RESOURCE_OBJECT) $(OBJ_DIR)/tests/test_smoke.$(OBJEXT)
