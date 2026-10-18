@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QFile>
+#include <QFileInfo>
 #include <QProcess>
 #include <QSignalSpy>
 #include <QSettings>
@@ -31,6 +32,25 @@ void stopIoc(QProcess& ioc) {
   }
 }
 
+// QTSTRIPTOOL_SOFTIOC names the softIoc to run (make test-ioc passes the EPICS Base one);
+// otherwise softIoc is looked up on PATH. Empty when no executable is found.
+QString softIocProgram() {
+  const QString configured = qEnvironmentVariable("QTSTRIPTOOL_SOFTIOC");
+  if (configured.isEmpty()) return QStandardPaths::findExecutable(QStringLiteral("softIoc"));
+  const QFileInfo info(configured);
+  return info.isFile() && info.isExecutable() ? info.absoluteFilePath() : QString();
+}
+
+QString missingSoftIocReason() {
+  const QString configured = qEnvironmentVariable("QTSTRIPTOOL_SOFTIOC");
+  return configured.isEmpty()
+      ? QStringLiteral("softIoc is not available on PATH")
+      : QStringLiteral("QTSTRIPTOOL_SOFTIOC is not an executable: %1").arg(configured);
+}
+
+// make test-ioc sets QTSTRIPTOOL_REQUIRE_IOC so a missing softIoc fails instead of skipping.
+bool iocRequired() { return !qEnvironmentVariableIsEmpty("QTSTRIPTOOL_REQUIRE_IOC"); }
+
 class IocGuard {
 public:
   explicit IocGuard(QProcess& process) : process_(process) {}
@@ -46,9 +66,10 @@ class ChannelAccessIntegrationTests final : public QObject {
   Q_OBJECT
 private slots:
   void automaticallyReconnectsAfterIocRestart() {
-    const QString softIoc = QStandardPaths::findExecutable(QStringLiteral("softIoc"));
+    const QString softIoc = softIocProgram();
     const QString database = qEnvironmentVariable("QTSTRIPTOOL_TEST_IOC_DB");
-    if (softIoc.isEmpty()) QSKIP("softIoc is not available on PATH");
+    if (softIoc.isEmpty() && iocRequired()) QFAIL(qPrintable(missingSoftIocReason()));
+    if (softIoc.isEmpty()) QSKIP(qPrintable(missingSoftIocReason()));
     if (database.isEmpty()) QSKIP("QTSTRIPTOOL_TEST_IOC_DB is not set");
 
     const int port = 15000 + int(QCoreApplication::applicationPid() % 10000);
@@ -89,8 +110,9 @@ private slots:
   }
 
   void refreshesMetadataAfterIocRestart() {
-    const QString softIoc = QStandardPaths::findExecutable(QStringLiteral("softIoc"));
-    if (softIoc.isEmpty()) QSKIP("softIoc is not available on PATH");
+    const QString softIoc = softIocProgram();
+    if (softIoc.isEmpty() && iocRequired()) QFAIL(qPrintable(missingSoftIocReason()));
+    if (softIoc.isEmpty()) QSKIP(qPrintable(missingSoftIocReason()));
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
     const auto writeDatabase = [&directory](const QString& name, const char* units,

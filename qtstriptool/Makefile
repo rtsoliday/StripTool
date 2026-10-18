@@ -274,7 +274,8 @@ test-report: all $(TEST_PROGRAM)
 	@cat $(OBJ_DIR)/test-artifacts/smoke.txt
 
 test-ioc: $(IOC_TEST_PROGRAM)
-	QT_QPA_PLATFORM=offscreen \
+	QT_QPA_PLATFORM=offscreen QTSTRIPTOOL_REQUIRE_IOC=1 \
+	  QTSTRIPTOOL_SOFTIOC="$(EPICS_BASE)/bin/$(EPICS_HOST_ARCH)/softIoc$(if $(filter Windows,$(OS)),.exe)" \
 	  QTSTRIPTOOL_TEST_IOC_DB="$(CURDIR)/tests/reconnect.db" \
 	  $(IOC_TEST_PROGRAM) automaticallyReconnectsAfterIocRestart \
 	  refreshesMetadataAfterIocRestart
