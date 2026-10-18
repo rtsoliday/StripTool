@@ -10,4 +10,4 @@
 | Help should open site documentation | Set `STRIP_HELP_PATH` to a local file or URL; **Help > Online Manual** then opens it. **Help Topics** (F1) always shows the guide built into the application. |
 | Print or snapshot differs from Motif | Check the active Qt style, platform fonts, DPI scale, and print backend. |
 
-If a curve's Controls status shows **Stale**, a quiet Channel Access PV may simply have no new monitor event. An actual disconnect is different: the trace ends and a gap appears. See [configure curves](./curves) and [historical data](./history).
+If a curve's Controls status shows **Stale**, a quiet Channel Access PV may simply have no new monitor event. An actual disconnect is different: the trace ends and a gap appears. An **Error** status from a failed read, such as revoked read access, returns to **Live** once monitor updates resume. See [configure curves](./curves) and [historical data](./history).

@@ -175,7 +175,8 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              activeHistoryRequestCanBeDestroyedSafely exportReportsWriteFailures \
              exportsTextAndCsvData exportsPreEpochTimestamps exportsClockMinimumWithoutOverflow \
              applicationUsesCNumericLocale \
-             exportsGapSamplesAsInvalidNan mainWindowExportEndsWithTrailingGap
+             exportsGapSamplesAsInvalidNan mainWindowExportEndsWithTrailingGap \
+             liveSamplesClearErrorAndLaterOutageEndsTrace
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \
                preservesUnknownFieldsAcrossRoundTrip \
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \

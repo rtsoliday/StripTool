@@ -18,7 +18,10 @@ AcquisitionManager::AcquisitionManager(ChannelProvider* provider, QObject* paren
               state->buffer.append(sample);
               state->lastReceived = std::chrono::steady_clock::now();
               state->metadata.lastUpdate = sample.timestamp;
-              if (state->metadata.connection == ConnectionState::Stale) {
+              // A value after a failed read (e.g. read access restored) ends Error.
+              if (state->metadata.connection == ConnectionState::Stale ||
+                  (state->metadata.connection == ConnectionState::Error &&
+                   sample.plotable)) {
                 state->metadata.connection = ConnectionState::Connected;
                 state->metadata.statusMessage = "Connected";
                 emit channelMetadataChanged(id, state->metadata);
@@ -28,11 +31,11 @@ AcquisitionManager::AcquisitionManager(ChannelProvider* provider, QObject* paren
   connect(provider_, &ChannelProvider::connectionChanged, this,
           [this](ChannelId id, ConnectionState connection, const QString& message) {
             if (auto state = channels_.value(id)) {
-              if ((state->metadata.connection == ConnectionState::Connected ||
-                   state->metadata.connection == ConnectionState::Stale) &&
-                  connection != ConnectionState::Connected &&
-                  connection != ConnectionState::Stale &&
-                  !state->buffer.empty())
+              // Break the trace unless the latest sample already does.
+              const auto latest = state->buffer.latest();
+              if (connection != ConnectionState::Connected &&
+                  connection != ConnectionState::Stale && latest &&
+                  latest->plotable)
                 state->buffer.append({std::chrono::system_clock::now(), 0.0,
                                       0, 0, false});
               state->metadata.connection = connection;

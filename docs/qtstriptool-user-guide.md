@@ -151,7 +151,9 @@ curve's reduction notice. These archive limits are separate from live samples.
 Channel Access values are held as step lines until another monitor update or an
 actual disconnect/error is received. A quiet PV may be marked **Stale** in the
 Controls window, but silence alone does not end its plotted line because CA
-monitors are not required to repeat unchanged values.
+monitors are not required to repeat unchanged values. An **Error** status from a
+failed read, such as revoked read access, returns to **Live** when monitor
+updates resume; a later disconnect still ends the plotted line with a gap.
 
 CA updates use a bounded GUI inbox. If incoming updates outrun processing, the
 graph records a gap and the status bar reports lost observations; delivery then

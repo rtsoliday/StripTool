@@ -2653,6 +2653,45 @@ private slots:
     acquisition.clearSamples();
     QVERIFY(acquisition.buffer(id)->empty());
   }
+  void liveSamplesClearErrorAndLaterOutageEndsTrace() {
+    using striptool::ConnectionState;
+    FakeChannelProvider provider;
+    striptool::AcquisitionManager acquisition(&provider);
+    const auto id = acquisition.addChannel(QStringLiteral("test:error"));
+    const auto now = std::chrono::system_clock::now();
+    provider.publishConnection(id, ConnectionState::Connected);
+    provider.publishSample(id, {now, 1.0, 0, 0});
+    // A failed monitor read, e.g. read access revoked, reports Error.
+    provider.publishConnection(id, ConnectionState::Error);
+    QCOMPARE(acquisition.metadata(id).connection, ConnectionState::Error);
+    QVERIFY(!acquisition.buffer(id)->latest()->plotable);
+    QSignalSpy metadataSpy(&acquisition,
+                           &striptool::AcquisitionManager::channelMetadataChanged);
+    provider.publishSample(id, {now + std::chrono::seconds(1), 0.0, 0, 0, false});
+    QCOMPARE(acquisition.metadata(id).connection, ConnectionState::Error);
+    QCOMPARE(metadataSpy.count(), 0);
+    // Values flow again once the server can deliver them.
+    provider.publishSample(id, {now + std::chrono::seconds(2), 2.0, 0, 0});
+    provider.publishSample(id, {now + std::chrono::seconds(3), 3.0, 0, 0});
+    QCOMPARE(acquisition.metadata(id).connection, ConnectionState::Connected);
+    QCOMPARE(acquisition.metadata(id).statusMessage, std::string("Connected"));
+    QCOMPARE(metadataSpy.count(), 1);
+    QCOMPARE(qvariant_cast<striptool::ChannelMetadata>(metadataSpy.last().at(1)).connection,
+             ConnectionState::Connected);
+    // A later outage must not hold the last value as if it were current.
+    auto size = acquisition.buffer(id)->size();
+    provider.publishConnection(id, ConnectionState::Disconnected);
+    QCOMPARE(acquisition.buffer(id)->size(), size + 1);
+    QVERIFY(!acquisition.buffer(id)->latest()->plotable);
+    // A trace already broken by an explicit gap gets no second one.
+    provider.publishConnection(id, ConnectionState::Connected);
+    provider.publishSample(id, {now + std::chrono::seconds(4), 4.0, 0, 0});
+    provider.publishSample(id, {now + std::chrono::seconds(5), 0.0, 0, 0, false});
+    size = acquisition.buffer(id)->size();
+    provider.publishConnection(id, ConnectionState::Disconnected);
+    QCOMPARE(acquisition.buffer(id)->size(), size);
+    QVERIFY(!acquisition.buffer(id)->latest()->plotable);
+  }
   void cpuUsageIsASeparateLocalProvider() {
     striptool::CpuUsageProvider provider;
     provider.setSampleInterval(std::chrono::milliseconds(125));
