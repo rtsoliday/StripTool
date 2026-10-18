@@ -1,6 +1,6 @@
 # Historical data
 
-Choose **View > Historical Range** to request a time range from an EPICS Archiver Appliance. The dialog starts with the graph's current visible range. When you select **OK**, the graph moves to the chosen range, auto-scroll turns off, and the archived samples join the live data as they arrive. Requests run in the background, and a new Historical Range request replaces any that are still pending.
+Choose **View > Historical Range** to request a time range from an EPICS Archiver Appliance. The dialog starts with the graph's current visible range. The From time must be earlier than the To time; otherwise an **Invalid Range** warning appears, nothing is requested, and pending requests continue. When you select **OK** with a valid range, the graph moves to the chosen range, auto-scroll turns off, and the archived samples join the live data as they arrive. Requests run in the background, and a new Historical Range request replaces any that are still pending.
 
 <figure class="doc-shot doc-shot--compact">
   <img src="../assets/screenshots/history-range.png" alt="Historical Time Range dialog with From and To date and time fields and OK and Cancel buttons" />

@@ -258,7 +258,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            fineWheelDeltasZoomInProportionToTheNotch \
            invalidPvEntryIsRejectedAndKept \
            overlongCurveRowNameIsRejectedBeforeSave \
-           controlsDismissAsksBeforeHidingTheLastWindow
+           controlsDismissAsksBeforeHidingTheLastWindow \
+           emptyHistoricalRangeIsRejectedBeforeCancellingBackfill
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 

@@ -2059,6 +2059,47 @@ private slots:
     QCOMPARE(dialog.selectedRange().start, start);
     QCOMPARE(dialog.selectedRange().end, end);
   }
+  void emptyHistoricalRangeIsRejectedBeforeCancellingBackfill() {
+    // From equal to To selects no time. It gets the same single warning as a
+    // reversed range, sends nothing to the Archiver and leaves the pending
+    // automatic backfill running.
+    striptool::MainWindow window;
+    auto provider = std::make_unique<RecordingHistoryProvider>();
+    auto* recording = provider.get();
+    window.setHistoryProvider(std::move(provider));
+    window.startAcquisition();
+    auto* controls = window.controlsWindow();
+    controls->findChild<QLineEdit*>(QStringLiteral("pvEntry"))
+        ->setText(QStringLiteral("test:empty-history-range"));
+    controls->findChild<QPushButton*>(QStringLiteral("connectButton"))->click();
+    QCOMPARE(recording->requests.size(), std::size_t{1});
+    auto* history = window.findChild<QAction*>(QStringLiteral("historyAction"));
+    QVERIFY(history);
+    const QDateTime to = QDateTime::fromSecsSinceEpoch(QDateTime::currentSecsSinceEpoch() - 600);
+    for (const QDateTime& from : {to, to.addSecs(1)}) {
+      QStringList boxes;
+      QTimer answer;
+      connect(&answer, &QTimer::timeout, [&] {
+        QWidget* modal = QApplication::activeModalWidget();
+        if (auto* dialog = qobject_cast<striptool::HistoryDialog*>(modal)) {
+          dialog->findChild<QDateTimeEdit*>(QStringLiteral("historyFrom"))->setDateTime(from);
+          dialog->findChild<QDateTimeEdit*>(QStringLiteral("historyTo"))->setDateTime(to);
+          dialog->accept();
+        } else if (auto* box = qobject_cast<QMessageBox*>(modal)) {
+          boxes << box->windowTitle() + QStringLiteral(": ") + box->text();
+          box->accept();
+        }
+      });
+      answer.start(10);
+      history->trigger();
+      QTest::qWait(100);
+      answer.stop();
+      QCOMPARE(boxes, QStringList{QStringLiteral(
+                          "Invalid Range: The From time must precede the To time.")});
+      QCOMPARE(recording->requests.size(), std::size_t{1});
+      QVERIFY(recording->cancelled.empty());
+    }
+  }
   void extremeZoomPanAndDatesKeepTimeRangesValid() {
     // Nanosecond time points overflow about 292 years from 1970.
     striptool::PlotWidget plot;

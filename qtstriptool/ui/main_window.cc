@@ -673,7 +673,7 @@ void MainWindow::requestHistory() {
   dialog.setRange(plotWidget_->visibleTimeRange());
   if (dialog.exec() != QDialog::Accepted) return;
   const TimeRange range = dialog.selectedRange();
-  if (!range.isValid()) {
+  if (!(range.start < range.end)) {
     QMessageBox::warning(this, tr("Invalid Range"), tr("The From time must precede the To time."));
     return;
   }

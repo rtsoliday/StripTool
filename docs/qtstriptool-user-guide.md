@@ -140,8 +140,10 @@ Delete or Backspace removes the selected annotation. Annotations are runtime
 graph state and are not saved in `.stp` files.
 
 **View > Historical Range** retrieves the selected range from the EPICS
-Archiver Appliance and joins returned samples with live data. The default
-retrieval root is `http://asddtn03.aps4.anl.gov:17668/retrieval`. Set
+Archiver Appliance and joins returned samples with live data. The From time
+must be earlier than the To time; otherwise an **Invalid Range** warning
+appears, nothing is requested, and pending history requests continue. The
+default retrieval root is `http://asddtn03.aps4.anl.gov:17668/retrieval`. Set
 `QTSTRIPTOOL_ARCHIVER_URL` to another retrieval root, or directly to its
 `data/getData.json` endpoint, before starting qtstriptool to override it.
 Requests use automatic `lastSample` reduction to keep long ranges responsive.
