@@ -1344,10 +1344,12 @@ void PlotWidget::wheelEvent(QWheelEvent* event) {
 #else
   const QPointF position = event->posF();
 #endif
+  // Scale by the delta so a notch split into finer events zooms one 0.8 step.
+  const double factor = std::pow(0.8, verticalDelta / 120.0);
   if (plotRect().contains(position))
-    zoomAt(verticalDelta > 0 ? 0.8 : 1.25, position);
+    zoomAt(factor, position);
   else
-    zoom(verticalDelta > 0 ? 0.8 : 1.25);
+    zoom(factor);
   event->accept();
 }
 

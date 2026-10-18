@@ -254,7 +254,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            farOffScaleSpikesKeepBothStepEdges \
            hugeFiniteSamplesDrawInsidePlot \
            extremeRangeYZoomAndPanMoveTheView \
-           stationaryClicksKeepLiveZoomDuration doubleClickAnnotatesClickedTimeInLiveZoom
+           stationaryClicksKeepLiveZoomDuration doubleClickAnnotatesClickedTimeInLiveZoom \
+           fineWheelDeltasZoomInProportionToTheNotch
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 

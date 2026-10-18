@@ -3761,6 +3761,51 @@ private slots:
     QVERIFY2(anchorShift < 0.001,
              "Mouse-wheel zoom moved the timestamp under the pointer");
   }
+  void fineWheelDeltasZoomInProportionToTheNotch() {
+    // High-resolution wheels and touchpads split one 120-unit notch into
+    // several smaller events; together they must zoom exactly one step.
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "wheel:fine";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    plot.setVisibleTimeRange({base, base + std::chrono::seconds(300)});
+
+    const QPoint inside(plot.width() / 2, plot.height() / 2);
+    const QPoint outside(0, plot.height() / 2);
+    QVERIFY(plot.isInPlot(inside));
+    QVERIFY(!plot.isInPlot(outside));
+    auto turn = [&plot](const QPoint& position, int delta, int events) {
+      for (int i = 0; i < events; ++i) {
+        QWheelEvent wheel(QPointF(position), QPointF(plot.mapToGlobal(position)),
+                          QPoint(), QPoint(0, delta), Qt::NoButton, Qt::NoModifier,
+                          Qt::NoScrollPhase, false);
+        QApplication::sendEvent(&plot, &wheel);
+      }
+    };
+    auto seconds = [&plot] {
+      const auto range = plot.visibleTimeRange();
+      return std::chrono::duration<double>(range.end - range.start).count();
+    };
+    auto near = [](double actual, double expected) {
+      return std::abs(actual - expected) <= 1e-6 * expected;
+    };
+
+    turn(inside, 15, 8);
+    QVERIFY2(near(seconds(), 240.0),
+             qPrintable(QStringLiteral("8 x 15 inside: %1 s").arg(seconds(), 0, 'g', 12)));
+    turn(inside, -15, 8);
+    QVERIFY2(near(seconds(), 300.0),
+             qPrintable(QStringLiteral("8 x -15 inside: %1 s").arg(seconds(), 0, 'g', 12)));
+    turn(outside, 15, 8);
+    QVERIFY2(near(seconds(), 240.0),
+             qPrintable(QStringLiteral("8 x 15 outside: %1 s").arg(seconds(), 0, 'g', 12)));
+    turn(outside, -4, 30);
+    QVERIFY2(near(seconds(), 300.0),
+             qPrintable(QStringLiteral("30 x -4 outside: %1 s").arg(seconds(), 0, 'g', 12)));
+  }
   void narrowYAxisTicksRemainDistinct() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "S-DCCT:CurrentM";
