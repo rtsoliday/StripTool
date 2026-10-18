@@ -179,7 +179,8 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              liveSamplesClearErrorAndLaterOutageEndsTrace \
              archiverRequestsEncodePlusInPvNames \
              loadDiagnosticsNameFileLineAndActualFallback \
-             testProcessKeepsChannelAccessAndArchiveLocal
+             testProcessKeepsChannelAccessAndArchiveLocal \
+             unterminatedChannelAccessStringsStayInBounds
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \
                preservesUnknownFieldsAcrossRoundTrip \
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \

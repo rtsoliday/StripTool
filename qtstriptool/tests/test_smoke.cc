@@ -94,6 +94,16 @@ struct ChannelAccessProviderTestAccess {
     args.dbr = &value;
     ChannelAccessProvider::controlCallback(args);
   }
+  // Delivers a DBR_STRING DESC reply through the real CA callback.
+  static void description(ChannelAccessProvider& p, ChannelId id, const char* value) {
+    event_handler_args args{};
+    args.usr = p.active_.value(id);
+    args.type = DBR_STRING;
+    args.count = 1;
+    args.status = ECA_NORMAL;
+    args.dbr = value;
+    ChannelAccessProvider::descriptionCallback(args);
+  }
 };
 }
 
@@ -2893,6 +2903,28 @@ private slots:
       QTRY_VERIFY(acquisition.metadata(id).displayMinimum == c.low &&
                   acquisition.metadata(id).displayMaximum == c.high);
     }
+  }
+  void unterminatedChannelAccessStringsStayInBounds() {
+    striptool::ChannelAccessProvider provider;
+    striptool::AcquisitionManager acquisition(&provider);
+    const auto id = acquisition.addChannel(QStringLiteral("QTST:STRINGS:UNTERMINATED"), 100);
+    using Access = striptool::ChannelAccessProviderTestAccess;
+    // A non-EPICS server may fill a string field without a NUL. The display
+    // limits after units and the bytes after DESC contain no NUL, so an
+    // unbounded read picks them up.
+    dbr_ctrl_double control{};
+    std::memset(control.units, 'u', sizeof control.units);
+    control.upper_disp_limit = 0.1;
+    control.lower_disp_limit = -0.1;
+    Access::control(provider, id, control);
+    QTRY_COMPARE(QString::fromStdString(acquisition.metadata(id).units),
+                 QString(int(sizeof control.units), QLatin1Char('u')));
+    struct { dbr_string_t text; char after[8]; } description{};
+    std::memset(description.text, 'd', sizeof description.text);
+    std::memset(description.after, 'x', sizeof description.after - 1);
+    Access::description(provider, id, description.text);
+    QTRY_COMPARE(QString::fromStdString(acquisition.metadata(id).description),
+                 QString(int(sizeof description.text), QLatin1Char('d')));
   }
   void acquisitionShutdownDisconnectsActiveChannels() {
     FakeChannelProvider provider;

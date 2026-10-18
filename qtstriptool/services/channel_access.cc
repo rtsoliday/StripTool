@@ -5,6 +5,7 @@
 #include <QPointer>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <utility>
 #include <algorithm>
 #include <deque>
@@ -175,7 +176,8 @@ void ChannelAccessProvider::controlCallback(event_handler_args args) {
   const auto* control = static_cast<const dbr_ctrl_double*>(args.dbr);
   ChannelMetadata metadata;
   metadata.connection = ConnectionState::Connected;
-  metadata.units = control->units;
+  // Other CA servers may fill units without a NUL; stay within the field.
+  metadata.units.assign(control->units, strnlen(control->units, sizeof control->units));
   metadata.precision = control->precision;
   // A NaN or infinite limit would reach the curve limits, which then cannot
   // be plotted or saved.
@@ -225,8 +227,10 @@ void ChannelAccessProvider::descriptionCallback(event_handler_args args) {
   auto* state = static_cast<State*>(args.usr);
   if (!state || !state->active.load() || args.status != ECA_NORMAL || !args.dbr)
     return;
+  // DBR_STRING is a fixed field that need not end in a NUL.
+  const auto* text = static_cast<const char*>(args.dbr);
   state->owner->queueDescription(
-      state->id, QString::fromUtf8(static_cast<const char*>(args.dbr)).trimmed());
+      state->id, QString::fromUtf8(text, int(qstrnlen(text, MAX_STRING_SIZE))).trimmed());
 }
 
 void ChannelAccessProvider::queueConnection(ChannelId id, ConnectionState state,
