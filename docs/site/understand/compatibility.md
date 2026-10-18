@@ -16,7 +16,7 @@ remains available for workflows that depend on documented differences.
 
 ## Differences to review
 
-The Qt history provider uses an EPICS Archiver Appliance; the legacy CAR/AAPI/LANL providers are not ported. Text and CSV exports write one row per curve sample, whereas legacy dump files use one row per timestamp; a disconnect, CA error, or lost-update gap is a row with value `nan` and severity 3 (INVALID) instead of a `BadVal` cell. Partial configuration-group load/save, CDEV, SDDS export, arbitrary X resources, and legacy printer commands are not available. Qt widgets, fonts, dialogs, and print backends follow the selected platform style.
+The Qt history provider uses an EPICS Archiver Appliance; the legacy CAR/AAPI/LANL providers are not ported. Text and CSV exports write one row per curve sample, whereas legacy dump files use one row per timestamp; a disconnect, CA error, or lost-update gap, or for a curve with archived history the first live sample discarded from the buffer, is a row with value `nan` and severity 3 (INVALID) instead of a `BadVal` cell. Partial configuration-group load/save, CDEV, SDDS export, arbitrary X resources, and legacy printer commands are not available. Qt widgets, fonts, dialogs, and print backends follow the selected platform style.
 
 The Qt executable is named `qtstriptool` and installs alongside `StripTool`. The project does not install a `StripTool` alias or a system-wide `.stp` MIME registration.
 
