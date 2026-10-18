@@ -7,6 +7,7 @@
 | `STRIP_HELP_PATH` | Local file or URL opened by **Help > Online Manual** instead of the documentation website. **Help Topics** (F1) always shows the guide built into the application. |
 | `QTSTRIPTOOL_ARCHIVER_URL` | Overrides the EPICS Archiver Appliance retrieval root or `data/getData.json` endpoint. |
 | `QT_QPA_PLATFORM`, `QT_STYLE_OVERRIDE`, and other standard Qt variables | Interpreted by Qt for platform and appearance behavior. |
+| `QTSTRIPTOOL_TEST_EXIT_AFTER_MS` | Test and automation hook, not for operator use. A positive integer makes Qt StripTool quit that many milliseconds after startup, without a message; other values are ignored. The automated tests use it to run the program briefly. Leave it unset. |
 
 The default Archiver retrieval root is `http://asddtn03.aps4.anl.gov:17668/retrieval`. Set an override before launching Qt StripTool when your site uses another service. See [historical data](../operate/history).
 

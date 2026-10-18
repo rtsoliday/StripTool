@@ -49,6 +49,7 @@ Useful environment variables are:
 | `STRIP_HELP_PATH` | Local file or URL opened by **Help > Online Manual** instead of the documentation website |
 | `QTSTRIPTOOL_ARCHIVER_URL` | Overrides the EPICS Archiver Appliance retrieval root or `data/getData.json` endpoint |
 | `QT_QPA_PLATFORM`, `QT_STYLE_OVERRIDE` and standard Qt variables | Interpreted by Qt |
+| `QTSTRIPTOOL_TEST_EXIT_AFTER_MS` | Test and automation hook, not for operator use: a positive integer makes the application quit that many milliseconds after startup, without a message; leave it unset |
 
 Legacy X resource and printer environment variables are not consumed; see the
 known differences in the compatibility guide.
