@@ -18,6 +18,8 @@ Use at most one configuration file. Timing options override settings loaded from
 
 If an explicit file cannot be loaded, Qt StripTool tries `StripTool.stp` in the current directory and otherwise starts with compiled defaults. An absolute path or path containing a directory component is used directly; it is not searched along `STRIP_FILE_SEARCH_PATH`.
 
+Each load failure is reported on standard error with the file and line, for example `qtstriptool: /data/beam.stp:2: invalid value for Strip.Time.Timespan; trying StripTool.stp`. The message ends with `; trying StripTool.stp` only when a different `StripTool.stp` exists and will be read next; otherwise it ends with `; using defaults`.
+
 ```sh
 qtstriptool beam.stp
 qtstriptool -style adwaita beam.stp

@@ -567,12 +567,14 @@ void MainWindow::applyModel() {
 }
 
 bool MainWindow::openConfiguration(const QString& path, QString* error) {
-  const auto result = FileWorkflow::open(std::filesystem::u8path(path.toStdString()), model_);
+  const auto file = std::filesystem::u8path(path.toStdString());
+  const auto result = FileWorkflow::open(file, model_);
   if (!result.success) {
     if (error)
       *error = result.diagnostics.empty()
                    ? tr("Unable to open %1").arg(path)
-                   : QString::fromStdString(result.diagnostics.front().message);
+                   : QString::fromStdString(
+                         formatDiagnostic(file, result.diagnostics.front()));
     return false;
   }
   applyModel();

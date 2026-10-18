@@ -4,7 +4,7 @@
 
 Configuration and data-export files support non-ASCII file and folder names.
 
-**File > Open**, **Save**, and **Save As** read and write Motif-readable `StripConfig 1.2` `.stp` files. **Open Recent** uses Qt application settings. **Restore Defaults** in Controls replaces the current model with compiled defaults. Open and save work on the complete supported configuration; partial group selection is not available.
+**File > Open**, **Save**, and **Save As** read and write Motif-readable `StripConfig 1.2` `.stp` files. **Open Recent** uses Qt application settings. **Restore Defaults** in Controls replaces the current model with compiled defaults. Open and save work on the complete supported configuration; partial group selection is not available. An Open error names the file and, for a malformed file, the failing line.
 
 Use a `.stp` file to preserve curve definitions, timing, and appearance. Runtime annotations and sampled data are separate from the configuration. See [configuration files](../reference/configuration) for format details.
 

@@ -1952,6 +1952,114 @@ private slots:
       QCOMPARE(model.timing.numberOfSamples, 7200);
     }
   }
+  void loadDiagnosticsNameFileLineAndActualFallback() {
+#ifdef Q_OS_WIN
+    const QString program = QCoreApplication::applicationDirPath() + QStringLiteral("/qtstriptool.exe");
+#else
+    const QString program = QCoreApplication::applicationDirPath() + QStringLiteral("/qtstriptool");
+#endif
+    if (!QFileInfo(program).isExecutable()) QSKIP("qtstriptool is not built next to the test program");
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto write = [&directory](const QString& name, const QByteArray& content) {
+      QFile file(directory.filePath(name));
+      return file.open(QIODevice::WriteOnly) && file.write(content) == content.size();
+    };
+    struct Output {
+      QString out;
+      QString err;
+    };
+    const auto run = [&](const QStringList& arguments) {
+      QProcess process;
+      auto environment = QProcessEnvironment::systemEnvironment();
+      environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+      environment.insert(QStringLiteral("QTSTRIPTOOL_TEST_EXIT_AFTER_MS"), QStringLiteral("200"));
+      environment.insert(QStringLiteral("EPICS_CA_AUTO_ADDR_LIST"), QStringLiteral("NO"));
+      environment.insert(QStringLiteral("EPICS_CA_ADDR_LIST"), QStringLiteral("127.0.0.1"));
+      environment.insert(QStringLiteral("QTSTRIPTOOL_ARCHIVER_URL"),
+                         QStringLiteral("http://127.0.0.1:9/retrieval"));
+      environment.insert(QStringLiteral("XDG_CONFIG_HOME"), directory.filePath(QStringLiteral("settings")));
+      environment.remove(QStringLiteral("STRIP_FILE_SEARCH_PATH"));
+      process.setProcessEnvironment(environment);
+      process.setWorkingDirectory(directory.path());
+      process.start(program, arguments);
+      if (!process.waitForFinished(30000)) {
+        process.kill();
+        process.waitForFinished();
+      }
+      return Output{QString::fromUtf8(process.readAllStandardOutput()),
+                    QString::fromUtf8(process.readAllStandardError())};
+    };
+
+    QVERIFY(write(QStringLiteral("bad.stp"), "StripConfig 1.2\nStrip.Time.Timespan bad\n"));
+    auto output = run({QStringLiteral("bad.stp")});
+    QVERIFY2(output.err.contains(QStringLiteral(
+                 "bad.stp:2: invalid value for Strip.Time.Timespan; using defaults")),
+             qPrintable(output.err));
+    QVERIFY2(!output.err.contains(QStringLiteral("trying StripTool.stp")), qPrintable(output.err));
+    output = run({QStringLiteral("missing.stp")});
+    QVERIFY2(output.err.contains(QStringLiteral("cannot find missing.stp; using defaults")),
+             qPrintable(output.err));
+    QVERIFY2(!output.err.contains(QStringLiteral("trying StripTool.stp")), qPrintable(output.err));
+    output = run({QStringLiteral("--version")});
+    QVERIFY2(output.out.contains(QStringLiteral("Qt StripTool")), qPrintable(output.out));
+
+    // StripTool.stp is promised only when it is a different, existing file.
+    QVERIFY(write(QStringLiteral("StripTool.stp"),
+                  "StripConfig 1.2\nStrip.Title fallback\nStrip.Time.NumSamples bad\n"));
+    const QString fallbackFailure =
+        QStringLiteral("StripTool.stp:3: invalid value for Strip.Time.NumSamples; using defaults");
+    output = run({QStringLiteral("bad.stp")});
+    QVERIFY2(output.err.contains(QStringLiteral(
+                 "bad.stp:2: invalid value for Strip.Time.Timespan; trying StripTool.stp")),
+             qPrintable(output.err));
+    QVERIFY2(output.err.count(fallbackFailure) == 1, qPrintable(output.err));
+    output = run({QStringLiteral("missing.stp")});
+    QVERIFY2(output.err.contains(QStringLiteral("cannot find missing.stp; trying StripTool.stp")),
+             qPrintable(output.err));
+    QVERIFY2(output.err.count(fallbackFailure) == 1, qPrintable(output.err));
+    QStringList sameFile{QStringLiteral("StripTool.stp")};
+#ifndef Q_OS_WIN
+    // A symbolic link to StripTool.stp is the same file, so it is read once.
+    if (QFile::link(directory.filePath(QStringLiteral("StripTool.stp")),
+                    directory.filePath(QStringLiteral("link.stp"))))
+      sameFile << QStringLiteral("link.stp");
+#endif
+    for (const QString& name : sameFile) {
+      output = run({name});
+      QVERIFY2(output.err.count(QStringLiteral(":3: invalid value for Strip.Time.NumSamples")) == 1,
+               qPrintable(output.err));
+      QVERIFY2(output.err.contains(name + QStringLiteral(
+                   ":3: invalid value for Strip.Time.NumSamples; using defaults")),
+               qPrintable(output.err));
+      QVERIFY2(!output.err.contains(QStringLiteral("trying StripTool.stp")), qPrintable(output.err));
+    }
+
+    // File > Open reports the same file and line; an open failure names the
+    // path only once.
+    striptool::MainWindow window;
+    QString error;
+    const QString bad = directory.filePath(QStringLiteral("bad.stp"));
+    QVERIFY(!window.openConfiguration(bad, &error));
+    QCOMPARE(error, bad + QStringLiteral(":2: invalid value for Strip.Time.Timespan"));
+    const QString missing = directory.filePath(QStringLiteral("missing.stp"));
+    QVERIFY(!window.openConfiguration(missing, &error));
+    QCOMPARE(error, QStringLiteral("unable to open ") + missing);
+
+    // A legacy limit with a bad number is not reported as a missing CHANNEL.
+    auto model = striptool::makeDefaultModel();
+    std::istringstream badNumber("CHANNEL a\nMINIMUM x\n");
+    auto result = striptool::readConfiguration(badNumber, model);
+    QVERIFY(!result.success);
+    QCOMPARE(result.diagnostics[0].line, std::size_t{2});
+    QCOMPARE(QString::fromStdString(result.diagnostics[0].message), QStringLiteral("invalid MINIMUM"));
+    std::istringstream beforeChannel("MAXIMUM 1\nCHANNEL a\n");
+    result = striptool::readConfiguration(beforeChannel, model);
+    QVERIFY(!result.success);
+    QCOMPARE(result.diagnostics[0].line, std::size_t{1});
+    QCOMPARE(QString::fromStdString(result.diagnostics[0].message),
+             QStringLiteral("curve limit appears before a CHANNEL"));
+  }
   void automaticHistoryUsesConfiguredWindow() {
     auto model = striptool::makeDefaultModel();
     model.timing.timespanSeconds = 3600;

@@ -36,6 +36,9 @@ int main(int argc, char** argv) {
   }
   const QString explicitName = parser.positionalArguments().value(0);
   const auto workingDirectory = std::filesystem::u8path(QDir::currentPath().toStdString());
+  const auto fallback = workingDirectory / "StripTool.stp";
+  std::error_code checkError;
+  const bool fallbackExists = std::filesystem::is_regular_file(fallback, checkError);
   auto model = striptool::makeDefaultModel();
   const auto explicitConfiguration = explicitName.isEmpty()
                                          ? std::filesystem::path{}
@@ -47,35 +50,35 @@ int main(int argc, char** argv) {
                                                    .toStdString());
   if (!explicitName.isEmpty() && explicitConfiguration.empty()) {
     QTextStream(stderr) << "qtstriptool: cannot find " << explicitName
-                        << "; trying StripTool.stp\n";
+                        << (fallbackExists ? "; trying StripTool.stp\n"
+                                           : "; using defaults\n");
   }
   const auto configuration = striptool::findStartupConfiguration(
       explicitName.toStdString(), workingDirectory,
       qEnvironmentVariable("STRIP_FILE_SEARCH_PATH").toStdString());
-  bool loaded = false;
+  bool tryFallback = false;
   if (!configuration.empty()) {
     const auto result = striptool::FileWorkflow::open(configuration, model);
-    loaded = result.success;
-    if (!loaded) {
+    if (!result.success) {
+      // Retry only a distinct StripTool.stp; a link to the file that just
+      // failed is the same file.
+      std::error_code sameError;
+      tryFallback = !explicitName.isEmpty() && fallbackExists &&
+                    !std::filesystem::equivalent(configuration, fallback, sameError);
       QTextStream(stderr) << "qtstriptool: "
-                          << QString::fromStdString(result.diagnostics.front().message)
-                          << (explicitName.isEmpty() ? "; using defaults\n"
-                                                     : "; trying StripTool.stp\n");
+                          << QString::fromStdString(striptool::formatDiagnostic(
+                                 configuration, result.diagnostics.front()))
+                          << (tryFallback ? "; trying StripTool.stp\n"
+                                          : "; using defaults\n");
     }
   }
-  if (!loaded && !explicitName.isEmpty()) {
-    const auto fallback = workingDirectory /
-                          "StripTool.stp";
-    std::error_code checkError;
-    const bool sameFile = !configuration.empty() &&
-        std::filesystem::absolute(configuration).lexically_normal() == fallback;
-    if (!sameFile && std::filesystem::is_regular_file(fallback, checkError)) {
-      const auto result = striptool::FileWorkflow::open(fallback, model);
-      if (!result.success)
-        QTextStream(stderr) << "qtstriptool: "
-                            << QString::fromStdString(result.diagnostics.front().message)
-                            << "; using defaults\n";
-    }
+  if (tryFallback) {
+    const auto result = striptool::FileWorkflow::open(fallback, model);
+    if (!result.success)
+      QTextStream(stderr) << "qtstriptool: "
+                          << QString::fromStdString(striptool::formatDiagnostic(
+                                 fallback, result.diagnostics.front()))
+                          << "; using defaults\n";
   }
   QString timingError;
   if (!striptool::applyCommandLineTiming(parser, model, &timingError)) {

@@ -119,9 +119,10 @@ ConfigResult parseLegacy(const std::vector<std::string>& lines,
       curve.nameSet = true;
       recognized = true;
     } else if (key == "MINIMUM" || key == "MAXIMUM") {
-      double parsed = 0;
-      if (curveIndex < 0 || !parseDouble(value, parsed))
+      if (curveIndex < 0)
         return fail(i + 1, "curve limit appears before a CHANNEL", true);
+      double parsed = 0;
+      if (!parseDouble(value, parsed)) return fail(i + 1, "invalid " + key, true);
       auto& curve = candidate.curves[static_cast<std::size_t>(curveIndex)];
       if (key == "MINIMUM") {
         curve.minimum = parsed;
@@ -434,6 +435,18 @@ bool writeConfigurationFile(const std::filesystem::path& path,
     return false;
   }
   return true;
+}
+
+std::string formatDiagnostic(const std::filesystem::path& path,
+                             const ConfigDiagnostic& diagnostic) {
+  const std::string name = path.u8string();
+  // An open failure already names the file.
+  if (diagnostic.line == 0 && !name.empty() &&
+      diagnostic.message.find(name) != std::string::npos)
+    return diagnostic.message;
+  std::string text = name;
+  if (diagnostic.line != 0) text += ':' + std::to_string(diagnostic.line);
+  return text + ": " + diagnostic.message;
 }
 
 ConfigResult loadConfigurationLayers(

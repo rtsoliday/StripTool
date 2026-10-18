@@ -30,6 +30,11 @@ bool writeConfigurationFile(const std::filesystem::path& path,
                             const StripToolModel& model,
                             std::string* error = nullptr);
 
+// Formats a load failure as "<path>:<line>: <message>", leaving out a zero
+// line and the path when the message already names the file.
+std::string formatDiagnostic(const std::filesystem::path& path,
+                             const ConfigDiagnostic& diagnostic);
+
 // Applies existing files from lowest to highest precedence. Missing optional
 // layers are ignored; a malformed existing layer fails transactionally.
 ConfigResult loadConfigurationLayers(

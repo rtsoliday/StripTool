@@ -28,7 +28,12 @@ For a bare relative configuration name, Qt StripTool checks the current
 directory and then each directory in `STRIP_FILE_SEARCH_PATH`. Absolute paths
 and paths containing a directory component are used directly. If the explicit
 file cannot be loaded, the application tries `StripTool.stp` in the current
-directory and otherwise starts with compiled defaults.
+directory and otherwise starts with compiled defaults. Each failure is reported
+on standard error with the file and line, such as
+`qtstriptool: /data/beam.stp:2: invalid value for Strip.Time.Timespan; trying StripTool.stp`.
+The message ends with `; trying StripTool.stp` only when a different
+`StripTool.stp` exists and will be read next; otherwise it ends with
+`; using defaults`.
 
 Useful environment variables are:
 
@@ -180,6 +185,7 @@ Configuration and data-export files support non-ASCII file and folder names.
 
 - **File > Open**, **Save**, and **Save As** read and write Motif-readable
   `StripConfig 1.2` files. Open Recent is stored with Qt application settings.
+  An Open error names the file and, for a malformed file, the failing line.
 - **Restore Defaults** in Controls replaces the current model with compiled
   defaults.
 - **Export Text** and **Export CSV** write samples in the visible time range.

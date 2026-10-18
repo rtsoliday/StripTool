@@ -177,7 +177,8 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              applicationUsesCNumericLocale \
              exportsGapSamplesAsInvalidNan mainWindowExportEndsWithTrailingGap \
              liveSamplesClearErrorAndLaterOutageEndsTrace \
-             archiverRequestsEncodePlusInPvNames
+             archiverRequestsEncodePlusInPvNames \
+             loadDiagnosticsNameFileLineAndActualFallback
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \
                preservesUnknownFieldsAcrossRoundTrip \
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \
