@@ -250,7 +250,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            evictedLiveSamplesBreakArchivedHold unevictedLiveSamplesJoinArchiveContinuously \
            sampleBufferRecordsFirstEvictedTimestamp displayRefreshBreaksArchivedHoldAfterEviction \
            legendValueKeepsSixSignificantDigits \
-           subnormalConstantCurvesKeepValidRangesAndLabels
+           subnormalConstantCurvesKeepValidRangesAndLabels \
+           farOffScaleSpikesKeepBothStepEdges
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 

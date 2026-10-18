@@ -3484,6 +3484,83 @@ private slots:
     QVERIFY(hasBlueNear(int(std::lround(left + (right - left) * 0.40))));
     QVERIFY(!hasBlueNear(int(std::lround(left + (right - left) * 0.75))));
   }
+  void farOffScaleSpikesKeepBothStepEdges() {
+    // Sentinels such as 1e30 or a SCPI overrange of 9.9e37 against fixed
+    // limits map to pixel coordinates far beyond the plot. Every excursion,
+    // including one held from before the view, must still show both edges
+    // without flooding the plot.
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    for (const int lineWidth : {1, 2})
+      for (const double spike : {1e30, -9.9e37, 1e300,
+                                 std::numeric_limits<double>::max()}) {
+        const QString context = QStringLiteral("spike %1 at line width %2")
+                                    .arg(spike).arg(lineWidth);
+        auto model = striptool::makeDefaultModel();
+        model.colors.background = {65535, 65535, 65535, 65535};
+        model.colors.curves[0] = {0, 0, 65535, 65535};
+        model.graph.lineWidth = lineWidth;
+        model.curves[0].name = "spike:test";
+        model.curves[0].nameSet = true;
+        model.curves[0].minimum = 0.0;
+        model.curves[0].maximum = 100.0;
+        model.curves[0].minimumSet = true;
+        model.curves[0].maximumSet = true;
+        striptool::PlotWidget plot;
+        plot.resize(800, 500);
+        plot.setModel(model);
+        plot.setCurveSamples(0, {{base - std::chrono::seconds(60), spike, 0, 0},
+                                 {base - std::chrono::seconds(20), 50.0, 0, 0},
+                                 {base, spike, 0, 0},
+                                 {base + std::chrono::seconds(20), 50.0, 0, 0}});
+        plot.setVisibleTimeRange({base - std::chrono::seconds(40),
+                                  base + std::chrono::seconds(40)});
+        plot.resetVerticalView();
+        QVERIFY(!plot.autoScaleEnabled());
+        QCOMPARE(plot.valueRange(0).minimum, 0.0);
+        QCOMPARE(plot.valueRange(0).maximum, 100.0);
+        QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::white);
+        plot.render(&image);
+
+        int left = -1;
+        int right = -1;
+        int top = -1;
+        int bottom = -1;
+        for (int x = 0; x < plot.width(); ++x)
+          if (plot.isInPlot(QPoint(x, plot.height() / 2))) {
+            if (left < 0) left = x;
+            right = x;
+          }
+        for (int y = 0; y < plot.height(); ++y)
+          if (plot.isInPlot(QPoint((left + right) / 2, y))) {
+            if (top < 0) top = y;
+            bottom = y;
+          }
+        // Trace pixels in the plot of the tallest column near a fraction.
+        const auto tallestColumn = [&](double fraction) {
+          const int center = int(std::lround(left + (right - left) * fraction));
+          int tallest = 0;
+          for (int x = center - 3; x <= center + 3; ++x) {
+            int count = 0;
+            for (int y = top; y <= bottom; ++y) {
+              const QColor pixel = image.pixelColor(x, y);
+              if (pixel.blue() > 150 && pixel.red() < 100) ++count;
+            }
+            tallest = std::max(tallest, count);
+          }
+          return tallest;
+        };
+        // Edges leave or rejoin 50 at -20 s, 0 s and +20 s; each spans from
+        // the middle of the plot to its top or bottom.
+        for (const double edge : {0.25, 0.5, 0.75})
+          QVERIFY2(tallestColumn(edge) >= (bottom - top) / 2 - 4,
+                   qPrintable(context + QStringLiteral(", edge at %1").arg(edge)));
+        // Between them the trace is off scale or one horizontal line.
+        for (const double level : {0.125, 0.375, 0.625, 0.875})
+          QVERIFY2(tallestColumn(level) <= lineWidth + 1,
+                   qPrintable(context + QStringLiteral(", level at %1").arg(level)));
+      }
+  }
   void mouseWheelZoomKeepsPointerTimestampFixed() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "wheel:test";

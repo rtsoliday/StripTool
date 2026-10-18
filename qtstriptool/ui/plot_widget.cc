@@ -845,8 +845,13 @@ std::optional<QPointF> PlotWidget::mapSample(const Sample& sample,
   const double value = plotValue(sample.value, scale);
   if (end <= begin || !sample.plotable || !range.isValid() || !std::isfinite(value))
     return std::nullopt;
+  // Off-scale sentinels such as 9.9e37 map far beyond what Qt's raster
+  // engine draws correctly, or to infinity. The trace's steps are clipped to
+  // the area, so holding them within one area height of it draws the same.
   return QPointF(area.left() + area.width() * double(time - begin) / double(end - begin),
-                 area.bottom() - rangeOffset(range, value, area.height()));
+                 std::clamp<qreal>(area.bottom() - rangeOffset(range, value, area.height()),
+                                   area.top() - area.height(),
+                                   area.bottom() + area.height()));
 }
 
 QRectF PlotWidget::currentPlotRect() const {
