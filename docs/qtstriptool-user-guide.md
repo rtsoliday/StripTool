@@ -14,6 +14,10 @@ for site-specific rollback.
 qtstriptool [--help] [--version] [-history=seconds] [-sampleCount=count] [configuration.stp]
 ```
 
+`--help` (or `-h`) prints the application options and exits; `--help-all`
+also lists Qt's standard options. `--version` (or `-v`) prints the version and
+exits.
+
 Qt StripTool defaults to Qt's Fusion style for consistent, compact controls
 across desktop environments. Qt also consumes its standard command-line
 options; for example, `qtstriptool -style adwaita example.stp` selects an
@@ -62,7 +66,8 @@ directory, and is always available through **Window > Show Controls**. Its
 **File > Dismiss** hides Controls while the graph window is open, including
 when it is minimized. After **Dismiss Graph**, Controls is the only remaining window and cannot be
 dismissed: **File > Dismiss** asks whether to exit, and **No** keeps Controls
-open.
+open. **Window > Show Graph** in Controls shows the graph window again and
+brings it to the front.
 
 1. Enter a PV in the **PV** field and select **Connect**, or enter a name in an
    unused curve row. A PV name is limited to 63 bytes (a non-ASCII character
@@ -74,8 +79,8 @@ open.
    field, to apply row edits. **Remove** frees the row and stops its acquisition.
 4. Use the Timing tab to set history length, bounded sample count, the local
    `CPU_Usage` sampling interval, and the independent display-refresh interval.
-5. Use Appearance for graph colors, grid density, colored Y axes, and line
-   width.
+5. Use Appearance for the graph title, graph colors, grid density, colored Y
+   axes, and line width.
 
 You can also hold the middle mouse button on a PV in an executing MEDM or
 QtEDM display, drag it to the Controls or Plot window, and release. Dropping
@@ -117,8 +122,9 @@ samples create a gap and cannot be plotted on a base-10 scale.
 ## Work with the graph
 
 The View menu can pause time scrolling, enable or disable auto-scroll, pan in time or
-value, zoom either axis, toggle auto-scale (on by default), reset both axes, and
-force a replot. Moving the pointer over the plot updates the location readout.
+value, zoom either axis, toggle auto-scale (on by default), reset both axes,
+clear data, and force a replot. Moving the pointer over the plot updates the
+location readout.
 Each X-axis tick has two labels: an offset relative to the right edge above,
 and local clock time below. The rightmost relative label is always 0; earlier
 ticks are negative. With auto-scroll, the right edge tracks the latest time.
@@ -139,7 +145,8 @@ Enabling auto-scroll preserves the visible duration and moves the right edge
 to now. Toolbar time zoom remains in auto-scroll and keeps the right edge fixed;
 mouse-wheel zoom keeps the pointer timestamp fixed and disables auto-scroll.
 Resuming after Pause also preserves the duration. Reset View restores the
-configured History length.
+configured History length. Time zoom and pan steps that would move either edge
+of the view more than about 146 years before or after 1970 are ignored.
 The legend beside the plot shows each visible curve's name and latest value.
 The latest value is rounded to six significant digits, as in the legacy legend;
 a curve Precision above 6 keeps more digits, up to 15.
@@ -157,7 +164,8 @@ graph state and are not saved in `.stp` files.
 **View > Historical Range** retrieves the selected range from the EPICS
 Archiver Appliance and joins returned samples with live data. The From time
 must be earlier than the To time; otherwise an **Invalid Range** warning
-appears, nothing is requested, and pending history requests continue. The
+appears, nothing is requested, and pending history requests continue. The From
+and To fields accept times from 1970-01-01 to 2100-01-01 UTC. The
 default retrieval root is `http://asddtn03.aps4.anl.gov:17668/retrieval`. Set
 `QTSTRIPTOOL_ARCHIVER_URL` to another retrieval root, or directly to its
 `data/getData.json` endpoint, before starting qtstriptool to override it.

@@ -59,7 +59,7 @@ Run from the repository root:
 make                              # Build every available variant
 make striptool                    # Build legacy Motif StripTool
 make qtstriptool                  # Build Qt StripTool
-make test-qtstriptool             # Core, config, UI, and performance tests
+make test-qtstriptool             # Core, config, UI, performance, and memory tests
 make test-qtstriptool-core
 make test-qtstriptool-config
 make test-qtstriptool-ui

@@ -16,7 +16,7 @@ The **View** menu can pause time scrolling, toggle auto-scroll, pan in time or v
 
 Vertical zoom uses logarithmic units for Log 10 curves. **Auto Scale** is on by default and keeps the value axis fitted to visible data. Zooming or panning the value axis turns it off, starting from the fitted range; select **Auto Scale** again to resume fitting. Unchecking **Auto Scale** restores configured limits. **Reset View** also turns it off, restoring configured limits and the time view.
 
-Enabling **Auto Scroll** preserves the current visible duration and moves its right edge to now. Toolbar time zoom keeps auto-scroll enabled and anchors the right edge. Mouse-wheel zoom fixes the timestamp under the pointer and disables auto-scroll. **Pause** holds the view; resuming preserves its duration. **Reset View** restores the configured History length.
+Enabling **Auto Scroll** preserves the current visible duration and moves its right edge to now. Toolbar time zoom keeps auto-scroll enabled and anchors the right edge. Mouse-wheel zoom fixes the timestamp under the pointer and disables auto-scroll. **Pause** holds the view; resuming preserves its duration. **Reset View** restores the configured History length. Time zoom and pan steps that would move either edge of the view more than about 146 years before or after 1970 are ignored.
 
 ## Annotate an event
 

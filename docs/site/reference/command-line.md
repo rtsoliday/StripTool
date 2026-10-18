@@ -8,8 +8,9 @@ qtstriptool [--help] [--version] [-history=seconds] [-sampleCount=count] [config
 
 | Argument | Behavior |
 | --- | --- |
-| `--help` | Print usage and exit. |
-| `--version` | Print version information and exit. |
+| `--help`, `-h` | Print usage and exit. |
+| `--help-all` | Print usage including Qt's standard options and exit. |
+| `--version`, `-v` | Print version information and exit. |
 | `-history=seconds` | Set the initial time window and automatic archive backfill in seconds; integer from 1 to 2147483647. Default: 300 unless set by the configuration file. |
 | `-sampleCount=count` | Set the maximum live samples retained per curve; integer from 1 to 65536. Default: 7200 unless set by the configuration file. |
 | `configuration.stp` | Open one configuration file; a bare name is searched in the current directory and then `STRIP_FILE_SEARCH_PATH`. |
