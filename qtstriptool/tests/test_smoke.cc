@@ -1224,6 +1224,54 @@ private slots:
     controls->findChild<QAction*>(QStringLiteral("showGraphAction"))->trigger();
     QVERIFY(window.isVisible());
   }
+  void controlsDismissAsksBeforeHidingTheLastWindow() {
+    // Hiding Controls after Dismiss Graph would leave an invisible process
+    // acquiring data. As in legacy StripTool, Dismiss then asks whether to
+    // exit; with the graph shown it only hides Controls.
+    striptool::MainWindow window;
+    auto* controls = window.controlsWindow();
+    auto* dismiss = controls->findChild<QAction*>(QStringLiteral("dismissControlsAction"));
+    QVERIFY(dismiss);
+    QString question;
+    const auto dismissAndAnswer = [&](QMessageBox::StandardButton answer) {
+      question.clear();
+      QTimer::singleShot(0, controls, [&question, answer] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+          question = box->text();
+          box->button(answer)->click();
+        }
+      });
+      dismiss->trigger();
+      QCoreApplication::processEvents();
+    };
+    window.show();
+    window.showControls();
+    dismissAndAnswer(QMessageBox::Yes);
+    QVERIFY(question.isEmpty());
+    QVERIFY(window.isVisible());
+    QVERIFY(!controls->isVisible());
+
+    window.findChild<QAction*>(QStringLiteral("dismissGraphAction"))->trigger();
+    QVERIFY(!window.isVisible());
+    QVERIFY(controls->isVisible());
+    dismissAndAnswer(QMessageBox::No);
+    QCOMPARE(question, QStringLiteral("This is the only remaining window and can't be "
+                                      "dismissed. Do you want to exit?"));
+    QVERIFY(controls->isVisible());
+    QVERIFY(!window.isVisible());
+
+    // Yes closes every window, so the real event loop quits instead of
+    // running on with nothing visible.
+    QTimer watchdog;
+    watchdog.setSingleShot(true);
+    connect(&watchdog, &QTimer::timeout, [] { QCoreApplication::exit(42); });
+    watchdog.start(5000);
+    QTimer::singleShot(0, controls, [&] { dismissAndAnswer(QMessageBox::Yes); });
+    QCOMPARE(QApplication::exec(), 0);
+    QVERIFY(!question.isEmpty());
+    for (QWidget* topLevel : QApplication::topLevelWidgets())
+      QVERIFY2(!topLevel->isVisible(), qPrintable(topLevel->objectName()));
+  }
   void localChannelMetadataReachesControlsAndGraph() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "CPU_Usage";

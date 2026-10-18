@@ -50,7 +50,11 @@ known differences in the compatibility guide.
 ## Configure curves
 
 The Controls window opens at startup when no configuration file is given, and
-is always available through **Window > Show Controls**.
+is always available through **Window > Show Controls**. Its **File > Dismiss**
+hides Controls while the graph window is open, including when it is minimized.
+After **Dismiss Graph**, Controls is the only remaining window and cannot be
+dismissed: **File > Dismiss** asks whether to exit, and **No** keeps Controls
+open.
 
 1. Enter a PV in the **PV** field and select **Connect**, or enter a name in an
    unused curve row. A PV name is limited to 63 bytes (a non-ASCII character

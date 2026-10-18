@@ -384,6 +384,19 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     raise();
     activateWindow();
   });
+  connect(controlsWindow_.get(), &ControlsWindow::dismissRequested, this, [this] {
+    // Hiding the last visible window would leave an unreachable process
+    // acquiring data; offer to exit instead, as legacy StripTool does.
+    if (isVisible()) {
+      controlsWindow_->hide();
+      return;
+    }
+    if (QMessageBox::question(
+            controlsWindow_.get(), tr("Exit %1").arg(applicationName()),
+            tr("This is the only remaining window and can't be dismissed. "
+               "Do you want to exit?")) == QMessageBox::Yes)
+      qApp->closeAllWindows();
+  });
   connect(controlsWindow_.get(), &ControlsWindow::openRequested, this, chooseOpen);
   connect(controlsWindow_.get(), &ControlsWindow::saveRequested, this,
           [chooseSave] { chooseSave(false); });

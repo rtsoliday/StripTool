@@ -121,7 +121,7 @@ ControlsWindow::ControlsWindow(StripToolModel* model, QWidget* parent)
   connect(save, &QAction::triggered, this, &ControlsWindow::saveRequested);
   connect(saveAs, &QAction::triggered, this, &ControlsWindow::saveAsRequested);
   connect(showGraph, &QAction::triggered, this, &ControlsWindow::showGraphRequested);
-  connect(dismiss, &QAction::triggered, this, &QWidget::hide);
+  connect(dismiss, &QAction::triggered, this, &ControlsWindow::dismissRequested);
   connect(defaults, &QAction::triggered, this, [this] {
     FileWorkflow::restoreDefaults(*model_);
     reloadFromModel();

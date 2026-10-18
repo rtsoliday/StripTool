@@ -34,6 +34,7 @@ signals:
   void saveRequested();
   void saveAsRequested();
   void showGraphRequested();
+  void dismissRequested();
 
 private:
   struct CurveRow {
