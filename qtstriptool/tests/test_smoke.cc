@@ -1348,9 +1348,9 @@ private slots:
     QVERIFY(window.plotWidget()->curveSamples(0).front().timestamp > previous);
   }
   void fileWorkflowIsTransactionalAndTracksRecentFiles() {
-    const auto root = std::filesystem::temp_directory_path() /
-                      "qtstriptool-file-workflow-test";
-    std::filesystem::create_directories(root);
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto root = std::filesystem::u8path(directory.path().toStdString());
     const auto path = root / "saved.stp";
     auto model = striptool::makeDefaultModel();
     model.timing.timespanSeconds = 123;
@@ -1379,7 +1379,6 @@ private slots:
     QCOMPARE(model.timing.timespanSeconds, before.timing.timespanSeconds);
     striptool::FileWorkflow::restoreDefaults(model);
     QCOMPARE(model.timing.timespanSeconds, 300U);
-    std::filesystem::remove_all(root);
   }
   void archiverRequestsIdentifyApplicationVersion() {
     QTcpServer server;
@@ -1811,30 +1810,28 @@ private slots:
     QVERIFY(range.end > std::chrono::system_clock::from_time_t(4000000000));
   }
   void mainWindowFileExportAndSnapshotEntryPointsWork() {
-    const auto root = std::filesystem::temp_directory_path() /
-                      "qtstriptool-main-workflow-test";
-    std::filesystem::create_directories(root);
+    QTemporaryDir root;
+    QVERIFY(root.isValid());
     striptool::MainWindow window;
     window.resize(640, 480);
     window.show();
     QString error;
-    QVERIFY2(window.saveConfiguration(QString::fromStdString((root / "saved.stp").string()),
+    QVERIFY2(window.saveConfiguration(root.filePath(QStringLiteral("saved.stp")),
                                       &error), qPrintable(error));
-    QVERIFY2(window.openConfiguration(QString::fromStdString((root / "saved.stp").string()),
+    QVERIFY2(window.openConfiguration(root.filePath(QStringLiteral("saved.stp")),
                                       &error), qPrintable(error));
-    QVERIFY2(window.exportData(QString::fromStdString((root / "data.csv").string()), true,
+    QVERIFY2(window.exportData(root.filePath(QStringLiteral("data.csv")), true,
                                &error), qPrintable(error));
-    QVERIFY2(window.saveSnapshot(QString::fromStdString((root / "plot.png").string()),
+    QVERIFY2(window.saveSnapshot(root.filePath(QStringLiteral("plot.png")),
                                  &error), qPrintable(error));
-    QVERIFY2(window.saveSnapshot(QString::fromStdString((root / "plot-default").string()),
+    QVERIFY2(window.saveSnapshot(root.filePath(QStringLiteral("plot-default")),
                                  &error), qPrintable(error));
-    QVERIFY2(window.saveSnapshot(QString::fromStdString((root / "plot-jpeg").string()),
+    QVERIFY2(window.saveSnapshot(root.filePath(QStringLiteral("plot-jpeg")),
                                  QStringLiteral("jpg"), &error), qPrintable(error));
-    QVERIFY(std::filesystem::file_size(root / "data.csv") > 0);
-    QVERIFY(std::filesystem::file_size(root / "plot.png") > 0);
-    QVERIFY(std::filesystem::file_size(root / "plot-default.png") > 0);
-    QVERIFY(std::filesystem::file_size(root / "plot-jpeg.jpg") > 0);
-    std::filesystem::remove_all(root);
+    QVERIFY(QFileInfo(root.filePath(QStringLiteral("data.csv"))).size() > 0);
+    QVERIFY(QFileInfo(root.filePath(QStringLiteral("plot.png"))).size() > 0);
+    QVERIFY(QFileInfo(root.filePath(QStringLiteral("plot-default.png"))).size() > 0);
+    QVERIFY(QFileInfo(root.filePath(QStringLiteral("plot-jpeg.jpg"))).size() > 0);
   }
   void printPreviewHasUsefulInitialGeometry() {
     striptool::MainWindow window;
@@ -2177,8 +2174,9 @@ private slots:
     QCOMPARE(model.graph.lineWidth, 10);
   }
   void appliesLayersInOrder() {
-    const auto temporary = std::filesystem::temp_directory_path() / "qtstriptool-layer-test";
-    std::filesystem::create_directories(temporary);
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto temporary = std::filesystem::u8path(directory.path().toStdString());
     const auto site = temporary / "site.stp";
     const auto user = temporary / "user.stp";
     const auto explicitFile = temporary / "explicit.stp";
@@ -2189,7 +2187,6 @@ private slots:
     QVERIFY(striptool::loadConfigurationLayers({site, user, explicitFile}, model).success);
     QCOMPARE(model.timing.timespanSeconds, 300U);
     QCOMPARE(model.graph.lineWidth, 1);
-    std::filesystem::remove_all(temporary);
   }
   void writerRejectsInvalidModels() {
     auto model = striptool::makeDefaultModel();
@@ -2491,11 +2488,14 @@ private slots:
     QVERIFY(striptool::writeConfiguration(crUnitsOutput, crUnitsModel));
   }
   void followsLegacySearchOrder() {
-    const auto root = std::filesystem::temp_directory_path() / "qtstriptool-search-test";
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto root = std::filesystem::u8path(directory.path().toStdString());
     const auto current = root / "current";
     const auto search = root / "search";
-    std::filesystem::create_directories(current);
-    std::filesystem::create_directories(search);
+    std::error_code error;
+    QVERIFY(std::filesystem::create_directories(current, error));
+    QVERIFY(std::filesystem::create_directories(search, error));
     { std::ofstream out(search / "example.stp"); out << "StripConfig 1.2\n"; }
     QCOMPARE(striptool::findConfigurationFile("example.stp", current, search.string()),
              search / "example.stp");
@@ -2509,7 +2509,6 @@ private slots:
              current / "StripTool.stp");
     QCOMPARE(striptool::findStartupConfiguration("missing.stp", current, search.string()),
              current / "StripTool.stp");
-    std::filesystem::remove_all(root);
   }
   void sampleBufferWrapsAndHonorsMemoryLimit() {
     striptool::SampleBuffer buffer(3);
