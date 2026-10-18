@@ -10,3 +10,8 @@
 ## Qt StripTool
 
 - **Robert Soliday (APS)** developed and maintains the Qt port.
+
+## Other contributors
+
+- **Deb Kirstens** contributed suggestions and code.
+- **Vladimir Romano** contributed pixmap and bug fixes.
