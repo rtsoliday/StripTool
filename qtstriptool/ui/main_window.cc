@@ -779,7 +779,7 @@ void MainWindow::startAcquisition() {
       acquiring = true;
       if (buffer->generation() == refreshedGenerations_[i]) continue;
       refreshedGenerations_[i] = buffer->generation();
-      plotWidget_->setCurveSamples(i, buffer->samples());
+      plotWidget_->setCurveSamples(i, buffer->samples(), buffer->firstEvicted());
     }
     plotWidget_->advanceToNow();
     // A held trace extends to the present even when the view does not scroll.

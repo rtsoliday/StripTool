@@ -246,7 +246,9 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            middleDragKeepsLiveViewStableUntilRelease \
            removingCurveRemapsAnnotationSelection middleDragStopsAtPlotEdge \
            plotKeepsCrossingSegmentsAndDoesNotRewindOnLateSamples \
-           toolbarRightClickUsesFinePanAndZoomSteps
+           toolbarRightClickUsesFinePanAndZoomSteps \
+           evictedLiveSamplesBreakArchivedHold unevictedLiveSamplesJoinArchiveContinuously \
+           sampleBufferRecordsFirstEvictedTimestamp displayRefreshBreaksArchivedHoldAfterEviction
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 

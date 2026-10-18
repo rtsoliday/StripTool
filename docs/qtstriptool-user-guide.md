@@ -160,6 +160,13 @@ monitors are not required to repeat unchanged values. An **Error** status from a
 failed read, such as revoked read access, returns to **Live** when monitor
 updates resume; a later disconnect still ends the plotted line with a gap.
 
+Once a curve receives more live updates than its sample count, the oldest live
+samples are discarded. Archived data is then held only until the first
+discarded sample, and the graph leaves a gap from there to the oldest live
+sample still retained rather than extending the last archived value across it.
+That span is not requested from the Archiver automatically; use
+**View > Historical Range** to retrieve it.
+
 CA updates use a bounded GUI inbox. If incoming updates outrun processing, the
 graph records a gap and the status bar reports lost observations; delivery then
 continues from the latest channel state. Updates within the budget retain their

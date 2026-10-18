@@ -25,6 +25,8 @@ void SampleBuffer::setCapacity(std::size_t requestedSamples,
   // Copy only the retained tail into an exactly sized allocation. Erasing the
   // front of the old vector would keep its former (possibly large) capacity.
   const auto retained = std::min(size_, newCapacity);
+  if (retained < size_ && !firstEvicted_)
+    firstEvicted_ = storage_[(head_ + capacity_ - size_) % capacity_].timestamp;
   std::vector<Sample> current;
   current.reserve(newCapacity);
   for (std::size_t i = 0; i < retained; ++i)
@@ -47,6 +49,7 @@ void SampleBuffer::append(Sample sample) {
     head_ = size_ == capacity_ ? 0 : size_;
     return;
   }
+  if (!firstEvicted_) firstEvicted_ = storage_[head_].timestamp;
   storage_[head_] = sample;
   head_ = (head_ + 1) % capacity_;
   size_ = capacity_;
@@ -56,6 +59,7 @@ void SampleBuffer::clear() {
   std::vector<Sample>().swap(storage_);
   head_ = 0;
   size_ = 0;
+  firstEvicted_.reset();
   touch();
 }
 

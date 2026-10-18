@@ -167,7 +167,9 @@ void PlotWidget::setModel(const StripToolModel& model) {
   redraw();
 }
 
-void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples) {
+void PlotWidget::setCurveSamples(
+    std::size_t curve, std::vector<Sample> samples,
+    std::optional<std::chrono::system_clock::time_point> firstEvicted) {
   if (curve >= samples_.size()) return;
   // During a drag the ranges are kept as they were before these samples.
   if (dragMode_ != DragMode::None) resolveAutoRanges();
@@ -177,11 +179,12 @@ void PlotWidget::setCurveSamples(std::size_t curve, std::vector<Sample> samples)
   if (!std::is_sorted(samples.begin(), samples.end(), earlier))
     std::sort(samples.begin(), samples.end(), earlier);
   liveSamples_[curve] = std::move(samples);
+  firstEvicted_[curve] = firstEvicted;
   if (historicalSamples_[curve].empty()) {
     if (liveSamples_[curve].empty() || samples_[curve].capacity() / 2 > liveSamples_[curve].size())
       std::vector<Sample>(liveSamples_[curve]).swap(samples_[curve]);
     else samples_[curve] = liveSamples_[curve];
-  } else samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
+  } else samples_[curve] = joinedSamples(curve);
   if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
     if (!samples_[curve].empty()) {
       const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
@@ -213,9 +216,11 @@ void PlotWidget::appendSample(std::size_t curve, Sample sample) {
     data.push_back(sample);
   }
   const std::size_t maximum = std::max(1, model_.timing.numberOfSamples);
-  if (data.size() > maximum)
+  if (data.size() > maximum) {
+    if (!firstEvicted_[curve]) firstEvicted_[curve] = data.front().timestamp;
     data.erase(data.begin(), data.end() - static_cast<std::ptrdiff_t>(maximum));
-  samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], data);
+  }
+  samples_[curve] = joinedSamples(curve);
   if (autoScroll_ && !paused_ && dragMode_ == DragMode::None) {
     const auto duration = visibleTimeRange_.end - visibleTimeRange_.start;
     const auto now = std::chrono::system_clock::now();
@@ -233,6 +238,7 @@ void PlotWidget::clearCurveSamples(std::size_t curve) {
   if (curve >= samples_.size()) return;
   std::vector<Sample>().swap(liveSamples_[curve]);
   std::vector<Sample>().swap(historicalSamples_[curve]);
+  firstEvicted_[curve].reset();
   widestLegendValue_[curve].clear();
   std::vector<Sample>().swap(samples_[curve]);
   if (historyReduced_[curve]) {
@@ -272,13 +278,31 @@ void PlotWidget::joinHistoricalSamples(std::size_t curve,
   if (merged.size() > maximum) merged = decimateSamples(merged, maximum);
   else if (merged.capacity() > maximum) std::vector<Sample>(merged).swap(merged);
   historicalSamples_[curve] = std::move(merged);
-  samples_[curve] = joinHistoricalAndLive(historicalSamples_[curve], liveSamples_[curve]);
+  samples_[curve] = joinedSamples(curve);
   if (reduced && !historyReduced_[curve]) {
     historyReduced_[curve] = true;
     emit historyReductionChanged();
   }
   if (dragMode_ == DragMode::None) updateAutoRange();
   redraw();
+}
+
+std::vector<Sample> PlotWidget::joinedSamples(std::size_t curve) const {
+  const auto& historical = historicalSamples_[curve];
+  const auto& live = liveSamples_[curve];
+  const auto& evicted = firstEvicted_[curve];
+  if (!evicted || historical.empty()) return joinHistoricalAndLive(historical, live);
+  // Live samples from the first evicted one up to the oldest retained one were
+  // discarded. Break the trace there so an archived value is not held across
+  // a span in which newer data existed.
+  const auto at = std::lower_bound(live.begin(), live.end(), *evicted,
+      [](const Sample& sample, const auto& time) { return sample.timestamp < time; });
+  std::vector<Sample> marked;
+  marked.reserve(live.size() + 1);
+  marked.insert(marked.end(), live.begin(), at);
+  marked.push_back({*evicted, 0.0, 0, 0, false});
+  marked.insert(marked.end(), at, live.end());
+  return joinHistoricalAndLive(historical, marked);
 }
 
 bool PlotWidget::historyReduced(std::size_t curve) const {

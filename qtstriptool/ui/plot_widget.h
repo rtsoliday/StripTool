@@ -29,7 +29,11 @@ public:
 
   void setModel(const StripToolModel& model);
   const StripToolModel& model() const { return model_; }
-  void setCurveSamples(std::size_t curve, std::vector<Sample> samples);
+  // firstEvicted is the time of the first live sample the acquisition buffer
+  // discarded, if any. Archived samples are not held across that point.
+  void setCurveSamples(std::size_t curve, std::vector<Sample> samples,
+                       std::optional<std::chrono::system_clock::time_point>
+                           firstEvicted = std::nullopt);
   void appendSample(std::size_t curve, Sample sample);
   void clearCurveSamples(std::size_t curve);
   void clearSamples();
@@ -114,6 +118,8 @@ private:
   int annotationAt(const QPoint& position) const;
   std::chrono::system_clock::time_point timeAt(const QPoint& position) const;
   std::optional<double> valueAt(const QPoint& position) const;
+  // Historical and live samples of a curve, broken where live data was evicted.
+  std::vector<Sample> joinedSamples(std::size_t curve) const;
   void updateAutoRange();
   void resolveAutoRange(std::size_t curve) const;
   void resolveAutoRanges() const;
@@ -132,6 +138,8 @@ private:
   StripToolModel model_ = makeDefaultModel();
   std::array<std::vector<Sample>, kMaximumCurves> liveSamples_;
   std::array<std::vector<Sample>, kMaximumCurves> historicalSamples_;
+  std::array<std::optional<std::chrono::system_clock::time_point>, kMaximumCurves>
+      firstEvicted_;
   std::array<bool, kMaximumCurves> historyReduced_{};
   // Widest legend value line shown per curve; plotRect() only ever grows it.
   mutable std::array<QString, kMaximumCurves> widestLegendValue_;

@@ -1353,6 +1353,28 @@ private slots:
       return sample.timestamp == oldest;
     }));
   }
+  void displayRefreshBreaksArchivedHoldAfterEviction() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "CPU_Usage";
+    model.curves[0].nameSet = true;
+    model.timing.sampleIntervalSeconds = 0.02;
+    model.timing.refreshIntervalSeconds = 0.02;
+    model.timing.numberOfSamples = 3;
+    striptool::MainWindow window(model);
+    window.startAcquisition();
+    auto* plot = window.plotWidget();
+    QTRY_VERIFY_WITH_TIMEOUT(!plot->curveSamples(0).empty(), 2500);
+    // CPU_Usage is never backfilled; join an archived sample directly so
+    // each refresh joins history to the ring once it has wrapped.
+    const auto archived = plot->curveSamples(0).front().timestamp - std::chrono::seconds(1);
+    plot->joinHistoricalSamples(0, {{archived, 1000.0, 0, 0}});
+    QTRY_VERIFY_WITH_TIMEOUT(plot->curveSamples(0).size() == 5, 2500);
+    const auto& samples = plot->curveSamples(0);
+    QCOMPARE(samples[0].timestamp, archived);
+    QVERIFY(!samples[1].plotable);
+    QVERIFY(samples[1].timestamp > archived);
+    QVERIFY(samples[1].timestamp < samples[2].timestamp);
+  }
   void openingConfigurationClearsPreviousAcquisitionData() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "CPU_Usage";
@@ -2672,6 +2694,37 @@ private slots:
     striptool::SampleBuffer limited(1000, sizeof(striptool::Sample) * 2);
     QCOMPARE(limited.capacity(), std::size_t{2});
   }
+  void sampleBufferRecordsFirstEvictedTimestamp() {
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    const auto at = [base](int i) { return base + std::chrono::seconds(i); };
+    striptool::SampleBuffer buffer(3);
+    for (int i = 0; i < 3; ++i) buffer.append({at(i), double(i), 0, 0});
+    QVERIFY(!buffer.firstEvicted());  // full, but nothing discarded yet
+    buffer.append({at(3), 3.0, 0, 0});
+    QVERIFY(buffer.firstEvicted());
+    QCOMPARE(*buffer.firstEvicted(), at(0));
+    buffer.append({at(4), 4.0, 0, 0});
+    QCOMPARE(*buffer.firstEvicted(), at(0));  // the first, not the newest
+    buffer.clear();
+    QVERIFY(!buffer.firstEvicted());
+
+    // Shrinking the capacity discards the oldest samples too.
+    for (int i = 10; i < 13; ++i) buffer.append({at(i), double(i), 0, 0});
+    buffer.setCapacity(5);
+    QVERIFY(!buffer.firstEvicted());
+    buffer.setCapacity(2);
+    QVERIFY(buffer.firstEvicted());
+    QCOMPARE(*buffer.firstEvicted(), at(10));
+    QCOMPARE(buffer.samples().front().timestamp, at(11));
+    buffer.append({at(13), 13.0, 0, 0});
+    QCOMPARE(*buffer.firstEvicted(), at(10));
+    buffer.clear();
+    buffer.append({at(20), 20.0, 0, 0});
+    buffer.setCapacity(1);
+    QVERIFY(!buffer.firstEvicted());
+    buffer.append({at(21), 21.0, 0, 0});
+    QCOMPARE(*buffer.firstEvicted(), at(20));
+  }
   void decimationPreservesChronologyAndExtrema() {
     std::vector<striptool::Sample> samples;
     const auto base = std::chrono::system_clock::time_point{};
@@ -3191,6 +3244,128 @@ private slots:
     plot.render(&image);
     QVERIFY(hasBlueNear(xAt(0.125), yAt(5.0)) ||
             hasBlueNear(xAt(0.125), yAt(10.0)));
+  }
+  void evictedLiveSamplesBreakArchivedHold() {
+    auto model = striptool::makeDefaultModel();
+    model.colors.background = {65535, 65535, 65535, 65535};
+    model.colors.curves[0] = {0, 0, 65535, 65535};
+    model.graph.lineWidth = 3;
+    model.curves[0].name = "evicted:test";
+    model.curves[0].nameSet = true;
+    model.timing.numberOfSamples = 20;
+    // Archive backfill ends when the PV is added at base. Live updates then
+    // arrive every 0.1 s for 25 s, so a 20 sample ring keeps only the last 2 s.
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    std::vector<striptool::Sample> archived;
+    for (int i = 20; i >= 1; --i)
+      archived.push_back({base - std::chrono::seconds(i), i % 2 ? 1000.0 : 990.0, 0, 0});
+    striptool::SampleBuffer buffer(20);
+    for (int i = 0; i < 250; ++i)
+      buffer.append({base + std::chrono::milliseconds(100 * i), double(i % 100), 0, 0});
+    const auto oldestLive = buffer.samples().front().timestamp;
+    QCOMPARE(oldestLive, base + std::chrono::seconds(23));
+    // The archived value may be held until live data began at base, but no
+    // sample may be held across the evicted span up to the oldest live one.
+    const auto heldAcrossEvictedSpan = [&](const std::vector<striptool::Sample>& samples) {
+      for (std::size_t i = 0; i + 1 < samples.size(); ++i)
+        if (samples[i].plotable && samples[i].timestamp < oldestLive &&
+            samples[i + 1].timestamp > base)
+          return true;
+      return false;
+    };
+
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    // History may be joined after the ring wrapped as well as before.
+    plot.setCurveSamples(0, buffer.samples(), buffer.firstEvicted());
+    plot.joinHistoricalSamples(0, archived);
+    QVERIFY(!heldAcrossEvictedSpan(plot.curveSamples(0)));
+    plot.setCurveSamples(0, buffer.samples(), buffer.firstEvicted());
+    const auto& samples = plot.curveSamples(0);
+    QVERIFY(!heldAcrossEvictedSpan(samples));
+    QCOMPARE(samples.size(), archived.size() + buffer.size() + 1);
+    const auto marker = std::find_if(samples.begin(), samples.end(),
+                                     [](const auto& sample) { return !sample.plotable; });
+    QVERIFY(marker != samples.end());
+    QCOMPARE(marker->timestamp, base);
+
+    // A view starting inside the evicted span neither draws nor scales to
+    // the archived value.
+    plot.setVisibleTimeRange({base + std::chrono::seconds(15),
+                              base + std::chrono::seconds(25)});
+    QVERIFY(plot.valueRange(0).maximum < 100.0);
+    QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::white);
+    plot.render(&image);
+    int left = -1;
+    int right = -1;
+    for (int x = 0; x < plot.width(); ++x)
+      if (plot.isInPlot(QPoint(x, plot.height() / 2))) {
+        if (left < 0) left = x;
+        right = x;
+      }
+    const auto traceInColumns = [&](double from, double to) {
+      for (int x = int(left + (right - left) * from); x <= int(left + (right - left) * to); ++x)
+        for (int y = 0; y < plot.height(); ++y) {
+          if (!plot.isInPlot(QPoint(x, y))) continue;
+          const QColor pixel = image.pixelColor(x, y);
+          if (pixel.blue() > 150 && pixel.red() < 100) return true;
+        }
+      return false;
+    };
+    QVERIFY(!traceInColumns(0.02, 0.75));  // evicted span up to 23 s
+    QVERIFY(traceInColumns(0.85, 0.95));   // retained live samples
+
+    // PlotWidget::appendSample trims to the configured sample count alike.
+    striptool::PlotWidget appended;
+    appended.setModel(model);
+    appended.joinHistoricalSamples(0, archived);
+    for (int i = 0; i < 250; ++i)
+      appended.appendSample(0, {base + std::chrono::milliseconds(100 * i),
+                                double(i % 100), 0, 0});
+    QVERIFY(!heldAcrossEvictedSpan(appended.curveSamples(0)));
+  }
+  void unevictedLiveSamplesJoinArchiveContinuously() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "unevicted:test";
+    model.curves[0].nameSet = true;
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    const std::vector<striptool::Sample> archived{
+        {base - std::chrono::seconds(2), 990.0, 0, 0},
+        {base - std::chrono::seconds(1), 1000.0, 0, 0}};
+    striptool::SampleBuffer buffer(1000);
+    for (int i = 0; i < 250; ++i)
+      buffer.append({base + std::chrono::milliseconds(100 * i), double(i % 100), 0, 0});
+    QVERIFY(!buffer.firstEvicted());
+    striptool::PlotWidget plot;
+    plot.setModel(model);
+    plot.joinHistoricalSamples(0, archived);
+    plot.setCurveSamples(0, buffer.samples(), buffer.firstEvicted());
+    const auto isPlotable = [](const striptool::Sample& sample) { return sample.plotable; };
+    // Nothing was evicted: the archived value stays active until the first
+    // live update, without a break at the boundary.
+    QCOMPARE(plot.curveSamples(0).size(), archived.size() + buffer.size());
+    QVERIFY(std::all_of(plot.curveSamples(0).begin(), plot.curveSamples(0).end(),
+                        isPlotable));
+    QCOMPARE(plot.curveSamples(0)[1].value, 1000.0);
+    QCOMPARE(plot.curveSamples(0)[2].timestamp, base);
+    plot.setVisibleTimeRange({base - std::chrono::milliseconds(500),
+                              base + std::chrono::seconds(5)});
+    QCOMPARE(plot.valueRange(0).maximum, 1000.0);
+
+    // Without archived samples an evicted ring needs no break either.
+    striptool::SampleBuffer wrapped(20);
+    for (int i = 0; i < 250; ++i)
+      wrapped.append({base + std::chrono::milliseconds(100 * i), double(i % 100), 0, 0});
+    plot.clearCurveSamples(0);
+    plot.setCurveSamples(0, wrapped.samples(), wrapped.firstEvicted());
+    QCOMPARE(plot.curveSamples(0).size(), wrapped.size());
+    QVERIFY(std::all_of(plot.curveSamples(0).begin(), plot.curveSamples(0).end(),
+                        isPlotable));
+    plot.setVisibleTimeRange({base + std::chrono::seconds(15),
+                              base + std::chrono::seconds(25)});
+    QVERIFY(plot.valueRange(0).maximum < 100.0);
   }
   void stepTraceStopsAtPresentTime() {
     auto model = striptool::makeDefaultModel();
