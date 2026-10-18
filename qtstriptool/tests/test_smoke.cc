@@ -769,6 +769,52 @@ private slots:
     QVERIFY(!controls.addPvs({QStringLiteral("test:10")}));
     QCOMPARE(model.curves[9].name, std::string("test:9"));
   }
+  void invalidPvEntryIsRejectedAndKept() {
+    // The PV field accepts the names a drop accepts. A rejected entry is
+    // reported and kept for correction instead of being truncated to the
+    // row editor's length or written into a curve row.
+    auto model = striptool::makeDefaultModel();
+    striptool::ControlsWindow controls(&model);
+    QSignalSpy changed(&controls, &striptool::ControlsWindow::modelChanged);
+    QSignalSpy acquisition(&controls,
+                           &striptool::ControlsWindow::acquisitionConfigurationChanged);
+    auto* entry = controls.findChild<QLineEdit*>(QStringLiteral("pvEntry"));
+    auto* row = controls.findChild<QLineEdit*>(QStringLiteral("curveName0"));
+    auto* connect = controls.findChild<QPushButton*>(QStringLiteral("connectButton"));
+    QString warning;
+    const auto connectEntry = [&](const QString& text) {
+      warning.clear();
+      entry->setText(text);
+      QTimer::singleShot(0, &controls, [&warning] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+          warning = box->windowTitle();
+          box->accept();
+        }
+      });
+      connect->click();
+      QCoreApplication::processEvents();
+    };
+    const QString overlong = QStringLiteral("test:overlong:") + QString(73, QLatin1Char('x'));
+    QCOMPARE(overlong.size(), 87);
+    const QString wide(32, QChar(0x00e9));  // 32 characters, 64 UTF-8 bytes
+    for (const auto& rejected : {overlong, wide, QStringLiteral("test:a test:b")}) {
+      connectEntry(rejected);
+      QCOMPARE(warning, QStringLiteral("Invalid Curve Name"));
+      QVERIFY(!model.curves[0].nameSet);
+      QCOMPARE(row->text(), QString());
+      QCOMPARE(entry->text(), rejected);
+      QCOMPARE(changed.count(), 0);
+      QCOMPARE(acquisition.count(), 0);
+    }
+    const QString longest = QStringLiteral("test:longest:") + QString(50, QLatin1Char('x'));
+    QCOMPARE(longest.toUtf8().size(), int(striptool::kMaximumCurveNameLength));
+    connectEntry(longest);
+    QVERIFY(warning.isEmpty());
+    QVERIFY(model.curves[0].nameSet);
+    QCOMPARE(QString::fromStdString(model.curves[0].name), longest);
+    QCOMPARE(entry->text(), QString());
+    QCOMPARE(acquisition.count(), 1);
+  }
   void qtedmMiddleButtonDropsReachBothScreens() {
     const QString qtedm = qEnvironmentVariable("QTSTRIPTOOL_TEST_QTEDM");
     const QString driver = qEnvironmentVariable("QTSTRIPTOOL_TEST_DRAG_DRIVER");

@@ -372,12 +372,22 @@ bool ControlsWindow::addPvs(const QStringList& names) {
 void ControlsWindow::connectEnteredPv() {
   const QString name = pvEntry_->text().trimmed();
   if (name.isEmpty()) return;
+  // Accept the names a drop accepts. Checking before the row editor sees the
+  // text keeps its length limit from silently truncating the name.
+  if (droppedPvNames(name) != QStringList{name}) {
+    QMessageBox::warning(this, tr("Invalid Curve Name"),
+                         tr("A process variable name must be at most %1 bytes long "
+                            "and cannot contain whitespace or control characters.")
+                             .arg(static_cast<int>(kMaximumCurveNameLength)));
+    return;
+  }
   for (std::size_t i = 0; i < model_->curves.size(); ++i) {
     if (!model_->curves[i].nameSet) {
       curveRows_[i].name->setText(name);
       curveRows_[i].plotted->setChecked(true);
       applyCurve(i);
-      pvEntry_->clear();
+      // Keep the entry for correction when applyCurve rejected the row.
+      if (model_->curves[i].nameSet) pvEntry_->clear();
       return;
     }
   }

@@ -4,7 +4,7 @@ Qt StripTool has ten curve slots. The graph and Controls windows use the same co
 
 ## Curve rows
 
-Enter a name in an unused row or type it in the **PV** field and select **Connect** (or press Return). Each row controls plotting, linear or base-10 logarithmic scale, precision, minimum, maximum, and color. Select **Modify** to apply row edits. **Remove** frees the slot and stops acquisition.
+Enter a name in an unused row or type it in the **PV** field and select **Connect** (or press Return). A PV name is limited to 63 bytes and cannot contain whitespace; **Connect** warns about an invalid name and keeps it in the **PV** field so you can correct it. Each row controls plotting, linear or base-10 logarithmic scale, precision, minimum, maximum, and color. Select **Modify** to apply row edits. **Remove** frees the slot and stops acquisition.
 
 <figure class="doc-shot">
   <img src="../assets/screenshots/controls-curves.png" alt="Controls window Curves tab with the CPU_Usage row, color and scale selectors, plotting checkbox, limits, Modify and Remove buttons, and Live status" />

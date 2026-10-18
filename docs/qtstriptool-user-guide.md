@@ -53,7 +53,9 @@ The Controls window opens at startup when no configuration file is given, and
 is always available through **Window > Show Controls**.
 
 1. Enter a PV in the **PV** field and select **Connect**, or enter a name in an
-   unused curve row.
+   unused curve row. A PV name is limited to 63 bytes and cannot contain
+   whitespace; **Connect** warns about an invalid name and leaves it in the
+   **PV** field for correction.
 2. Set Plot, Linear or Log 10 scale, precision, minimum, maximum, and color.
 3. Select **Modify**, or press Return in that row's Name, Minimum, or Maximum
    field, to apply row edits. **Remove** frees the row and stops its acquisition.
