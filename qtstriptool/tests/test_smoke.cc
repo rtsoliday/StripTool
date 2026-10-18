@@ -1398,6 +1398,49 @@ private slots:
     QVERIFY2(received.contains(agent), received.constData());
     provider.cancel(id);
   }
+  void archiverRequestsEncodePlusInPvNames() {
+    // The Archiver's servlet container form-decodes the query: a literal '+'
+    // arrives as a space, and "%XX" in a name must not pass as an escape.
+    const auto formDecodedPv = [](const QByteArray& query) {
+      for (const QByteArray& item : query.split('&'))
+        if (item.startsWith("pv="))
+          return QUrl::fromPercentEncoding(item.mid(3).replace('+', ' '));
+      return QString();
+    };
+    const auto now = std::chrono::system_clock::now();
+    const striptool::TimeRange range{now - std::chrono::minutes(1), now};
+    const QByteArray plus = striptool::ArchiverHistoryProvider::requestUrl(
+        QStringLiteral("http://archive.example/retrieval"), QStringLiteral("S:I+B"), range)
+        .query(QUrl::FullyEncoded).toLatin1();
+    QVERIFY2(plus.contains("%2B"), plus.constData());
+    QCOMPARE(formDecodedPv(plus), QStringLiteral("lastSample_1(S:I+B)"));
+    const QByteArray percent = striptool::ArchiverHistoryProvider::requestUrl(
+        QStringLiteral("http://archive.example/retrieval"), QStringLiteral("A%41B"), range)
+        .query(QUrl::FullyEncoded).toLatin1();
+    QVERIFY2(percent.contains("%2541"), percent.constData());
+    QCOMPARE(formDecodedPv(percent), QStringLiteral("lastSample_1(A%41B)"));
+
+    QTcpServer server;
+    QVERIFY(server.listen(QHostAddress::LocalHost));
+    QByteArray received;
+    connect(&server, &QTcpServer::newConnection, &server, [&server, &received] {
+      auto* socket = server.nextPendingConnection();
+      connect(socket, &QTcpSocket::readyRead, socket,
+              [socket, &received] { received += socket->readAll(); });
+    });
+    striptool::ArchiverHistoryProvider provider(
+        QStringLiteral("http://127.0.0.1:%1").arg(server.serverPort()));
+    const auto id = provider.request(QStringLiteral("S:I+B"), range);
+    QTRY_VERIFY(received.contains("\r\n\r\n"));
+    const QByteArray line = received.left(received.indexOf("\r\n"));
+    const int query = line.indexOf('?');
+    const int version = line.lastIndexOf(" HTTP/");
+    QVERIFY2(query > 0 && version > query, line.constData());
+    const QByteArray wire = line.mid(query + 1, version - query - 1);
+    QVERIFY2(wire.contains("%2B") && !wire.contains('+'), line.constData());
+    QCOMPARE(formDecodedPv(wire), QStringLiteral("lastSample_1(S:I+B)"));
+    provider.cancel(id);
+  }
   void exportReportsWriteFailures() {
     // /dev/full accepts open() but every write fails with ENOSPC.
     if (!QFileInfo::exists(QStringLiteral("/dev/full"))) QSKIP("/dev/full is unavailable");
@@ -1508,7 +1551,8 @@ private slots:
         {start, start + std::chrono::seconds(10001)});
     QCOMPARE(url.path(), QStringLiteral("/retrieval/data/getData.json"));
     const QUrlQuery query(url);
-    QCOMPARE(query.queryItemValue(QStringLiteral("pv")),
+    QCOMPARE(QUrl::fromPercentEncoding(
+                 query.queryItemValue(QStringLiteral("pv"), QUrl::FullyEncoded).toLatin1()),
              QStringLiteral("lastSample_2(test:pv name)"));
     QCOMPARE(query.queryItemValue(QStringLiteral("from")),
              QStringLiteral("2000-01-01T00:00:00.123Z"));

@@ -175,8 +175,10 @@ QUrl ArchiverHistoryProvider::requestUrl(const QString& retrievalRoot,
     endpoint += QStringLiteral("/data/getData.json");
   QUrl url(endpoint);
   QUrlQuery query;
-  query.addQueryItem(QStringLiteral("pv"),
-                     QStringLiteral("lastSample_%1(%2)").arg(interval).arg(channel));
+  // QUrlQuery leaves '+' and "%XX" as written, but the Archiver form-decodes
+  // the query ('+' becomes a space), so encode the whole PV value here.
+  const QString pv = QStringLiteral("lastSample_%1(%2)").arg(interval).arg(channel);
+  query.addQueryItem(QStringLiteral("pv"), QString::fromLatin1(QUrl::toPercentEncoding(pv)));
   query.addQueryItem(QStringLiteral("from"),
                      QDateTime::fromMSecsSinceEpoch(
                          std::chrono::duration_cast<std::chrono::milliseconds>(
