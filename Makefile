@@ -118,7 +118,7 @@ endif
 
 package-qtstriptool: qtstriptool
 ifeq ($(OS),Windows)
-	@echo "Use windeployqt as documented in docs/qtstriptool-user-guide.md."
+	@echo "Use windeployqt as documented in README.md (Install and package Qt StripTool)."
 	@exit 1
 else
 	rm -rf "$(PACKAGE_ROOT)"
