@@ -194,7 +194,8 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                readsLegacyWrittenUnitsFixture \
                configurationSavesLineBreaksAsSpaces \
                configurationPreservesLongUnknownKeys \
-               clampsTimespanToControlsRange
+               clampsTimespanToControlsRange \
+               readsConfigurationWithUtf8Bom
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            typedTimingValuesApplyOnceWhenEntered \
            helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \

@@ -95,6 +95,8 @@ bugs, or exact pixels.
   channels, malformed known attributes, unsupported versions, and invalid
   model values transactionally. Precision is constrained to 0 through 20.
   `Timespan` values above 2147483647 seconds load as 2147483647.
+  A leading UTF-8 byte order mark is ignored; Motif treats such a file as
+  old-format and does not recognize its header or first record.
   Legacy acceptance caused by buffer, bounds, or clamp defects is not retained.
 - **Executable and desktop identity:** Qt installs as `qtstriptool` and
   `org.epics.qtstriptool`; no `.stp` MIME registration or `StripTool` alias is

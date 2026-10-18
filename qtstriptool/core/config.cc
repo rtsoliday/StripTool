@@ -315,6 +315,9 @@ ConfigResult readConfiguration(std::istream& input, StripToolModel& model) {
   }
   if (input.bad()) return fail(0, "unable to read configuration");
   if (lines.empty()) return fail(0, "configuration is empty");
+  // Some Windows tools start UTF-8 text with a byte order mark. Drop it from
+  // the stored line so neither the header check nor parseLegacy sees it.
+  if (lines.front().compare(0, 3, "\xEF\xBB\xBF") == 0) lines.front().erase(0, 3);
 
   StripToolModel candidate = model;
   const auto [header, versionText] = splitLine(lines.front());

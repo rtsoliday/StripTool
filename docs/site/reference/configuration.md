@@ -1,6 +1,6 @@
 # Configuration files
 
-Qt StripTool reads and writes Motif-readable `StripConfig 1.2` `.stp` files. It also reads supported older headers and the legacy pre-header format. Saving writes the current 1.2 format and the complete supported model.
+Qt StripTool reads and writes Motif-readable `StripConfig 1.2` `.stp` files. It also reads supported older headers and the legacy pre-header format. Saving writes the current 1.2 format and the complete supported model. A UTF-8 byte order mark at the start of a file, as some Windows editors and PowerShell write, is ignored; saved files never have one.
 
 ## Current format
 

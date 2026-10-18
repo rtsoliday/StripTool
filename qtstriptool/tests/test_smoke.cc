@@ -2209,6 +2209,42 @@ private slots:
       QCOMPARE(model.timing.timespanSeconds, maximum);
     }
   }
+  void readsConfigurationWithUtf8Bom() {
+    // Some Windows editors and PowerShell save UTF-8 with a byte order mark.
+    // It must not hide the StripConfig header or the first legacy record.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    for (const char* name : {"canonical-1.2.stp", "legacy-format.stp"}) {
+      auto expected = striptool::makeDefaultModel();
+      const auto plain = striptool::readConfigurationFile(fixture(name), expected);
+      QVERIFY2(plain.success, name);
+      std::ostringstream expectedText;
+      QVERIFY(striptool::writeConfiguration(expectedText, expected));
+
+      std::ifstream source(fixture(name), std::ios::binary);
+      std::ostringstream contents;
+      contents << source.rdbuf();
+      std::string crlf;
+      for (char character : contents.str()) {
+        if (character == '\n') crlf += '\r';
+        crlf += character;
+      }
+      const auto path = std::filesystem::u8path(
+          directory.filePath(QString::fromLatin1(name)).toStdString());
+      for (const std::string& text : {contents.str(), crlf}) {
+        { std::ofstream out(path, std::ios::binary); out << "\xEF\xBB\xBF" << text; }
+        auto model = striptool::makeDefaultModel();
+        const auto result = striptool::readConfigurationFile(path, model);
+        QVERIFY2(result.success, result.diagnostics.empty() ? name
+                                     : result.diagnostics.front().message.c_str());
+        QCOMPARE(result.legacyFormat, plain.legacyFormat);
+        std::ostringstream output;
+        QVERIFY(striptool::writeConfiguration(output, model));
+        QCOMPARE(QString::fromStdString(output.str()),
+                 QString::fromStdString(expectedText.str()));
+      }
+    }
+  }
   void appliesLayersInOrder() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
