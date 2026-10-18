@@ -188,8 +188,12 @@ samples, whichever is smaller. Further history is reduced across the loaded
 time span, preserving extrema and connection gaps within the point budget.
 An **Archive history reduced** notice in the status bar appears when this
 per-curve limit reduces a curve's archived samples; it does not report the
-Archiver's `lastSample` bins. Clearing data or removing a curve releases its
-sample storage and clears that curve's reduction notice. These archive limits
+Archiver's `lastSample` bins. **View > Clear Data** discards every curve's
+live and archived samples and returns the time axis to the History length with
+auto-scroll on; archived history that was already retrieved is not requested
+again automatically, so use **View > Historical Range** to reload it. Clearing
+data or removing a curve releases its sample storage and clears that curve's
+reduction notice. These archive limits
 are separate from live samples.
 
 Channel Access values are held as step lines until another monitor update or an
