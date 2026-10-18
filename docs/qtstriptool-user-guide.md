@@ -232,9 +232,11 @@ Configuration and data-export files support non-ASCII file and folder names.
   Qt uses one row per curve sample; legacy StripTool's dump files use one row
   per timestamp with separate curve columns. A row with value `nan` and
   severity 3 (INVALID) marks a gap from a disconnect, CA error, or lost
-  updates; a genuine NaN reading carries its own alarm severity. Earlier
-  builds omitted gap rows, so downstream parsers should treat them as missing
-  data rather than readings.
+  updates. For a curve with archived history, such a row also marks the first
+  live sample discarded from the buffer, where the graph's gap before the
+  oldest retained live sample begins. A genuine NaN reading carries its own
+  alarm severity. Earlier builds omitted gap rows, so downstream parsers
+  should treat them as missing data rather than readings.
 - **Save Snapshot** writes the graph as PNG or JPEG according to the chosen
   filename/filter. If the filename has no extension, the selected format's
   `.png` or `.jpg` extension is added automatically.

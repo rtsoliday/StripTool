@@ -61,9 +61,12 @@ bugs, or exact pixels.
   files need a format conversion until this output gate is resolved. Qt has
   separate Text and CSV actions and does not use `STRIP_DUMP_TYPE_DEFAULT`.
   A row with value `nan` and severity 3 (INVALID) marks a disconnect, CA
-  error, or lost-update gap where legacy writes `BadVal`; a genuine NaN
-  reading carries its own alarm severity. Earlier Qt builds omitted gap rows,
-  so downstream parsers must treat these rows as missing data.
+  error, or lost-update gap where legacy writes `BadVal`. For a curve with
+  archived history, such a row also marks the first live sample discarded
+  from the ring buffer, where the plotted gap before the oldest retained live
+  sample begins. A genuine NaN reading carries its own alarm severity. Earlier
+  Qt builds omitted gap rows, so downstream parsers must treat these rows as
+  missing data.
 - **Configuration groups:** Qt open/save operates on the complete model. The
   legacy dialog's partial Timing/Colors/Graph/Curve group load and save is not
   present.
