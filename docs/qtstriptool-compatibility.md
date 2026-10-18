@@ -22,6 +22,9 @@ deployment. The known differences below remain relevant to migrations.
 
 - Reads `StripConfig 1.2`, supported older headers, and the pre-header legacy
   form; writes Motif-readable 1.2 files.
+- Reads and writes configuration numbers with a `.` decimal point whatever the
+  desktop locale is. Files that Motif StripTool saved in a comma-decimal locale
+  such as `de_DE`, with values like `1,000000`, are also read.
 - Preserves ten curve slots, timing, colors, grid modes, line width, curve
   limits, precision, plot state, and linear/log scale.
 - Uses the legacy bare-filename search order through

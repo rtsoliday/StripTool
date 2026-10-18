@@ -1,13 +1,12 @@
 #include "core/config.h"
 
 #include <algorithm>
-#include <cerrno>
 #include <charconv>
 #include <cmath>
-#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <locale>
 #include <sstream>
 
 namespace striptool {
@@ -36,14 +35,22 @@ bool parseInteger(const std::string& text, Integer& value) {
   return result.ec == std::errc{} && result.ptr == end;
 }
 
+// Numbers are read in the classic locale whatever the process locale is.
+// Motif StripTool writes with printf in the user's locale, so a single ','
+// is the decimal point when there is no '.'; neither writer groups digits.
 bool parseDouble(const std::string& text, double& value) {
-  const std::string clean = trim(text);
+  std::string clean = trim(text);
   if (clean.empty()) return false;
-  char* end = nullptr;
-  errno = 0;
-  value = std::strtod(clean.c_str(), &end);
-  return errno != ERANGE && end == clean.c_str() + clean.size() &&
-         std::isfinite(value);
+  if (clean.find('.') == std::string::npos &&
+      std::count(clean.begin(), clean.end(), ',') == 1)
+    clean[clean.find(',')] = '.';
+  std::istringstream stream(clean);
+  stream.imbue(std::locale::classic());
+  value = 0;
+  // libc++ reports a subnormal result as a range error but still stores it.
+  const bool parsed = static_cast<bool>(stream >> value) ||
+                      std::fpclassify(value) == FP_SUBNORMAL;
+  return parsed && (stream >> std::ws).eof() && std::isfinite(value);
 }
 
 bool parseBooleanInteger(const std::string& text, bool& value) {

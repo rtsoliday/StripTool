@@ -8,6 +8,7 @@ remains available for workflows that depend on documented differences.
 ## Compatible workflows
 
 - Read `StripConfig 1.2`, supported older headers, and the pre-header format; write Motif-readable 1.2 files.
+- Read and write configuration numbers with a `.` decimal point in any desktop locale, and read files that Motif StripTool saved in a comma-decimal locale such as `de_DE` (for example `1,000000`).
 - Preserve ten slots, timing, colors, grid modes, line width, limits, precision, plot state, and linear/log scale.
 - Use the legacy bare-filename search order through `STRIP_FILE_SEARCH_PATH`, including the `StripTool.stp` fallback.
 - Plot Channel Access monitor updates and local `CPU_Usage` in bounded buffers, preserving reconnect gaps.

@@ -59,6 +59,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QToolButton>
+#include <clocale>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -126,6 +127,16 @@ public:
 };
 std::filesystem::path fixture(const char* name) {
   return std::filesystem::path("../tests/fixtures/config") / name;
+}
+
+// Switches LC_NUMERIC to an installed comma-decimal locale; callers restore
+// "C". Returns false when no such locale is installed.
+bool useCommaNumericLocale() {
+  for (const char* name : {"de_DE.UTF-8", "de_DE.utf8"}) {
+    if (std::setlocale(LC_NUMERIC, name) && std::localeconv()->decimal_point[0] == ',')
+      return true;
+  }
+  return false;
 }
 
 void moveWhileDragging(QWidget* widget, const QPoint& position,
@@ -439,6 +450,15 @@ private slots:
     QVERIFY(!striptool::epicsVersion().isEmpty());
     QVERIFY(striptool::versionText().contains(QStringLiteral("Qt StripTool")));
     QCOMPARE(QApplication::style()->objectName(), QStringLiteral("fusion"));
+  }
+  void applicationUsesCNumericLocale() {
+    // Qt adopts the environment locale on Unix; configuration and EPICS
+    // environment numbers always use '.' as the decimal point.
+    const auto restoreLocale = qScopeGuard([] { std::setlocale(LC_NUMERIC, "C"); });
+    if (!useCommaNumericLocale()) QSKIP("no comma-decimal locale is installed");
+    striptool::configureApplication(*qApp);
+    QCOMPARE(QByteArray(std::setlocale(LC_NUMERIC, nullptr)), QByteArray("C"));
+    QCOMPARE(QApplication::applicationName(), QStringLiteral("qtstriptool"));
   }
   void mainWindowHasStableScaffold() {
     striptool::MainWindow window;
@@ -2035,6 +2055,92 @@ private slots:
              QStringLiteral("metadata:temperature"));
     QVERIFY(!loaded.curves[0].unitsSet);
     QCOMPARE(QString::fromStdString(loaded.curves[1].units), QStringLiteral("mA"));
+  }
+  void configurationNumbersIgnoreCommaLocale() {
+    const auto restoreLocale = qScopeGuard([] { std::setlocale(LC_NUMERIC, "C"); });
+    if (!useCommaNumericLocale()) QSKIP("no comma-decimal locale is installed");
+    auto model = striptool::makeDefaultModel();
+    auto result = striptool::readConfigurationFile(fixture("canonical-1.2.stp"), model);
+    QVERIFY2(result.success, result.diagnostics.empty() ? "parse failed"
+                                 : result.diagnostics.front().message.c_str());
+    QCOMPARE(model.timing.sampleIntervalSeconds, 0.1);
+    QCOMPARE(model.timing.refreshIntervalSeconds, 0.5);
+    auto legacy = striptool::makeDefaultModel();
+    QVERIFY(striptool::readConfigurationFile(fixture("legacy-format.stp"), legacy).success);
+    QCOMPARE(legacy.timing.sampleIntervalSeconds, 0.5);
+    QCOMPARE(legacy.curves[1].minimum, 0.01);
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = std::filesystem::u8path(
+        directory.filePath(QStringLiteral("comma-locale.stp")).toStdString());
+    model.timing.sampleIntervalSeconds = 0.25;
+    model.timing.refreshIntervalSeconds = 0.75;
+    model.curves[0].minimum = -2.5;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximum = 1.5;
+    model.curves[0].maximumSet = true;
+    std::string error;
+    QVERIFY2(striptool::FileWorkflow::save(path, model, &error), error.c_str());
+    auto reopened = striptool::makeDefaultModel();
+    result = striptool::FileWorkflow::open(path, reopened);
+    QVERIFY2(result.success, result.diagnostics.empty() ? "parse failed"
+                                 : result.diagnostics.front().message.c_str());
+    QCOMPARE(reopened.timing.sampleIntervalSeconds, 0.25);
+    QCOMPARE(reopened.timing.refreshIntervalSeconds, 0.75);
+    QCOMPARE(reopened.curves[0].minimum, -2.5);
+    QCOMPARE(reopened.curves[0].maximum, 1.5);
+  }
+  void configurationAcceptsLegacyCommaDecimals() {
+    // Motif StripTool writes numbers with printf in the user's locale.
+    auto model = striptool::makeDefaultModel();
+    std::istringstream input(
+        "StripConfig                   1.2\n"
+        "Strip.Time.SampleInterval     1,000000\n"
+        "Strip.Time.RefreshInterval    2,500000\n"
+        "Strip.Curve.0.Name            comma:pv\n"
+        "Strip.Curve.0.Min             -1,5e-03\n");
+    auto result = striptool::readConfiguration(input, model);
+    QVERIFY2(result.success, result.diagnostics.empty() ? "parse failed"
+                                 : result.diagnostics.front().message.c_str());
+    QCOMPARE(model.timing.sampleIntervalSeconds, 1.0);
+    QCOMPARE(model.timing.refreshIntervalSeconds, 2.5);
+    QCOMPARE(model.curves[0].minimum, -1.5e-3);
+
+    auto legacy = striptool::makeDefaultModel();
+    std::istringstream legacyInput(
+        "SAMPLEFREQUENCY 0,5\nTIMESPAN 600\nCHANNEL comma:legacy\nMINIMUM -0,25\n");
+    result = striptool::readConfiguration(legacyInput, legacy);
+    QVERIFY(result.success);
+    QCOMPARE(legacy.timing.sampleIntervalSeconds, 0.5);
+    QCOMPARE(legacy.curves[0].minimum, -0.25);
+
+    for (const char* text : {"1,000.5", "1.000,5", "1,000,5"}) {
+      std::istringstream bad(std::string("StripConfig 1.2\nStrip.Time.SampleInterval ") +
+                             text + "\n");
+      QVERIFY2(!striptool::readConfiguration(bad, model).success, text);
+    }
+  }
+  void configurationRoundTripsSubnormalLimits() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "subnormal:pv";
+    model.curves[0].nameSet = true;
+    model.curves[0].minimum = std::numeric_limits<double>::denorm_min() * 1000;
+    model.curves[0].minimumSet = true;
+    model.curves[0].maximum = 1.0;
+    model.curves[0].maximumSet = true;
+    QCOMPARE(std::fpclassify(model.curves[0].minimum), FP_SUBNORMAL);
+    std::ostringstream output;
+    QVERIFY(striptool::writeConfiguration(output, model));
+    std::istringstream input(output.str());
+    auto loaded = striptool::makeDefaultModel();
+    const auto result = striptool::readConfiguration(input, loaded);
+    QVERIFY2(result.success, result.diagnostics.empty() ? "parse failed"
+                                 : result.diagnostics.front().message.c_str());
+    QCOMPARE(loaded.curves[0].minimum, model.curves[0].minimum);
+
+    std::istringstream overflow("StripConfig 1.2\nStrip.Curve.0.Max 1e400\n");
+    QVERIFY(!striptool::readConfiguration(overflow, loaded).success);
   }
   void followsLegacySearchOrder() {
     const auto root = std::filesystem::temp_directory_path() / "qtstriptool-search-test";

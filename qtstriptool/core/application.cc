@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QIcon>
+#include <clocale>
 namespace striptool {
 QString applicationName() { return QStringLiteral("Qt StripTool"); }
 QString applicationVersion() { return QStringLiteral("1.0.0"); }
@@ -35,5 +36,7 @@ void configureApplication(QApplication& application) {
   QCoreApplication::setApplicationVersion(applicationVersion());
   QCoreApplication::setOrganizationName(QStringLiteral("EPICS"));
   application.setWindowIcon(QIcon(QStringLiteral(":/icons/qtstriptool.svg")));
+  // Qt applies the user's locale on Unix; config and EPICS parsing need C numbers.
+  std::setlocale(LC_NUMERIC, "C");
 }
 }

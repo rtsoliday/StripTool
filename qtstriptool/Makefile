@@ -173,7 +173,8 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              archiverRejectsOutOfRangeTimestamps \
              archiverRequestsIdentifyApplicationVersion \
              activeHistoryRequestCanBeDestroyedSafely exportReportsWriteFailures \
-             exportsTextAndCsvData exportsPreEpochTimestamps exportsClockMinimumWithoutOverflow
+             exportsTextAndCsvData exportsPreEpochTimestamps exportsClockMinimumWithoutOverflow \
+             applicationUsesCNumericLocale
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \
                preservesUnknownFieldsAcrossRoundTrip \
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \
@@ -182,7 +183,9 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                configurationReportsCloseFailures \
                configurationWritesDiscoveredChannelMetadata \
                configurationOmitsDiscoveredUnitsThatAreNotOneWord \
-               followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles
+               followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles \
+               configurationNumbersIgnoreCommaLocale configurationAcceptsLegacyCommaDecimals \
+               configurationRoundTripsSubnormalLimits
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            typedTimingValuesApplyOnceWhenEntered \
            helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \

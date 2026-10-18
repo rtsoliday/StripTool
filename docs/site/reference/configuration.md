@@ -20,7 +20,7 @@ Strip.Curve.0.Name            example:pv
 | `Strip.Option` | `GridXon`, `GridYon`, `AxisYcolorStat`, `GraphLineWidth` | Grid modes (0 none, 1 some, 2 all), colored Y axes (0 or 1), and trace width (0–10). |
 | `Strip.Curve.<index>` | `Name`, `Units`, `Comment`, `Precision`, `Min`, `Max`, `Scale`, `PlotStatus` | A curve at index 0 through 9. `Scale` is 0 for linear or 1 for base-10 log. |
 
-`Name` and `Units` are whitespace-delimited; `Comment` extends to the end of its line. Precision is limited to 0 through 20. If `NumSamples` is omitted, it is derived from the time span and sample interval. Unknown groups and fields are preserved across a load/save round trip; invalid known values cause the load to fail without replacing the current configuration. Versions newer than 1.2 are not supported.
+`Name` and `Units` are whitespace-delimited; `Comment` extends to the end of its line. Precision is limited to 0 through 20. Numbers are written with a `.` decimal point in every locale; a lone `,` is also read as the decimal point, as in files Motif StripTool saved in comma-decimal locales. If `NumSamples` is omitted, it is derived from the time span and sample interval. Unknown groups and fields are preserved across a load/save round trip; invalid known values cause the load to fail without replacing the current configuration. Versions newer than 1.2 are not supported.
 
 ## Legacy pre-header format
 
