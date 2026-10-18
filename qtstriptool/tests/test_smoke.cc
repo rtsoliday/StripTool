@@ -1573,6 +1573,65 @@ private slots:
       QVERIFY(csv.str().find(expected) != std::string::npos);
     }
   }
+  void exportsGapSamplesAsInvalidNan() {
+    // A disconnect, CA error or lost-update marker is a non-plotable sample
+    // whose stored fields are 0.0/0/0. Export marks it as nan with INVALID
+    // severity instead of dropping it or writing the stored zero.
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "gap:test";
+    model.curves[0].nameSet = true;
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    striptool::CurveSamples samples;
+    samples[0] = {{base, 1.0, 0, 0},
+                  {base + std::chrono::seconds(1), 0.0, 0, 0, false},
+                  {base + std::chrono::seconds(2), 2.0, 0, 0}};
+    std::ostringstream text, csv;
+    QVERIFY(striptool::ExportService::writeText(text, model, samples));
+    QVERIFY(striptool::ExportService::writeCsv(csv, model, samples));
+    QCOMPARE(QString::fromStdString(text.str()),
+             QStringLiteral("# Qt StripTool data dump\n"
+                            "# timestamp curve value status severity\n"
+                            "1970-01-01T00:16:40.000Z gap:test 1 0 0\n"
+                            "1970-01-01T00:16:41.000Z gap:test nan 0 3\n"
+                            "1970-01-01T00:16:42.000Z gap:test 2 0 0\n"));
+    QCOMPARE(QString::fromStdString(csv.str()),
+             QStringLiteral("timestamp,curve,value,status,severity\n"
+                            "\"1970-01-01T00:16:40.000Z\",\"gap:test\",1,0,0\n"
+                            "\"1970-01-01T00:16:41.000Z\",\"gap:test\",nan,0,3\n"
+                            "\"1970-01-01T00:16:42.000Z\",\"gap:test\",2,0,0\n"));
+  }
+  void mainWindowExportEndsWithTrailingGap() {
+    // A PV that is still disconnected at export time ends on its gap marker,
+    // not on the stale value held from before the outage.
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "trailing:gap";
+    model.curves[0].nameSet = true;
+    striptool::MainWindow window(model);
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    window.plotWidget()->setCurveSamples(0,
+        {{base, 1.0, 0, 0}, {base + std::chrono::seconds(10), 2.0, 0, 0},
+         {base + std::chrono::seconds(20), 0.0, 0, 0, false}});
+    window.plotWidget()->setVisibleTimeRange({base, base + std::chrono::seconds(30)});
+    for (const bool csv : {false, true}) {
+      const QString path = temporary.filePath(csv ? QStringLiteral("gap.csv")
+                                                  : QStringLiteral("gap.txt"));
+      QString error;
+      QVERIFY2(window.exportData(path, csv, &error), qPrintable(error));
+      std::ifstream input(path.toStdString());
+      const std::string content((std::istreambuf_iterator<char>(input)),
+                                std::istreambuf_iterator<char>());
+      const std::string last = csv
+          ? "\"1970-01-01T00:17:00.000Z\",\"trailing:gap\",nan,0,3\n"
+          : "1970-01-01T00:17:00.000Z trailing:gap nan 0 3\n";
+      QCOMPARE(static_cast<int>(std::count(content.begin(), content.end(), '\n')),
+               csv ? 4 : 5);
+      QVERIFY2(content.size() >= last.size() &&
+                   content.compare(content.size() - last.size(), last.size(), last) == 0,
+               content.c_str());
+    }
+  }
   void archiverRejectsOutOfRangeTimestamps() {
     const QByteArray response = R"([{"data":[
       {"secs":9223372037,"nanos":0,"val":1},

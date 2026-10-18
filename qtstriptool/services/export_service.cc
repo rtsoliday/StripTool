@@ -1,6 +1,7 @@
 #include "services/export_service.h"
 
 #include <chrono>
+#include <cstdint>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
@@ -48,6 +49,21 @@ std::string csvQuote(const std::string& value) {
   return '"' + escaped + '"';
 }
 
+// EPICS INVALID_ALARM: no valid data.
+constexpr std::uint16_t kInvalidSeverity = 3;
+
+// Writes the value, status and severity fields. A non-plotable sample marks a
+// disconnect, CA error or lost updates; its stored fields are not a reading,
+// so the row says nan with INVALID severity.
+void writeReading(std::ostream& output, const Sample& sample, char separator) {
+  if (!sample.plotable) {
+    output << "nan" << separator << 0 << separator << kInvalidSeverity;
+    return;
+  }
+  output << sample.value << separator << sample.status << separator
+         << sample.severity;
+}
+
 template <typename Writer>
 bool writeFile(const std::filesystem::path& path, Writer writer,
                std::string* error) {
@@ -76,10 +92,10 @@ bool ExportService::writeText(std::ostream& output, const StripToolModel& model,
   for (std::size_t curve = 0; curve < samples.size(); ++curve) {
     if (!model.curves[curve].nameSet) continue;
     for (const auto& sample : samples[curve]) {
-      if (!sample.plotable) continue;
       output << timestamp(sample.timestamp) << ' ' << model.curves[curve].name
-             << ' ' << sample.value << ' ' << sample.status << ' '
-             << sample.severity << '\n';
+             << ' ';
+      writeReading(output, sample, ' ');
+      output << '\n';
     }
   }
   return bool(output);
@@ -92,10 +108,10 @@ bool ExportService::writeCsv(std::ostream& output, const StripToolModel& model,
   for (std::size_t curve = 0; curve < samples.size(); ++curve) {
     if (!model.curves[curve].nameSet) continue;
     for (const auto& sample : samples[curve]) {
-      if (!sample.plotable) continue;
       output << csvQuote(timestamp(sample.timestamp)) << ','
-             << csvQuote(model.curves[curve].name) << ',' << sample.value << ','
-             << sample.status << ',' << sample.severity << '\n';
+             << csvQuote(model.curves[curve].name) << ',';
+      writeReading(output, sample, ',');
+      output << '\n';
     }
   }
   return bool(output);
