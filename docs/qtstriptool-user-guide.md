@@ -212,8 +212,11 @@ still reported.
 Zooming out or panning to a time before the retrieved history extends it
 automatically. About half a second after the view settles, qtstriptool requests
 only the newly exposed span for each archived curve and joins it to the data
-already plotted. These requests are also silent; a span that failed is not
-requested again unless the PV is reconnected or the configuration is reloaded.
+already plotted. These requests are also silent. A span that failed is not
+requested automatically again, even after the PV reconnects, until the curve is
+removed and added again or the configuration is reloaded with **File > Open**
+or **Open Recent**; changing a curve's PV name requests history for the new PV
+instead. To retry sooner, use **View > Historical Range**.
 
 Each automatic request uses the `lastSample` bin size for the span it covers
 when it is sent. A History length above 10,000 seconds (about 2.8 hours), or a
