@@ -149,11 +149,14 @@ appears, nothing is requested, and pending history requests continue. The
 default retrieval root is `http://asddtn03.aps4.anl.gov:17668/retrieval`. Set
 `QTSTRIPTOOL_ARCHIVER_URL` to another retrieval root, or directly to its
 `data/getData.json` endpoint, before starting qtstriptool to override it.
-Requests use automatic `lastSample` reduction to keep long ranges responsive.
-Retrieval is asynchronous and implemented directly with Qt Network; no Python
-runtime or external conversion command is required. Archived scalar numeric
-values retain their archive timestamps, status, and severity. `CPU_Usage` is a
-local live-only channel and is not sent to the Archiver.
+Requests use automatic `lastSample` reduction to keep long ranges responsive:
+the Archiver keeps the last sample in each bin, and the bin is sized from the
+requested span so that each PV returns at most about 10,000 points, never less
+than one second. Retrieval is asynchronous and implemented directly with Qt
+Network; no Python runtime or external conversion command is required.
+Archived scalar numeric values retain their archive timestamps, status, and
+severity. `CPU_Usage` is a local live-only channel and is not sent to the
+Archiver.
 
 Archive responses are limited to 8 MiB and 100,000 data entries each. Up to ten
 requests share a 32 MiB response-buffer budget, including responses waiting for
@@ -163,9 +166,11 @@ history error handling; choose a smaller historical range to retry.
 Each curve retains at most 65,536 archived samples or 2 MiB of raw archive
 samples, whichever is smaller. Further history is reduced across the loaded
 time span, preserving extrema and connection gaps within the point budget.
-An **Archive history reduced** notice identifies the loss of fine detail.
-Clearing data or removing a curve releases its sample storage and clears that
-curve's reduction notice. These archive limits are separate from live samples.
+An **Archive history reduced** notice in the status bar appears when this
+per-curve limit reduces a curve's archived samples; it does not report the
+Archiver's `lastSample` bins. Clearing data or removing a curve releases its
+sample storage and clears that curve's reduction notice. These archive limits
+are separate from live samples.
 
 Channel Access values are held as step lines until another monitor update or an
 actual disconnect/error is received. A quiet PV may be marked **Stale** in the
@@ -199,6 +204,16 @@ automatically. About half a second after the view settles, qtstriptool requests
 only the newly exposed span for each archived curve and joins it to the data
 already plotted. These requests are also silent; a span that failed is not
 requested again unless the PV is reconnected or the configuration is reloaded.
+
+Each automatic request uses the `lastSample` bin size for the span it covers
+when it is sent. A History length above 10,000 seconds (about 2.8 hours), or a
+zoom-out or pan that exposes more than 10,000 seconds at once, therefore
+retrieves bins longer than one second. Zooming in later does not request that
+history again at a finer interval, so a close-up or export of it shows at most
+one sample per bin and can miss short spikes. To refine the current view, choose
+**View > Historical Range** and select **OK**: the dialog starts with the
+visible range, which is retrieved at the bin size for its own span (one second
+for any range up to 10,000 seconds) and joined with the data already plotted.
 
 ## Open, save, export, and print
 
