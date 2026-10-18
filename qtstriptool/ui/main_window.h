@@ -41,6 +41,7 @@ public:
 
 private:
   void applyModel();
+  void updateWindowTitle();
   void updateRecentFiles(const QString& path = {});
   void requestHistory();
   void requestRecentHistory(std::size_t curve, const std::string& channel);

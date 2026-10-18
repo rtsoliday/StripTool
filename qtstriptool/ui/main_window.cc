@@ -84,10 +84,7 @@ MainWindow::MainWindow(QWidget* parent) : MainWindow(makeDefaultModel(), parent)
 MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     : QMainWindow(parent), model_(std::move(model)) {
   setObjectName(QStringLiteral("mainWindow"));
-  setWindowTitle(model_.title.empty()
-                     ? applicationName()
-                     : QString::fromStdString(model_.title) +
-                           QStringLiteral(" — ") + applicationName());
+  updateWindowTitle();
   resize(900, 620);
   auto* fileMenu = menuBar()->addMenu(tr("&File"));
   fileMenu->setObjectName(QStringLiteral("fileMenu"));
@@ -372,10 +369,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     plotWidget_->setModel(model_);
     if (timespanChanged && plotWidget_->autoScroll() && !plotWidget_->paused())
       plotWidget_->resetView();
-    setWindowTitle(model_.title.empty()
-                       ? applicationName()
-                       : QString::fromStdString(model_.title) + QStringLiteral(" — ") +
-                             applicationName());
+    updateWindowTitle();
   });
   connect(controlsWindow_.get(), &ControlsWindow::acquisitionConfigurationChanged,
           this, &MainWindow::restartAcquisition);
@@ -572,11 +566,15 @@ void MainWindow::applyModel() {
   plotWidget_->setModel(model_);
   plotWidget_->resetView();
   controlsWindow_->reloadFromModel();
+  updateWindowTitle();
+  restartAcquisition();
+}
+
+void MainWindow::updateWindowTitle() {
   setWindowTitle(model_.title.empty()
                      ? applicationName()
-                     : QString::fromStdString(model_.title) + QStringLiteral(" — ") +
-                           applicationName());
-  restartAcquisition();
+                     : QString::fromStdString(model_.title) +
+                           QStringLiteral(" — ") + applicationName());
 }
 
 bool MainWindow::openConfiguration(const QString& path, QString* error) {
@@ -604,8 +602,7 @@ bool MainWindow::saveConfiguration(const QString& path, QString* error) {
   }
   updateRecentFiles(path);
   plotWidget_->setModel(model_);
-  setWindowTitle(QString::fromStdString(model_.title) + QStringLiteral(" — ") +
-                 applicationName());
+  updateWindowTitle();
   controlsWindow_->updateTitle();
   statusBar()->showMessage(tr("Saved %1").arg(path), 5000);
   return true;

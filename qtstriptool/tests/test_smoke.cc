@@ -2100,6 +2100,27 @@ private slots:
       QVERIFY(recording->cancelled.empty());
     }
   }
+  void savingUntitledConfigurationKeepsApplicationWindowTitle() {
+    // An untitled graph window is named after the application alone, before
+    // and after a save; a titled one is "<title> — Qt StripTool".
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("untitled.stp"));
+    striptool::MainWindow window;
+    QVERIFY(window.model().title.empty());
+    QString error;
+    QVERIFY2(window.saveConfiguration(path, &error), qPrintable(error));
+    QCOMPARE(window.windowTitle(), striptool::applicationName());
+    QVERIFY2(window.openConfiguration(path, &error), qPrintable(error));
+    QCOMPARE(window.windowTitle(), striptool::applicationName());
+    auto model = striptool::makeDefaultModel();
+    model.title = "Beam";
+    striptool::MainWindow titled(model);
+    QVERIFY2(titled.saveConfiguration(directory.filePath(QStringLiteral("titled.stp")), &error),
+             qPrintable(error));
+    QCOMPARE(titled.windowTitle(),
+             QStringLiteral("Beam — ") + striptool::applicationName());
+  }
   void extremeZoomPanAndDatesKeepTimeRangesValid() {
     // Nanosecond time points overflow about 292 years from 1970.
     striptool::PlotWidget plot;

@@ -259,7 +259,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            invalidPvEntryIsRejectedAndKept \
            overlongCurveRowNameIsRejectedBeforeSave \
            controlsDismissAsksBeforeHidingTheLastWindow \
-           emptyHistoricalRangeIsRejectedBeforeCancellingBackfill
+           emptyHistoricalRangeIsRejectedBeforeCancellingBackfill \
+           savingUntitledConfigurationKeepsApplicationWindowTitle
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 
