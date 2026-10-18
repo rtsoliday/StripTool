@@ -2196,6 +2196,71 @@ private slots:
     std::istringstream overflow("StripConfig 1.2\nStrip.Curve.0.Max 1e400\n");
     QVERIFY(!striptool::readConfiguration(overflow, loaded).success);
   }
+  void configurationSavesLineBreaksAsSpaces() {
+    // A multi-line title paste or a channel .DESC holding a newline must not
+    // start a new line that adds or replaces fields when the file is reopened.
+    auto model = striptool::makeDefaultModel();
+    model.title = "Linac\nStrip.Curve.3.Name INJECTED:PV";
+    model.curves[0].name = "real:pv";
+    model.curves[0].nameSet = true;
+    model.curves[0].comment = "x\nStrip.Curve.0.Name OTHER:PV";
+    model.curves[0].commentDiscovered = true;
+    model.curves[1].name = "second:pv";
+    model.curves[1].nameSet = true;
+    model.curves[1].comment = std::string("Line one\r\nLine\ttwo\0end", 22);
+    model.curves[1].commentSet = true;
+
+    std::ostringstream output;
+    QVERIFY(striptool::writeConfiguration(output, model));
+    const auto text = output.str();
+
+    auto loaded = striptool::makeDefaultModel();
+    std::istringstream input(text);
+    const auto result = striptool::readConfiguration(input, loaded);
+    QVERIFY2(result.success, result.diagnostics.empty() ? "parse failed"
+                                 : result.diagnostics.front().message.c_str());
+    QCOMPARE(QString::fromStdString(loaded.title),
+             QStringLiteral("Linac Strip.Curve.3.Name INJECTED:PV"));
+    QCOMPARE(QString::fromStdString(loaded.curves[0].name), QStringLiteral("real:pv"));
+    QCOMPARE(QString::fromStdString(loaded.curves[0].comment),
+             QStringLiteral("x Strip.Curve.0.Name OTHER:PV"));
+    QCOMPARE(QString::fromStdString(loaded.curves[1].name), QStringLiteral("second:pv"));
+    QCOMPARE(QString::fromStdString(loaded.curves[1].comment),
+             QStringLiteral("Line one  Line two end"));
+    int named = 0;
+    for (const auto& curve : loaded.curves) named += curve.nameSet ? 1 : 0;
+    QCOMPARE(named, 2);
+    QVERIFY(loaded.unknownFields.empty());
+    for (const char c : text)
+      QVERIFY2(c == '\n' || static_cast<unsigned char>(c) >= 0x20, text.c_str());
+    std::ostringstream resaved;
+    QVERIFY(striptool::writeConfiguration(resaved, loaded));
+    QCOMPARE(QString::fromStdString(resaved.str()), QString::fromStdString(text));
+
+    // The reader splits words on the writer's separators, so a name with an
+    // interior carriage return fails at its line instead of failing each save.
+    std::istringstream crName(
+        "StripConfig 1.2\nStrip.Title t\nStrip.Curve.0.Name            a\rb\r\n");
+    auto unchanged = loaded;
+    const auto crResult = striptool::readConfiguration(crName, unchanged);
+    QVERIFY(!crResult.success);
+    QCOMPARE(crResult.diagnostics.size(), std::size_t{1});
+    QCOMPARE(crResult.diagnostics[0].line, std::size_t{3});
+    QCOMPARE(QString::fromStdString(unchanged.curves[0].name), QStringLiteral("real:pv"));
+    std::istringstream crChannel("SAMPLEFREQUENCY 1\nCHANNEL a\rb\n");
+    const auto crLegacy = striptool::readConfiguration(crChannel, unchanged);
+    QVERIFY(!crLegacy.success);
+    QCOMPARE(crLegacy.diagnostics[0].line, std::size_t{2});
+    // Such units are ignored like other multi-word units, so Save still works.
+    std::istringstream crUnits(
+        "StripConfig 1.2\r\nStrip.Curve.0.Name a:b\r\nStrip.Curve.0.Units de\rgC\r\n");
+    auto crUnitsModel = striptool::makeDefaultModel();
+    QVERIFY(striptool::readConfiguration(crUnits, crUnitsModel).success);
+    QCOMPARE(QString::fromStdString(crUnitsModel.curves[0].name), QStringLiteral("a:b"));
+    QVERIFY(!crUnitsModel.curves[0].unitsSet);
+    std::ostringstream crUnitsOutput;
+    QVERIFY(striptool::writeConfiguration(crUnitsOutput, crUnitsModel));
+  }
   void followsLegacySearchOrder() {
     const auto root = std::filesystem::temp_directory_path() / "qtstriptool-search-test";
     const auto current = root / "current";

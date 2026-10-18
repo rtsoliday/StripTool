@@ -112,8 +112,7 @@ ConfigResult parseLegacy(const std::vector<std::string>& lines,
       if (curveIndex >= static_cast<int>(kMaximumCurves))
         return fail(i + 1, "configuration exceeds the ten-curve limit", true);
       const std::string name = trim(value);
-      if (name.empty() || name.find_first_of(" \t") != std::string::npos ||
-          !checkLength(name, kMaximumCurveNameLength))
+      if (!isWord(name, kMaximumCurveNameLength))
         return fail(i + 1, "invalid CHANNEL name", true);
       auto& curve = candidate.curves[static_cast<std::size_t>(curveIndex)];
       curve.name = name;
@@ -228,15 +227,14 @@ ConfigResult parseCurrent(const std::vector<std::string>& lines,
       auto& curve = candidate.curves[static_cast<std::size_t>(index)];
       if (parts[3] == "Name") {
         const std::string word = trim(value);
-        valid = !word.empty() && word.find_first_of(" \t") == std::string::npos &&
-                checkLength(word, kMaximumCurveNameLength);
+        valid = isWord(word, kMaximumCurveNameLength);
         if (valid) { curve.name = word; curve.nameSet = true; }
       } else if (parts[3] == "Units") {
         // Motif StripTool saves the units Channel Access reported, which may
         // be empty or several words such as "deg C". Those are ignored so the
         // channel supplies its units again.
         const std::string word = trim(value);
-        if (!word.empty() && word.find_first_of(" \t") == std::string::npos) {
+        if (!word.empty() && word.find_first_of(" \t\r\n") == std::string::npos) {
           valid = checkLength(word, kMaximumUnitsLength);
           if (valid) { curve.units = word; curve.unitsSet = true; }
         }
@@ -280,6 +278,14 @@ ConfigResult parseCurrent(const std::vector<std::string>& lines,
 void writeField(std::ostream& output, const std::string& key,
                 const std::string& value) {
   output << std::left << std::setw(30) << key << value << '\n';
+}
+
+// A line break in free text would start a new field when the file is read
+// back, so control characters in the title and comments are saved as spaces.
+std::string singleLine(std::string value) {
+  for (char& character : value)
+    if (static_cast<unsigned char>(character) < 0x20) character = ' ';
+  return value;
 }
 
 std::string number(double value, int precision = std::numeric_limits<double>::max_digits10) {
@@ -362,7 +368,7 @@ bool writeConfiguration(std::ostream& output, const StripToolModel& model,
     }
   }
   writeField(output, "StripConfig", "1.2");
-  writeField(output, "Strip.Title", model.title);
+  writeField(output, "Strip.Title", singleLine(model.title));
   for (const auto& field : model.unknownFields) writeField(output, field.key, field.value);
   writeField(output, "Strip.Time.Timespan", std::to_string(model.timing.timespanSeconds));
   writeField(output, "Strip.Time.NumSamples", std::to_string(model.timing.numberOfSamples));
@@ -395,7 +401,7 @@ bool writeConfiguration(std::ostream& output, const StripToolModel& model,
         (curve.unitsDiscovered && isWord(curve.units, kMaximumUnitsLength)))
       writeField(output, prefix + "Units", curve.units);
     if (curve.commentSet || curve.commentDiscovered)
-      writeField(output, prefix + "Comment", curve.comment);
+      writeField(output, prefix + "Comment", singleLine(curve.comment));
     if (curve.precisionSet || curve.precisionDiscovered)
       writeField(output, prefix + "Precision", std::to_string(curve.precision));
     if (curve.minimumSet || curve.minimumDiscovered)
