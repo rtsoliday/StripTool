@@ -35,6 +35,13 @@ bool parseInteger(const std::string& text, Integer& value) {
   return result.ec == std::errc{} && result.ptr == end;
 }
 
+// Motif reads Timespan up to UINT_MAX, but the Timing tab spin box and
+// -history stop at INT_MAX; a larger value would show as 1 in Controls.
+unsigned clampTimespan(unsigned seconds) {
+  return std::clamp(seconds, 1U,
+                    static_cast<unsigned>(std::numeric_limits<int>::max()));
+}
+
 // Numbers are read in the classic locale whatever the process locale is.
 // Motif StripTool writes with printf in the user's locale, so a single ','
 // is the decimal point when there is no '.'; neither writer groups digits.
@@ -105,7 +112,7 @@ ConfigResult parseLegacy(const std::vector<std::string>& lines,
       unsigned parsed = 0;
       if (!parseInteger(value, parsed))
         return fail(i + 1, "invalid TIMESPAN", true);
-      candidate.timing.timespanSeconds = std::max(parsed, 1U);
+      candidate.timing.timespanSeconds = clampTimespan(parsed);
       recognized = true;
     } else if (key == "CHANNEL") {
       ++curveIndex;
@@ -161,7 +168,7 @@ ConfigResult parseCurrent(const std::vector<std::string>& lines,
       if (parts[2] == "Timespan") {
         unsigned parsed = 0;
         valid = parseInteger(value, parsed);
-        if (valid) candidate.timing.timespanSeconds = std::max(parsed, 1U);
+        if (valid) candidate.timing.timespanSeconds = clampTimespan(parsed);
       } else if (parts[2] == "NumSamples") {
         int parsed = 0;
         valid = parseInteger(value, parsed);

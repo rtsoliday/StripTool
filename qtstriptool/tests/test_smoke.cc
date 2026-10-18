@@ -2186,6 +2186,29 @@ private slots:
     QCOMPARE(model.graph.xGrid, striptool::GridMode::Some);
     QCOMPARE(model.graph.lineWidth, 10);
   }
+  void clampsTimespanToControlsRange() {
+    // Motif reads Timespan as unsigned, but the Timing tab and -history stop
+    // at INT_MAX. A larger file value must not reach the spin box, which
+    // would show 1 and write 1 s back on the next timing edit.
+    constexpr unsigned maximum = std::numeric_limits<int>::max();
+    for (const char* text : {"StripConfig 1.2\nStrip.Time.Timespan 2147483647\n",
+                             "StripConfig 1.2\nStrip.Time.Timespan 2147483648\n",
+                             "StripConfig 1.2\nStrip.Time.Timespan 3000000000\n",
+                             "StripConfig 1.2\nStrip.Time.Timespan 4294967295\n",
+                             "TIMESPAN 3000000000\n"}) {
+      auto model = striptool::makeDefaultModel();
+      std::istringstream input(text);
+      QVERIFY2(striptool::readConfiguration(input, model).success, text);
+      QCOMPARE(model.timing.timespanSeconds, maximum);
+      striptool::ControlsWindow controls(&model);
+      auto* timespan = controls.findChild<QSpinBox*>(QStringLiteral("timespanSeconds"));
+      QVERIFY(timespan);
+      QCOMPARE(timespan->value(), std::numeric_limits<int>::max());
+      controls.findChild<QSpinBox*>(QStringLiteral("sampleCount"))->setValue(4096);
+      QCOMPARE(model.timing.numberOfSamples, 4096);
+      QCOMPARE(model.timing.timespanSeconds, maximum);
+    }
+  }
   void appliesLayersInOrder() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());

@@ -94,6 +94,7 @@ bugs, or exact pixels.
 - **Safer parsing:** Qt rejects curve index 10, more than ten old-format
   channels, malformed known attributes, unsupported versions, and invalid
   model values transactionally. Precision is constrained to 0 through 20.
+  `Timespan` values above 2147483647 seconds load as 2147483647.
   Legacy acceptance caused by buffer, bounds, or clamp defects is not retained.
 - **Executable and desktop identity:** Qt installs as `qtstriptool` and
   `org.epics.qtstriptool`; no `.stp` MIME registration or `StripTool` alias is
