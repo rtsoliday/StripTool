@@ -276,9 +276,11 @@ ConfigResult parseCurrent(const std::vector<std::string>& lines,
   return {true, false, {}};
 }
 
+// Values start in column 31 like the legacy writer's, but a preserved unknown
+// key of 30 or more characters still gets the space that ends the key.
 void writeField(std::ostream& output, const std::string& key,
                 const std::string& value) {
-  output << std::left << std::setw(30) << key << value << '\n';
+  output << std::left << std::setw(29) << key << ' ' << value << '\n';
 }
 
 // A line break in free text would start a new field when the file is read

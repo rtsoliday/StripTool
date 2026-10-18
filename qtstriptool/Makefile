@@ -192,7 +192,8 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                configurationNumbersIgnoreCommaLocale configurationAcceptsLegacyCommaDecimals \
                configurationRoundTripsSubnormalLimits \
                readsLegacyWrittenUnitsFixture \
-               configurationSavesLineBreaksAsSpaces
+               configurationSavesLineBreaksAsSpaces \
+               configurationPreservesLongUnknownKeys
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            typedTimingValuesApplyOnceWhenEntered \
            helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \

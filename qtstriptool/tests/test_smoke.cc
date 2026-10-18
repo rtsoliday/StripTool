@@ -2500,6 +2500,66 @@ private slots:
     std::ostringstream crUnitsOutput;
     QVERIFY(striptool::writeConfiguration(crUnitsOutput, crUnitsModel));
   }
+  void configurationPreservesLongUnknownKeys() {
+    // Preserved unknown keys have no length limit. One of 30 or more
+    // characters still needs a space before its value, or each save merges
+    // the next word into the key (and a Strip.Curve key gains a fourth part).
+    const std::vector<std::pair<std::string, std::string>> expected = {
+        {"Foreign.Namespace.AVeryLongKey", "alpha beta gamma"},
+        {"Foreign.Namespace.AVeryLongKeyName", "alpha beta"},
+        {"Strip.Curve.FutureLongAttribute", "1.5"}};
+    QCOMPARE(expected[1].first.size(), std::size_t{34});
+    std::string text = "StripConfig 1.2\nStrip.Curve.0.Name long:key:pv\n";
+    for (const auto& [key, value] : expected) text += key + " " + value + "\n";
+    auto model = striptool::makeDefaultModel();
+    std::istringstream input(text);
+    QVERIFY(striptool::readConfiguration(input, model).success);
+    std::string firstSave;
+    for (int pass = 0;; ++pass) {
+      QCOMPARE(QString::fromStdString(model.curves[0].name), QStringLiteral("long:key:pv"));
+      QCOMPARE(model.unknownFields.size(), expected.size());
+      for (std::size_t i = 0; i < expected.size(); ++i) {
+        QCOMPARE(QString::fromStdString(model.unknownFields[i].key),
+                 QString::fromStdString(expected[i].first));
+        QCOMPARE(QString::fromStdString(model.unknownFields[i].value),
+                 QString::fromStdString(expected[i].second));
+      }
+      if (pass == 2) break;
+      std::ostringstream output;
+      QVERIFY(striptool::writeConfiguration(output, model));
+      const auto written = output.str();
+      for (const auto& [key, value] : expected)
+        QVERIFY2(written.find('\n' + key + ' ' + value + '\n') != std::string::npos,
+                 written.c_str());
+      if (pass == 0) firstSave = written;
+      QCOMPARE(QString::fromStdString(written), QString::fromStdString(firstSave));
+      model = striptool::makeDefaultModel();
+      std::istringstream reread(written);
+      const auto result = striptool::readConfiguration(reread, model);
+      QVERIFY2(result.success, result.diagnostics.empty() ? "parse failed"
+                                   : result.diagnostics.front().message.c_str());
+    }
+
+    // Shorter keys keep the legacy layout: padded so the value starts in
+    // column 31, exactly as Motif StripTool writes them.
+    for (const char* name : {"canonical-1.2.stp", "derived-samples-1.2.stp",
+                             "legacy-format.stp", "legacy-written-units-1.2.stp",
+                             "unknown-fields-1.2.stp", "visual-baseline-1.2.stp"}) {
+      auto fixtureModel = striptool::makeDefaultModel();
+      QVERIFY2(striptool::readConfigurationFile(fixture(name), fixtureModel).success, name);
+      std::ostringstream output;
+      QVERIFY(striptool::writeConfiguration(output, fixtureModel));
+      std::istringstream lines(output.str());
+      std::string line;
+      while (std::getline(lines, line)) {
+        const auto key = line.substr(0, line.find(' '));
+        QVERIFY2(key.size() < 30 && line.size() >= 30 &&
+                     line.find_first_not_of(' ', key.size()) ==
+                         (line.size() == 30 ? std::string::npos : 30),
+                 (std::string(name) + ": " + line).c_str());
+      }
+    }
+  }
   void followsLegacySearchOrder() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
