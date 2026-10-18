@@ -1812,6 +1812,75 @@ private slots:
     QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
     plot.render(&image);
   }
+  void subnormalConstantCurvesKeepValidRangesAndLabels() {
+    // Five percent of the nine smallest subnormal magnitudes rounds to zero.
+    // A constant trace there still needs a non-empty automatic range, a full
+    // set of tick labels and a drawn trace, as the axis curve or another one.
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    for (const int multiple : {1, 4, 9}) {
+      const double value = multiple * std::numeric_limits<double>::denorm_min();
+      for (const std::size_t tiny : {std::size_t(0), std::size_t(1)}) {
+        const QString context = QStringLiteral("%1 x denorm_min on curve %2")
+                                    .arg(multiple).arg(tiny);
+        auto model = striptool::makeDefaultModel();
+        model.colors.background = {65535, 65535, 65535, 65535};
+        model.colors.curves[0] = {0, 0, 65535, 65535};
+        model.colors.curves[tiny] = {0, 65535, 0, 65535};
+        model.graph.lineWidth = 3;
+        model.curves[0].nameSet = true;
+        model.curves[tiny].nameSet = true;
+        striptool::PlotWidget plot;
+        plot.resize(800, 500);
+        plot.setModel(model);
+        std::vector<striptool::Sample> constant;
+        std::vector<striptool::Sample> ramp;
+        for (int second = -10; second <= 10; ++second) {
+          constant.push_back({base + std::chrono::seconds(second), value, 0, 0});
+          ramp.push_back({base + std::chrono::seconds(second), double(second), 0, 0});
+        }
+        if (tiny) plot.setCurveSamples(0, ramp);
+        plot.setCurveSamples(tiny, constant);
+        plot.setVisibleTimeRange({base - std::chrono::seconds(10),
+                                  base + std::chrono::seconds(10)});
+        QVERIFY(plot.autoScaleEnabled());
+
+        const auto range = plot.valueRange(tiny);
+        QVERIFY2(std::isfinite(range.minimum) && std::isfinite(range.maximum),
+                 qPrintable(context));
+        QVERIFY2(range.minimum < value && value < range.maximum, qPrintable(context));
+        const int divisions = plot.valueAxisDivisions();
+        QCOMPARE(plot.yAxisLabels(tiny, divisions).size(), divisions + 1);
+        QCOMPARE(plot.yAxisLabels(0, divisions).size(), divisions + 1);
+
+        QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::white);
+        plot.render(&image);
+        int left = -1;
+        int right = -1;
+        int top = -1;
+        int bottom = -1;
+        for (int x = 0; x < plot.width(); ++x)
+          if (plot.isInPlot(QPoint(x, plot.height() / 2))) {
+            if (left < 0) left = x;
+            right = x;
+          }
+        for (int y = 0; y < plot.height(); ++y)
+          if (plot.isInPlot(QPoint((left + right) / 2, y))) {
+            if (top < 0) top = y;
+            bottom = y;
+          }
+        QVERIFY(left >= 0 && top >= 0);
+        int greenPixels = 0;
+        for (int y = top; y <= bottom; ++y)
+          for (int x = left; x <= right; ++x) {
+            const QColor pixel = image.pixelColor(x, y);
+            if (pixel.green() > 150 && pixel.red() < 100 && pixel.blue() < 100)
+              ++greenPixels;
+          }
+        QVERIFY2(greenPixels > (right - left) / 2, qPrintable(context));
+      }
+    }
+  }
   void activeHistoryRequestCanBeDestroyedSafely() {
     auto provider = std::make_unique<striptool::TestHistoryProvider>();
     const auto now = std::chrono::system_clock::now();

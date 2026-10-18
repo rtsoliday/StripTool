@@ -1034,7 +1034,8 @@ void PlotWidget::paintPlot(QPainter& painter, const QRectF& area) {
       constexpr qreal labelGap = 8;
       const qreal labelX = unitsLaneWidth + labelGap;
       const qreal labelWidth = area.left() - labelX - labelGap;
-      for (int tick = 0; tick <= valueDivisions; ++tick) {
+      // An invalid range has no labels; leave the ticks unlabelled.
+      for (int tick = 0; labels.size() == valueDivisions + 1 && tick <= valueDivisions; ++tick) {
         painter.drawText(QRectF(labelX, area.top() + area.height() * tick / valueDivisions - lineHeight / 2.0,
                                 labelWidth, lineHeight), Qt::AlignRight | Qt::AlignVCenter,
                          labels[tick]);

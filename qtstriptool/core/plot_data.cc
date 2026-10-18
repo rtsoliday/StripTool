@@ -10,7 +10,10 @@ namespace striptool {
 namespace {
 ValueRange padConstantRange(ValueRange range) {
   if (range.minimum == range.maximum) {
-    const double padding = range.minimum == 0.0 ? 1.0 : std::abs(range.minimum) * 0.05;
+    // Five percent of the smallest subnormals rounds to zero; the floor keeps
+    // the padded range non-empty with tick steps that do not underflow.
+    const double padding = range.minimum == 0.0 ? 1.0
+        : std::max(std::abs(range.minimum) * 0.05, std::numeric_limits<double>::min());
     range.minimum = std::max(std::numeric_limits<double>::lowest(), range.minimum - padding);
     range.maximum = std::min(std::numeric_limits<double>::max(), range.maximum + padding);
   }

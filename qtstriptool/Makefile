@@ -249,7 +249,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            toolbarRightClickUsesFinePanAndZoomSteps \
            evictedLiveSamplesBreakArchivedHold unevictedLiveSamplesJoinArchiveContinuously \
            sampleBufferRecordsFirstEvictedTimestamp displayRefreshBreaksArchivedHoldAfterEviction \
-           legendValueKeepsSixSignificantDigits
+           legendValueKeepsSixSignificantDigits \
+           subnormalConstantCurvesKeepValidRangesAndLabels
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 
