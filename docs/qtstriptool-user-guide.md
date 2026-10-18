@@ -184,7 +184,11 @@ samples are discarded. Archived data is then held only until the first
 discarded sample, and the graph leaves a gap from there to the oldest live
 sample still retained rather than extending the last archived value across it.
 That span is not requested from the Archiver automatically; use
-**View > Historical Range** to retrieve it.
+**View > Historical Range** to retrieve it. The live buffer keeps discarding
+its oldest samples after such a retrieval, and discarded samples newer than the
+retrieved range are not marked with a gap again, so the last retrieved archived
+value can again be held across them until you repeat the Historical Range
+request for that span.
 
 CA updates use a bounded GUI inbox. If incoming updates outrun processing, the
 graph records a gap and the status bar reports lost observations; delivery then
