@@ -3561,6 +3561,82 @@ private slots:
                    qPrintable(context + QStringLiteral(", level at %1").arg(level)));
       }
   }
+  void hugeFiniteSamplesDrawInsidePlot() {
+    // Automatic ranges around values near DBL_MAX are finite, but their
+    // offsets times the plot height overflow. A lone DBL_MAX sample sits on
+    // the top edge of its padded range and a constant 1e307 in the middle;
+    // both traces must still be drawn there.
+    const auto base = std::chrono::system_clock::from_time_t(1000);
+    for (const int lineWidth : {1, 2})
+      for (const bool lone : {true, false}) {
+        const QString context = QStringLiteral("%1 at line width %2")
+                                    .arg(lone ? QStringLiteral("lone DBL_MAX")
+                                              : QStringLiteral("constant 1e307"))
+                                    .arg(lineWidth);
+        auto model = striptool::makeDefaultModel();
+        model.colors.background = {65535, 65535, 65535, 65535};
+        model.colors.curves[0] = {0, 0, 65535, 65535};
+        model.graph.lineWidth = lineWidth;
+        model.curves[0].name = "huge:test";
+        model.curves[0].nameSet = true;
+        striptool::PlotWidget plot;
+        plot.resize(800, 500);
+        plot.setModel(model);
+        std::vector<striptool::Sample> samples;
+        if (lone) {
+          samples.push_back({base - std::chrono::seconds(20),
+                             std::numeric_limits<double>::max(), 0, 0});
+        } else {
+          for (int second = -20; second <= 20; second += 5)
+            samples.push_back({base + std::chrono::seconds(second), 1e307, 0, 0});
+        }
+        plot.setCurveSamples(0, samples);
+        plot.setVisibleTimeRange({base - std::chrono::seconds(20),
+                                  base + std::chrono::seconds(20)});
+        QVERIFY(plot.autoScaleEnabled());
+        const auto range = plot.valueRange(0);
+        QVERIFY2(std::isfinite(range.minimum) && std::isfinite(range.maximum),
+                 qPrintable(context));
+        QImage image(plot.size(), QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::white);
+        plot.render(&image);
+
+        int left = -1;
+        int right = -1;
+        int top = -1;
+        int bottom = -1;
+        for (int x = 0; x < plot.width(); ++x)
+          if (plot.isInPlot(QPoint(x, plot.height() / 2))) {
+            if (left < 0) left = x;
+            right = x;
+          }
+        for (int y = 0; y < plot.height(); ++y)
+          if (plot.isInPlot(QPoint((left + right) / 2, y))) {
+            if (top < 0) top = y;
+            bottom = y;
+          }
+        QVERIFY(left >= 0 && top >= 0);
+        const int expected = lone ? top : (top + bottom) / 2;
+        int traced = 0;
+        int nearest = plot.height();
+        int farthest = 0;
+        for (int y = top; y <= bottom; ++y) {
+          const auto* line = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+          for (int x = left; x <= right; ++x)
+            if (qBlue(line[x]) > 150 && qRed(line[x]) < 100) {
+              ++traced;
+              nearest = std::min(nearest, std::abs(y - expected));
+              farthest = std::max(farthest, std::abs(y - expected));
+            }
+        }
+        // The trace spans the whole view as one horizontal line.
+        QVERIFY2(traced >= (right - left) / 2,
+                 qPrintable(context + QStringLiteral(", %1 trace pixels").arg(traced)));
+        QVERIFY2(nearest == 0 && farthest <= lineWidth + 1,
+                 qPrintable(context + QStringLiteral(", rows %1..%2 from %3")
+                                          .arg(nearest).arg(farthest).arg(expected)));
+      }
+  }
   void mouseWheelZoomKeepsPointerTimestampFixed() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "wheel:test";

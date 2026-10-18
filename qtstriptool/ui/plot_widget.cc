@@ -60,9 +60,14 @@ double rangeValue(const ValueRange& range, double fraction) {
 double rangeOffset(const ValueRange& range, double value, double pixels) {
   const double offset = value - range.minimum;
   const double span = range.maximum - range.minimum;
-  return std::isfinite(offset) && std::isfinite(span) ? pixels * offset / span
-      : pixels * ((value / 2.0 - range.minimum / 2.0) /
-          (range.maximum / 2.0 - range.minimum / 2.0));
+  if (std::isfinite(offset) && std::isfinite(span)) {
+    // Offsets above DBL_MAX / pixels overflow when scaled first; dividing
+    // first is only used then, so ordinary coordinates stay bit-identical.
+    const double scaled = pixels * offset;
+    return std::isfinite(scaled) ? scaled / span : pixels * (offset / span);
+  }
+  return pixels * ((value / 2.0 - range.minimum / 2.0) /
+                   (range.maximum / 2.0 - range.minimum / 2.0));
 }
 
 QStringList axisLabels(const ValueRange& range, ScaleMode scale, int divisions) {
