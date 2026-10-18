@@ -35,6 +35,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
@@ -53,6 +54,7 @@
 #include <QTextBrowser>
 #include <QtMath>
 #include <QTimer>
+#include <QTimeZone>
 #include <QTemporaryDir>
 #include <QUrlQuery>
 #include <QTest>
@@ -67,6 +69,7 @@
 #include <limits>
 #include <sstream>
 #include <thread>
+#include <type_traits>
 
 namespace striptool {
 // Inject protocol callbacks without a network server; production ingress and
@@ -1610,11 +1613,26 @@ private slots:
     for (const auto& sample : samples[0]) {
       const auto milliseconds = std::chrono::floor<std::chrono::milliseconds>(
           sample.timestamp.time_since_epoch()).count();
-      const auto expected = QDateTime::fromMSecsSinceEpoch(milliseconds).toUTC()
-          .toString(QStringLiteral("yyyy-MM-dd'T'HH:mm:ss.zzz'Z'")).toStdString();
+      // POSIX gmtime numbers years astronomically (with a year 0) and Qt does
+      // not, so Qt is a cross-check only from year 1 on; earlier dates (the
+      // microsecond clock minimum on macOS) rely on the pattern above. The C
+      // locale keeps Qt's digits ASCII in every system locale.
+      const auto utc = QDateTime::fromMSecsSinceEpoch(milliseconds, QTimeZone::utc());
+      if (utc.date().year() < 1) continue;
+      const auto expected = QLocale::c().toString(
+          utc, QStringLiteral("yyyy-MM-dd'T'HH:mm:ss.zzz'Z'")).toStdString();
       QVERIFY(!expected.empty());
       QVERIFY(text.str().find(expected) != std::string::npos);
       QVERIFY(csv.str().find(expected) != std::string::npos);
+    }
+    // Fixed limits of a nanosecond clock, independent of the Qt formatter
+    // that the Windows exporter itself uses.
+    if constexpr (std::is_same_v<std::chrono::system_clock::period, std::nano>) {
+      for (const auto* expected : {"1677-09-21T00:12:43.145Z",
+                                   "2262-04-11T23:47:16.854Z"}) {
+        QVERIFY(text.str().find(expected) != std::string::npos);
+        QVERIFY(csv.str().find(expected) != std::string::npos);
+      }
     }
   }
   void exportsGapSamplesAsInvalidNan() {
