@@ -295,7 +295,8 @@ test-visual: $(TEST_PROGRAM)
   $(TEST_PROGRAM) plotWidgetRendersFixtureOffscreen mainAndControlsRenderOffscreen \
     largeFontsExpandPlotMarginsAndLegendRows \
     helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \
-    aboutBannerClickScrollsMessage
+    aboutBannerClickScrollsMessage \
+    printPreviewHasUsefulInitialGeometry
 	@echo "Visual review image: $(OBJ_DIR)/test-artifacts/plot-baseline.png"
 
 test-qt-versions:

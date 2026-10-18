@@ -1854,7 +1854,9 @@ private slots:
     QSize dialogSize;
     QSize previewSize;
     qreal zoomFactor = 0.0;
-    bool imageSaved = false;
+    bool imageGrabbed = false;
+    bool imageSaved = true;
+    const QString output = qEnvironmentVariable("QTSTRIPTOOL_VISUAL_OUTPUT");
     QTimer::singleShot(100, [&] {
       for (QWidget* topLevel : QApplication::topLevelWidgets()) {
         auto* preview = qobject_cast<QPrintPreviewDialog*>(topLevel);
@@ -1864,8 +1866,12 @@ private slots:
           dialogSize = preview->size();
           previewSize = widget->size();
           zoomFactor = widget->zoomFactor();
-          imageSaved = preview->grab().save(
-              QStringLiteral("/tmp/qtstriptool-print-preview.png"));
+          const QPixmap image = preview->grab();
+          imageGrabbed = !image.isNull();
+          if (!output.isEmpty()) {
+            const auto directory = std::filesystem::path(output.toStdString()).parent_path();
+            imageSaved = image.save(QString::fromStdString((directory / "print-preview.png").string()));
+          }
           inspected = true;
         }
         preview->reject();
@@ -1880,6 +1886,7 @@ private slots:
     QVERIFY(dialogSize.height() >= 600);
     QVERIFY(previewSize.height() >= 500);
     QVERIFY(zoomFactor >= 0.25);
+    QVERIFY(imageGrabbed);
     QVERIFY(imageSaved);
   }
   void unicodeFilePathsRoundTrip() {
