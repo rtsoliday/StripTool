@@ -1,0 +1,40 @@
+StripConfig 1.2
+Strip.Title Beam stability - demonstration
+Strip.Time.Timespan 900
+Strip.Time.NumSamples 7200
+Strip.Time.SampleInterval 1
+Strip.Time.RefreshInterval 0.25
+Strip.Option.GridXon 1
+Strip.Option.GridYon 1
+Strip.Option.AxisYcolorStat 1
+Strip.Option.GraphLineWidth 2
+Strip.Color.Background 65535 65535 65535
+Strip.Color.Foreground 10000 10000 10000
+Strip.Color.Grid 53000 54000 55000
+Strip.Color.Color1 9509 25443 60395
+Strip.Curve.0.Name DEMO:BeamCurrent
+Strip.Curve.0.Units mA
+Strip.Curve.0.Comment Stored beam current
+Strip.Curve.0.Precision 3
+Strip.Curve.0.Min 0
+Strip.Curve.0.Max 260
+Strip.Curve.0.Scale 0
+Strip.Curve.0.PlotStatus 1
+Strip.Color.Color2 56540 24415 5140
+Strip.Curve.1.Name DEMO:RFPower
+Strip.Curve.1.Units kW
+Strip.Curve.1.Comment RF forward power
+Strip.Curve.1.Precision 3
+Strip.Curve.1.Min 0
+Strip.Curve.1.Max 650
+Strip.Curve.1.Scale 0
+Strip.Curve.1.PlotStatus 1
+Strip.Color.Color3 0 35723 29555
+Strip.Curve.2.Name DEMO:Vacuum
+Strip.Curve.2.Units nTorr
+Strip.Curve.2.Comment Vacuum pressure
+Strip.Curve.2.Precision 3
+Strip.Curve.2.Min 0.1
+Strip.Curve.2.Max 10
+Strip.Curve.2.Scale 1
+Strip.Curve.2.PlotStatus 1

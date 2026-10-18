@@ -11,6 +11,42 @@ annotations, Archiver Appliance history, text/CSV and image export, and Qt
 printing. It remains a separately named application so sites can keep the
 legacy StripTool available where a documented difference matters.
 
+## Qt StripTool highlights
+
+The screenshots below show the running Qt application on macOS with isolated
+demonstration PVs and synthetic archive data.
+
+### Live trends and archive history
+
+Compare timestamped Channel Access values with Archiver Appliance history in
+one graph. Color-coded traces, units, latest values, and plotted ranges keep
+curves identifiable; auto-scroll, pan, zoom, and auto-scale help explore the data.
+This example shows beam current, RF power, and vacuum pressure through a
+simulated RF trip and recovery.
+
+![Qt StripTool displaying three colored beam-current, RF-power, and vacuum traces with archive history, a value legend, and navigation toolbar](docs/screenshots/qtstriptool/graph-overview.jpg)
+
+### Ten curves, individual settings
+
+Configure up to ten PVs in one window, with a color, plot toggle, linear or
+logarithmic scale, precision, and limits for each curve. Connection status is
+visible alongside the settings. The Timing and Appearance tabs control history
+length, sample capacity, refresh rate, graph colors, and grid styling.
+
+![Qt StripTool Controls showing ten curve slots, three live demo PVs, per-curve colors and limits, and mixed linear and logarithmic scales](docs/screenshots/qtstriptool/controls-curves.jpg)
+
+### Investigate events and share results
+
+Zoom into a time range and add movable, editable annotations to mark events
+and explain changes. Export the visible data as CSV or text, save a graph
+snapshot, or use print preview and Qt printing to share the result.
+
+![Zoomed Qt StripTool graph with RF trip and Beam recovery annotations on the demonstration traces](docs/screenshots/qtstriptool/graph-annotations.jpg)
+
+See the [Qt user guide](docs/qtstriptool-user-guide.md) for these workflows and
+the [screenshot capture notes](docs/screenshots/qtstriptool/README.md) for the
+demo setup.
+
 ## Repository layout
 
 - `striptool/` — Motif implementation; executable name `StripTool`.
