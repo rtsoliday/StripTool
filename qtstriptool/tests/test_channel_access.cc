@@ -1,5 +1,6 @@
 #include "core/application.h"
 #include "services/channel_access.h"
+#include "services/history_provider.h"
 #include "ui/main_window.h"
 
 #include <QApplication>
@@ -60,10 +61,58 @@ private:
   QProcess& process_;
 };
 
+// The Channel Access settings the restart tests point at their private IOC.
+const char* const privateIocVariables[] = {
+    "EPICS_CA_AUTO_ADDR_LIST", "EPICS_CA_SERVER_PORT", "EPICS_CA_ADDR_LIST"};
+
+QStringList privateIocSettings() {
+  QStringList settings;
+  for (const char* name : privateIocVariables) {
+    settings << (qEnvironmentVariableIsSet(name)
+                     ? QStringLiteral("%1=%2").arg(QLatin1String(name), qEnvironmentVariable(name))
+                     : QStringLiteral("%1 unset").arg(QLatin1String(name)));
+  }
+  return settings;
+}
+
+// Restores the caller's settings, unsetting those that were unset, so later
+// tests in the same run search where the caller asked.
+class PrivateIocSettingsGuard {
+public:
+  PrivateIocSettingsGuard() {
+    for (const char* name : privateIocVariables)
+      saved_.push_back({name, qEnvironmentVariableIsSet(name), qgetenv(name)});
+  }
+  ~PrivateIocSettingsGuard() {
+    for (const auto& setting : saved_) {
+      if (setting.wasSet) qputenv(setting.name, setting.value);
+      else qunsetenv(setting.name);
+    }
+  }
+
+private:
+  struct Setting {
+    const char* name;
+    bool wasSet;
+    QByteArray value;
+  };
+  std::vector<Setting> saved_;
+};
+
+// The private IOC inherits its port from the environment and serves only on
+// loopback.
+void serveOnLoopback(QProcess& ioc) {
+  auto environment = QProcessEnvironment::systemEnvironment();
+  environment.insert(QStringLiteral("EPICS_CAS_INTF_ADDR_LIST"), QStringLiteral("127.0.0.1"));
+  ioc.setProcessEnvironment(environment);
+}
+
 }  // namespace
 
 class ChannelAccessIntegrationTests final : public QObject {
   Q_OBJECT
+  const QStringList startupSettings_ = privateIocSettings();
+
 private slots:
   void automaticallyReconnectsAfterIocRestart() {
     const QString softIoc = softIocProgram();
@@ -73,12 +122,14 @@ private slots:
     if (database.isEmpty()) QSKIP("QTSTRIPTOOL_TEST_IOC_DB is not set");
 
     const int port = 15000 + int(QCoreApplication::applicationPid() % 10000);
+    PrivateIocSettingsGuard settingsGuard;
     qputenv("EPICS_CA_AUTO_ADDR_LIST", "NO");
     qputenv("EPICS_CA_SERVER_PORT", QByteArray::number(port));
     qputenv("EPICS_CA_ADDR_LIST", "127.0.0.1:" + QByteArray::number(port));
 
     QProcess ioc;
     IocGuard iocGuard(ioc);
+    serveOnLoopback(ioc);
     ioc.setProgram(softIoc);
     ioc.setArguments({QStringLiteral("-S"), QStringLiteral("-d"), database});
     ioc.start();
@@ -131,12 +182,14 @@ private slots:
     QVERIFY(!before.isEmpty() && !after.isEmpty());
 
     const int port = 15000 + int((QCoreApplication::applicationPid() + 1) % 10000);
+    PrivateIocSettingsGuard settingsGuard;
     qputenv("EPICS_CA_AUTO_ADDR_LIST", "NO");
     qputenv("EPICS_CA_SERVER_PORT", QByteArray::number(port));
     qputenv("EPICS_CA_ADDR_LIST", "127.0.0.1:" + QByteArray::number(port));
 
     QProcess ioc;
     IocGuard iocGuard(ioc);
+    serveOnLoopback(ioc);
     ioc.setProgram(softIoc);
     ioc.setArguments({QStringLiteral("-S"), QStringLiteral("-d"), before});
     ioc.start();
@@ -168,6 +221,12 @@ private slots:
     provider.disconnectChannel(id);
   }
 
+  void iocRestartTestsRestoreEpicsEnvironment() {
+    // Runs after the restart tests: their private port must not redirect the
+    // site-PV tests that follow in the same run.
+    QCOMPARE(privateIocSettings(), startupSettings_);
+  }
+
   void receivesMetadataAndSampleFromIoc() {
     const QString pv = qEnvironmentVariable("QTSTRIPTOOL_TEST_PV");
     if (pv.isEmpty()) QSKIP("Set QTSTRIPTOOL_TEST_PV to a readable numeric PV");
@@ -197,6 +256,7 @@ private slots:
       model.curves[0].name = pv.toStdString();
       model.curves[0].nameSet = true;
       striptool::MainWindow window(model);
+      window.setHistoryProvider(std::make_unique<striptool::NoHistoryProvider>());
       window.startAcquisition();
       QTRY_COMPARE_WITH_TIMEOUT(
           QString::fromStdString(window.model().curves[0].comment),

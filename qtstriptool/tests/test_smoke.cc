@@ -463,6 +463,19 @@ private slots:
     QCOMPARE(QByteArray(std::setlocale(LC_NUMERIC, nullptr)), QByteArray("C"));
     QCOMPARE(QApplication::applicationName(), QStringLiteral("qtstriptool"));
   }
+  void testProcessKeepsChannelAccessAndArchiveLocal() {
+    // main() overrides an operator shell, which points EPICS at a site gateway
+    // and leaves the Archiver at the operational server: test PV names must
+    // reach neither.
+    QCOMPARE(qgetenv("EPICS_CA_AUTO_ADDR_LIST"), QByteArray("NO"));
+    QCOMPARE(qgetenv("EPICS_CA_ADDR_LIST"), QByteArray("127.0.0.1"));
+    QVERIFY(!qEnvironmentVariableIsSet("EPICS_CA_NAME_SERVERS"));
+    QCOMPARE(qgetenv("EPICS_PVA_AUTO_ADDR_LIST"), QByteArray("NO"));
+    QCOMPARE(qgetenv("EPICS_PVA_ADDR_LIST"), QByteArray("127.0.0.1"));
+    QVERIFY(!qEnvironmentVariableIsSet("EPICS_PVA_NAME_SERVERS"));
+    QVERIFY(striptool::ArchiverHistoryProvider::configuredRetrievalRoot() !=
+            striptool::ArchiverHistoryProvider::defaultRetrievalRoot());
+  }
   void mainWindowHasStableScaffold() {
     striptool::MainWindow window;
     QCOMPARE(window.objectName(), QStringLiteral("mainWindow"));
@@ -4242,6 +4255,16 @@ private slots:
   }
 };
 int main(int argc, char** argv) {
+  // No test uses a site PV: search only this host, before any CA context
+  // exists. Unless the caller chose an archive, use an unused loopback port.
+  qputenv("EPICS_CA_AUTO_ADDR_LIST", "NO");
+  qputenv("EPICS_CA_ADDR_LIST", "127.0.0.1");
+  qunsetenv("EPICS_CA_NAME_SERVERS");
+  qputenv("EPICS_PVA_AUTO_ADDR_LIST", "NO");
+  qputenv("EPICS_PVA_ADDR_LIST", "127.0.0.1");
+  qunsetenv("EPICS_PVA_NAME_SERVERS");
+  if (qgetenv("QTSTRIPTOOL_ARCHIVER_URL").trimmed().isEmpty())
+    qputenv("QTSTRIPTOOL_ARCHIVER_URL", "http://127.0.0.1:9/retrieval");
   striptool::setDefaultApplicationStyle();
   QApplication application(argc, argv);
   striptool::configureApplication(application);

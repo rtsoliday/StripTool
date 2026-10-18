@@ -178,7 +178,8 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              exportsGapSamplesAsInvalidNan mainWindowExportEndsWithTrailingGap \
              liveSamplesClearErrorAndLaterOutageEndsTrace \
              archiverRequestsEncodePlusInPvNames \
-             loadDiagnosticsNameFileLineAndActualFallback
+             loadDiagnosticsNameFileLineAndActualFallback \
+             testProcessKeepsChannelAccessAndArchiveLocal
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \
                preservesUnknownFieldsAcrossRoundTrip \
                rejectsMalformedInputTransactionally clampsLegacyNumericRanges \
@@ -278,7 +279,8 @@ test-ioc: $(IOC_TEST_PROGRAM)
 	  QTSTRIPTOOL_SOFTIOC="$(EPICS_BASE)/bin/$(EPICS_HOST_ARCH)/softIoc$(if $(filter Windows,$(OS)),.exe)" \
 	  QTSTRIPTOOL_TEST_IOC_DB="$(CURDIR)/tests/reconnect.db" \
 	  $(IOC_TEST_PROGRAM) automaticallyReconnectsAfterIocRestart \
-	  refreshesMetadataAfterIocRestart
+	  refreshesMetadataAfterIocRestart \
+	  iocRestartTestsRestoreEpicsEnvironment
 	QT_QPA_PLATFORM=offscreen QTSTRIPTOOL_TEST_PV="$(TEST_PV)" \
 	  QTSTRIPTOOL_TEST_DESC="$(TEST_DESC)" $(IOC_TEST_PROGRAM) \
 	  receivesMetadataAndSampleFromIoc shutsDownWithAnActiveSubscription

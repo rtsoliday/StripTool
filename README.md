@@ -73,6 +73,11 @@ make clean
 make distclean
 ```
 
+The Qt tests keep Channel Access on the local host whatever `EPICS_CA_*`
+says, and send no archive requests to the operational Archiver unless
+`QTSTRIPTOOL_ARCHIVER_URL` points there. Only the `TEST_PV` step of the IOC
+test uses the site Channel Access configuration.
+
 If Motif is unavailable, the default build reports that the legacy variant is
 being skipped. A missing Qt or EPICS Base is an error for the Qt build. Build
 products are placed in `bin/<OS>-<architecture>/`; Qt object trees are named
