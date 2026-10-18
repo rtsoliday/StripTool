@@ -687,7 +687,9 @@ QRectF PlotWidget::legendRect(std::size_t position, const QRectF& area) const {
 
 QStringList PlotWidget::legendLines(std::size_t curve, bool widestValue) const {
   const auto& config = model_.curves[curve];
-  const int digits = std::clamp(config.precision, 1, 15);
+  // EPICS PREC counts decimal places (0 by default), so never show fewer than
+  // the legacy legend's %g six significant digits; larger values add digits.
+  const int digits = std::clamp(config.precision, 6, 15);
   QString latestValue;
   if (widestValue)
     latestValue = QStringLiteral("-.") + QString(digits, QLatin1Char('8'));

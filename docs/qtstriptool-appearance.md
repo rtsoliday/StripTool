@@ -9,9 +9,10 @@ metrics, and DPI scaling follow the active Qt platform integration.
 
 The Controls window Appearance tab sets foreground, background, grid color,
 X and Y grid density, colored Y-axis labels, and graph line width. Each curve
-has its own color. Curve scale, precision, and bounds control Y-axis formatting
-and transformation. These values round-trip through `.stp` files where the
-legacy format defines them.
+has its own color. Curve scale and bounds control Y-axis formatting and
+transformation. The legend's latest value is rounded to six significant
+digits, or to the curve precision when it is larger (up to 15). These values
+round-trip through `.stp` files where the legacy format defines them.
 
 The application defaults to Qt's Fusion style, providing a relatively
 consistent cross-desktop review baseline. An explicit standard Qt style option

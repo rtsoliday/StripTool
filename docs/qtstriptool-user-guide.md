@@ -119,6 +119,8 @@ mouse-wheel zoom keeps the pointer timestamp fixed and disables auto-scroll.
 Resuming after Pause also preserves the duration. Reset View restores the
 configured History length.
 The legend beside the plot shows each visible curve's name and latest value.
+The latest value is rounded to six significant digits, as in the legacy legend;
+a curve Precision above 6 keeps more digits, up to 15.
 Click a legend entry to read that curve's value at the pointer location.
 
 Drag the empty plot with the left button to pan. Left click an annotation box

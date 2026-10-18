@@ -3746,6 +3746,34 @@ private slots:
     QVERIFY(legendText >= metrics.horizontalAdvance(
         QStringLiteral("-123456.789012  (-2.5e+05, 2.5e+05)")));
   }
+  void legendValueKeepsSixSignificantDigits() {
+    // EPICS PREC counts decimal places and defaults to 0, so the latest value
+    // keeps at least the legacy %g six significant digits instead of rounding.
+    struct Case {
+      int precision;
+      double value;
+      const char* text;
+    };
+    for (const Case& c : {Case{0, 57.0, "57"}, Case{0, 1234.0, "1234"},
+                          Case{2, 21.5, "21.5"}, Case{2, 102.345, "102.345"}}) {
+      auto model = striptool::makeDefaultModel();
+      model.curves[0].name = "AUDIT:LEGEND";
+      model.curves[0].nameSet = true;
+      model.curves[0].precision = c.precision;
+      striptool::PlotWidget plot;
+      plot.resize(800, 500);
+      plot.setModel(model);
+      plot.show();
+      plot.setCurveSamples(0, {{std::chrono::system_clock::now(), c.value, 0, 0}});
+      QString value;
+      for (int y = 10; y < plot.height() && value.isEmpty(); y += 8) {
+        moveWhileDragging(&plot, QPoint(plot.width() - 30, y), Qt::NoButton);
+        const QStringList lines = plot.toolTip().split(QLatin1Char('\n'));
+        if (lines.size() > 1) value = lines[1].section(QStringLiteral("  "), 0, 0);
+      }
+      QCOMPARE(value, QString::fromLatin1(c.text));
+    }
+  }
   void largeFontsExpandPlotMarginsAndLegendRows() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "S-DCCT:CurrentM";

@@ -248,7 +248,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            plotKeepsCrossingSegmentsAndDoesNotRewindOnLateSamples \
            toolbarRightClickUsesFinePanAndZoomSteps \
            evictedLiveSamplesBreakArchivedHold unevictedLiveSamplesJoinArchiveContinuously \
-           sampleBufferRecordsFirstEvictedTimestamp displayRefreshBreaksArchivedHoldAfterEviction
+           sampleBufferRecordsFirstEvictedTimestamp displayRefreshBreaksArchivedHoldAfterEviction \
+           legendValueKeepsSixSignificantDigits
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 
