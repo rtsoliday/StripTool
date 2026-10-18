@@ -260,7 +260,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            overlongCurveRowNameIsRejectedBeforeSave \
            controlsDismissAsksBeforeHidingTheLastWindow \
            emptyHistoricalRangeIsRejectedBeforeCancellingBackfill \
-           savingUntitledConfigurationKeepsApplicationWindowTitle
+           savingUntitledConfigurationKeepsApplicationWindowTitle \
+           graphToolbarTooltipsOmitMenuMnemonics
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 

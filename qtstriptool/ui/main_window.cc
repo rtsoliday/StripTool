@@ -192,7 +192,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
     auto* button = new GraphToolButton(action, std::move(fineStep), toolbar);
     button->setObjectName(name);
     button->setText(label);
-    button->setToolTip(action->text());
+    button->setToolTip(action->toolTip());
     toolbar->addWidget(button);
   };
   addStepButton(panLeftAction, QStringLiteral("panLeftButton"),

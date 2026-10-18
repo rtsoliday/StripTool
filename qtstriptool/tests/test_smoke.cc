@@ -4743,6 +4743,27 @@ private slots:
     QCOMPARE(plot->valueRange(0).minimum, 0.0);
     QCOMPARE(plot->valueRange(0).maximum, 100.0);
   }
+  void graphToolbarTooltipsOmitMenuMnemonics() {
+    // Tooltips are plain text, so a menu mnemonic would show literally
+    // ("Pan &Left"); every toolbar button uses its action's stripped tooltip.
+    striptool::MainWindow window;
+    window.show();
+    auto* toolbar = window.findChild<QWidget*>(QStringLiteral("graphToolbar"));
+    QVERIFY(toolbar);
+    int actionButtons = 0;
+    for (auto* button : toolbar->findChildren<QToolButton*>()) {
+      QVERIFY2(!button->toolTip().contains(QLatin1Char('&')),
+               qPrintable(button->objectName() + QStringLiteral(": ") + button->toolTip()));
+      if (!button->defaultAction()) continue;
+      ++actionButtons;
+      QCOMPARE(button->toolTip(), button->defaultAction()->toolTip());
+    }
+    QCOMPARE(actionButtons, 12);
+    QCOMPARE(window.findChild<QToolButton*>(QStringLiteral("panLeftButton"))->toolTip(),
+             QStringLiteral("Pan Left"));
+    QCOMPARE(window.findChild<QToolButton*>(QStringLiteral("zoomInYButton"))->toolTip(),
+             QStringLiteral("Zoom In Y"));
+  }
   void plotWidgetRetainsHistoryAcrossLiveRefreshAndModelEdits() {
     auto model = striptool::makeDefaultModel();
     model.curves[0].name = "history:test";
