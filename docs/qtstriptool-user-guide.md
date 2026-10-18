@@ -47,6 +47,7 @@ Useful environment variables are:
 | `EPICS_CA_ADDR_LIST`, `EPICS_CA_AUTO_ADDR_LIST` and other EPICS CA variables | Used by EPICS Channel Access |
 | `STRIP_FILE_SEARCH_PATH` | Path-list used to find a bare startup `.stp` name |
 | `STRIP_HELP_PATH` | Local file or URL opened by **Help > Online Manual** instead of the documentation website |
+| `QTSTRIPTOOL_ARCHIVER_URL` | Overrides the EPICS Archiver Appliance retrieval root or `data/getData.json` endpoint |
 | `QT_QPA_PLATFORM`, `QT_STYLE_OVERRIDE` and standard Qt variables | Interpreted by Qt |
 
 Legacy X resource and printer environment variables are not consumed; see the
@@ -239,13 +240,17 @@ Configuration and data-export files support non-ASCII file and folder names.
   defaults.
 - **Export Text** and **Export CSV** write samples in the visible time range.
   Qt uses one row per curve sample; legacy StripTool's dump files use one row
-  per timestamp with separate curve columns. A row with value `nan` and
-  severity 3 (INVALID) marks a gap from a disconnect, CA error, or lost
-  updates. For a curve with archived history, such a row also marks the first
-  live sample discarded from the buffer, where the graph's gap before the
-  oldest retained live sample begins. A genuine NaN reading carries its own
-  alarm severity. Earlier builds omitted gap rows, so downstream parsers
-  should treat them as missing data rather than readings.
+  per timestamp with separate curve columns. Timestamps are UTC in ISO 8601
+  form with milliseconds, such as `2026-10-16T14:05:09.250Z`. Live Channel
+  Access samples carry the workstation time at which each update was
+  received, not the IOC timestamp; archived samples keep their archive
+  timestamps. A row with value `nan` and severity 3 (INVALID) marks a gap
+  from a disconnect, CA error, or lost updates. For a curve with archived
+  history, such a row also marks the first live sample discarded from the
+  buffer, where the graph's gap before the oldest retained live sample begins.
+  A genuine NaN reading carries its own alarm severity. Earlier builds omitted
+  gap rows, so downstream parsers should treat them as missing data rather
+  than readings.
 - **Save Snapshot** writes the graph as PNG or JPEG according to the chosen
   filename/filter. If the filename has no extension, the selected format's
   `.png` or `.jpg` extension is added automatically.
