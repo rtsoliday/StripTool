@@ -263,10 +263,11 @@ The graph and Controls windows have the same **Help** menu:
 | **Online Manual** | Opens the documentation website in your browser, or the file or URL in `STRIP_HELP_PATH` when that is set. |
 | **About Qt StripTool** | Shows the version, credits, and Qt and EPICS versions. **Open help** there opens this guide. |
 
-The Help window stays open while you work, and choosing Help again brings the
-same window forward. Pick a topic in the sidebar or just scroll; the sidebar
-follows along. The **Online manual** button opens the same place as
-**Help > Online Manual**.
+The Help window stays open while you work. Choosing Help again from the same
+window (graph or Controls) brings that window's Help forward; the graph and
+Controls each keep their own Help window, so both can be open at once. Pick a
+topic in the sidebar or just scroll; the sidebar follows along. The
+**Online manual** button opens the same place as **Help > Online Manual**.
 
 To search the guide, press Ctrl+F (Command+F on macOS) and type. Search
 ignores case, highlights every match, and wraps around at either end. Press
