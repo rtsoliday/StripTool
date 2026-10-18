@@ -815,6 +815,71 @@ private slots:
     QCOMPARE(entry->text(), QString());
     QCOMPARE(acquisition.count(), 1);
   }
+  void overlongCurveRowNameIsRejectedBeforeSave() {
+    // The file format limits a name to 63 UTF-8 bytes. A row name that fits
+    // the editor in characters but not in bytes, or a pasted name longer than
+    // the limit, is reported and leaves the curve unchanged so Save still works.
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "test:kept";
+    model.curves[0].nameSet = true;
+    striptool::ControlsWindow controls(&model);
+    controls.show();
+    QSignalSpy changed(&controls, &striptool::ControlsWindow::modelChanged);
+    QSignalSpy acquisition(&controls,
+                           &striptool::ControlsWindow::acquisitionConfigurationChanged);
+    auto* row = controls.findChild<QLineEdit*>(QStringLiteral("curveName0"));
+    QVERIFY(row);
+    QString title;
+    QString warning;
+    const auto applyRow = [&] {
+      title.clear();
+      warning.clear();
+      QTimer::singleShot(0, &controls, [&title, &warning] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+          title = box->windowTitle();
+          warning = box->text();
+          box->accept();
+        }
+      });
+      QTest::keyClick(row, Qt::Key_Return);
+      QCoreApplication::processEvents();
+    };
+    const auto savable = [&model] {
+      std::ostringstream output;
+      return striptool::writeConfiguration(output, model);
+    };
+    const QString wide(40, QChar(0x00e9));  // 40 characters, 80 UTF-8 bytes
+    row->selectAll();
+    for (const QChar character : wide)
+      QTest::sendKeyEvent(QTest::Click, row, Qt::Key_unknown, QString(character),
+                          Qt::NoModifier);
+    QCOMPARE(row->text(), wide);
+    QCOMPARE(row->text().toUtf8().size(), 80);
+    const QString pasted = QStringLiteral("test:pasted:") + QString(58, QLatin1Char('p'));
+    for (const auto& rejected : {wide, pasted}) {
+      if (rejected != wide) row->setText(rejected);
+      QCOMPARE(row->text(), rejected);
+      applyRow();
+      QCOMPARE(title, QStringLiteral("Invalid Curve Name"));
+      QVERIFY2(warning.contains(QStringLiteral("at most 63 bytes")), qPrintable(warning));
+      QCOMPARE(model.curves[0].name, std::string("test:kept"));
+      QVERIFY(model.curves[0].nameSet);
+      QCOMPARE(row->text(), rejected);
+      QCOMPARE(changed.count(), 0);
+      QCOMPARE(acquisition.count(), 0);
+      QVERIFY(savable());
+    }
+    const QString longest = QStringLiteral("test:longest:") + QString(50, QLatin1Char('x'));
+    QCOMPARE(longest.toUtf8().size(), int(striptool::kMaximumCurveNameLength));
+    row->selectAll();
+    QTest::keyClicks(row, longest);
+    applyRow();
+    QVERIFY(title.isEmpty());
+    QCOMPARE(QString::fromStdString(model.curves[0].name), longest);
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(acquisition.count(), 1);
+    QVERIFY(savable());
+  }
   void qtedmMiddleButtonDropsReachBothScreens() {
     const QString qtedm = qEnvironmentVariable("QTSTRIPTOOL_TEST_QTEDM");
     const QString driver = qEnvironmentVariable("QTSTRIPTOOL_TEST_DRAG_DRIVER");

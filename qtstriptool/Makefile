@@ -256,7 +256,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            extremeRangeYZoomAndPanMoveTheView \
            stationaryClicksKeepLiveZoomDuration doubleClickAnnotatesClickedTimeInLiveZoom \
            fineWheelDeltasZoomInProportionToTheNotch \
-           invalidPvEntryIsRejectedAndKept
+           invalidPvEntryIsRejectedAndKept \
+           overlongCurveRowNameIsRejectedBeforeSave
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 

@@ -159,7 +159,9 @@ QWidget* ControlsWindow::createCurvePage() {
     grid->addWidget(new QLabel(QString::number(i + 1), rows), int(i + 1), 0);
     row.name = new QLineEdit(rows);
     row.name->setObjectName(QStringLiteral("curveName") + suffix);
-    row.name->setMaxLength(static_cast<int>(kMaximumCurveNameLength));
+    // applyCurve checks the byte limit; a character limit here would silently
+    // truncate pasted names and still admit multibyte names over the limit.
+    row.name->setMaxLength(4096);
     row.name->setMinimumWidth(220);
     row.color = new QPushButton(tr("Color"), rows);
     row.color->setObjectName(QStringLiteral("curveColor") + suffix);
@@ -430,6 +432,14 @@ void ControlsWindow::applyCurve(std::size_t index) {
   if (name.contains(QRegularExpression(QStringLiteral("\\s")))) {
     QMessageBox::warning(this, tr("Invalid Curve Name"),
                          tr("A process variable name cannot contain whitespace."));
+    return;
+  }
+  // The editor counts characters, but configuration files limit UTF-8 bytes.
+  if (name.toUtf8().size() > int(kMaximumCurveNameLength)) {
+    QMessageBox::warning(this, tr("Invalid Curve Name"),
+                         tr("A process variable name must be at most %1 bytes long; "
+                            "non-ASCII characters take more than one byte.")
+                             .arg(static_cast<int>(kMaximumCurveNameLength)));
     return;
   }
   curve.name = name.toStdString();
