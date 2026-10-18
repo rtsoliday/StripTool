@@ -1302,8 +1302,11 @@ void PlotWidget::finishDrag() {
   const bool resumeAutoScroll = autoScroll_ && !paused_;
   dragMode_ = DragMode::None;
   panMoved_ = false;
-  if (resumeAutoScroll) resetView();
-  else {
+  // Catch a live view up to now without discarding its zoomed duration.
+  if (resumeAutoScroll) {
+    advanceToNow();
+    emit visibleTimeRangeChanged();
+  } else {
     updateAutoRange();
     redraw();
   }

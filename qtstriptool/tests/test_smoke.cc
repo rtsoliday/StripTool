@@ -31,6 +31,7 @@
 #include <QIcon>
 #include <QFileInfo>
 #include <QImage>
+#include <QInputDialog>
 #include <QElapsedTimer>
 #include <QLabel>
 #include <QLineEdit>
@@ -4677,6 +4678,98 @@ private slots:
     QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, start);
     QVERIFY(plot.visibleTimeRange().end > beforeClick.end);
     QVERIFY(plot.visibleTimeRange().end < later);
+    QVERIFY(plot.autoScroll());
+  }
+  void stationaryClicksKeepLiveZoomDuration() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "zoom:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.show();
+    plot.setCurveSamples(0, {{std::chrono::system_clock::now(), 1.0, 0, 0}});
+    const auto seconds = [&plot] {
+      const auto visible = plot.visibleTimeRange();
+      return std::chrono::duration<double>(visible.end - visible.start).count();
+    };
+    const QPoint start(400, 300);
+    // A release that did not pan catches the live view up to now but keeps
+    // its toolbar zoom duration; only Reset View restores the History length.
+    for (const double factor : {0.5, 2.0}) {
+      plot.resetView();
+      plot.zoom(factor);
+      QVERIFY(plot.autoScroll());
+      const double zoomed = seconds();
+      QVERIFY(std::abs(zoomed - 300.0 * factor) < 1e-3);
+      const auto beforeClick = plot.visibleTimeRange();
+      QTest::mouseClick(&plot, Qt::LeftButton, Qt::NoModifier, start);
+      QCOMPARE(seconds(), zoomed);
+      QVERIFY(plot.visibleTimeRange().end >= beforeClick.end);
+      QVERIFY(plot.autoScroll());
+      QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, start);
+      moveWhileDragging(&plot, start + QPoint(0, 20), Qt::LeftButton);
+      QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, start + QPoint(0, 20));
+      QCOMPARE(seconds(), zoomed);
+      QVERIFY(plot.autoScroll());
+    }
+    plot.resetView();
+    plot.zoom(0.25);
+    const double zoomed = seconds();
+    QVERIFY(plot.addAnnotationAt(start, QStringLiteral("hold me")) >= 0);
+    QTest::mousePress(&plot, Qt::MiddleButton, Qt::NoModifier, start + QPoint(4, 4));
+    QTest::mouseRelease(&plot, Qt::MiddleButton, Qt::NoModifier, start + QPoint(4, 4));
+    QCOMPARE(plot.selectedAnnotation(), 0);
+    QCOMPARE(seconds(), zoomed);
+    QVERIFY(plot.autoScroll());
+    const auto annotationTime = plot.model().annotations[0].time;
+    QTest::mousePress(&plot, Qt::MiddleButton, Qt::NoModifier, start + QPoint(4, 4));
+    moveWhileDragging(&plot, start + QPoint(44, 4), Qt::MiddleButton);
+    QTest::mouseRelease(&plot, Qt::MiddleButton, Qt::NoModifier, start + QPoint(44, 4));
+    QVERIFY(plot.model().annotations[0].time > annotationTime);
+    QCOMPARE(seconds(), zoomed);
+    QVERIFY(plot.autoScroll());
+  }
+  void doubleClickAnnotatesClickedTimeInLiveZoom() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].name = "note:test";
+    model.curves[0].nameSet = true;
+    striptool::PlotWidget plot;
+    plot.resize(800, 500);
+    plot.setModel(model);
+    plot.show();
+    plot.setCurveSamples(0, {{std::chrono::system_clock::now(), 1.0, 0, 0}});
+    plot.zoom(0.5);
+    const auto zoomed = plot.visibleTimeRange();
+    const QPoint point(300, 300);
+    // The time under the pointer before the double-click starts.
+    const int reference = plot.addAnnotationAt(point, QStringLiteral("reference"));
+    QVERIFY(reference >= 0);
+    const auto clicked = plot.model().annotations[static_cast<std::size_t>(reference)].time;
+    QVERIFY(plot.removeAnnotation(reference));
+    // Qt delivers a press and release before the double-click, which then
+    // asks for the annotation text.
+    QTest::mousePress(&plot, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, point);
+    bool answered = false;
+    QTimer::singleShot(0, &plot, [&answered] {
+      auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
+      if (!dialog) return;
+      dialog->setTextValue(QStringLiteral("clicked here"));
+      dialog->accept();
+      answered = true;
+    });
+    QTest::mouseDClick(&plot, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::mouseRelease(&plot, Qt::LeftButton, Qt::NoModifier, point);
+    QVERIFY(answered);
+    QCOMPARE(plot.model().annotations.size(), std::size_t(1));
+    const auto& note = plot.model().annotations[0];
+    QCOMPARE(QString::fromStdString(note.text), QStringLiteral("clicked here"));
+    const double error = std::chrono::duration<double>(note.time - clicked).count();
+    QVERIFY2(std::abs(error) < 1.0,
+             qPrintable(QStringLiteral("annotation %1 s from the clicked time").arg(error)));
+    const auto visible = plot.visibleTimeRange();
+    QCOMPARE(visible.end - visible.start, zoomed.end - zoomed.start);
     QVERIFY(plot.autoScroll());
   }
   void dragReleaseAppliesItsFinalPosition() {

@@ -253,7 +253,8 @@ UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            subnormalConstantCurvesKeepValidRangesAndLabels \
            farOffScaleSpikesKeepBothStepEdges \
            hugeFiniteSamplesDrawInsidePlot \
-           extremeRangeYZoomAndPanMoveTheView
+           extremeRangeYZoomAndPanMoveTheView \
+           stationaryClicksKeepLiveZoomDuration doubleClickAnnotatesClickedTimeInLiveZoom
 PERFORMANCE_TESTS = performanceTenCurveBufferAndLargeRender \
                     performanceWindowStartupAndShutdown
 
