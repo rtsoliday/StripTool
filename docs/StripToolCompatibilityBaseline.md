@@ -56,8 +56,14 @@ Curve semantics:
 
 The writer emits time, color, option, and curve attributes in that group
 order. It writes curve `Units`, `Comment`, `Precision`, `Min`, and `Max` only
-when those values have explicitly been set. It always writes `Name`, `Scale`,
-and `PlotStatus` for active curves.
+when their set flags are on. Those flags are not limited to values read from a
+file or edited by the operator: on a curve's first connection, Channel Access
+fills any unset units, precision, and display limits and marks them set, and
+the `.DESC` lookup sets the comment. A file saved after connecting therefore
+normally has a `Units` line for each connected curve, written verbatim from
+the channel's EGU. That value can be empty or contain spaces, such as
+`deg C`; the legacy loader accepts both and keeps only the first word. It
+always writes `Name`, `Scale`, and `PlotStatus` for active curves.
 
 The loader ignores lines outside the `Strip.*` namespace and ignores unknown
 groups or attributes. A syntactically known attribute with an invalid value

@@ -1,0 +1,50 @@
+StripConfig                   1.2
+Strip.Time.Timespan           300
+Strip.Time.NumSamples         300
+Strip.Time.SampleInterval     1.000000
+Strip.Time.RefreshInterval    1.000000
+Strip.Color.Background        32768     32768     32768     
+Strip.Color.Foreground        32768     32768     32768     
+Strip.Color.Grid              32768     32768     32768     
+Strip.Color.Color1            32768     32768     32768     
+Strip.Color.Color2            32768     32768     32768     
+Strip.Color.Color3            32768     32768     32768     
+Strip.Color.Color4            32768     32768     32768     
+Strip.Color.Color5            32768     32768     32768     
+Strip.Color.Color6            32768     32768     32768     
+Strip.Color.Color7            32768     32768     32768     
+Strip.Color.Color8            32768     32768     32768     
+Strip.Color.Color9            32768     32768     32768     
+Strip.Color.Color10           32768     32768     32768     
+Strip.Option.GridXon          1
+Strip.Option.GridYon          1
+Strip.Option.AxisYcolorStat   1
+Strip.Option.GraphLineWidth   2
+Strip.Curve.0.Name            test:units:none
+Strip.Curve.1.Name            test:units:status
+Strip.Curve.2.Name            test:units:degc
+Strip.Curve.3.Name            test:units:mm
+Strip.Curve.0.Units           
+Strip.Curve.1.Units           
+Strip.Curve.2.Units           deg C
+Strip.Curve.3.Units           mm
+Strip.Curve.0.Precision       0
+Strip.Curve.1.Precision       0
+Strip.Curve.2.Precision       0
+Strip.Curve.3.Precision       0
+Strip.Curve.0.Min              1
+Strip.Curve.1.Min              0
+Strip.Curve.2.Min              19
+Strip.Curve.3.Min              2
+Strip.Curve.0.Max              1
+Strip.Curve.1.Max              1
+Strip.Curve.2.Max              23
+Strip.Curve.3.Max              3
+Strip.Curve.0.Scale           0
+Strip.Curve.1.Scale           0
+Strip.Curve.2.Scale           0
+Strip.Curve.3.Scale           0
+Strip.Curve.0.PlotStatus      1
+Strip.Curve.1.PlotStatus      1
+Strip.Curve.2.PlotStatus      1
+Strip.Curve.3.PlotStatus      1

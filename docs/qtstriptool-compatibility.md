@@ -65,7 +65,9 @@ bugs, or exact pixels.
   present.
 - **Curve metadata editing:** units and comments are read from `.stp` files,
   and Channel Access supplies units and `.DESC` comments when unset, but the
-  controls window has no direct units or comment editor yet.
+  controls window has no direct units or comment editor yet. An empty or
+  multi-word `Units` value saved by Motif StripTool is ignored, so the channel
+  supplies its full units again; Motif keeps only the first word.
 - **Resources and defaults:** arbitrary X resources, `STRIP_SITE_DEFAULTS`,
   `$HOME/.StripToolrc`, and exact site fallback resources are not interpreted.
   Relevant settings belong in `.stp` files or future documented Qt settings.

@@ -14,6 +14,9 @@ configurations and intentionally use synthetic PV names.
   `MINIMUM`, and `MAXIMUM` syntax.
 - `visual-baseline-1.2.stp`: uses the built-in `CPU_Usage` pseudo-curve so the
   legacy UI can be captured safely without a Channel Access IOC.
+- `legacy-written-units-1.2.stp`: output of the legacy `StripConfig_write`
+  after connecting to channels whose EGU is empty, `deg C`, and `mm`, with only
+  the PV names replaced. The empty `Units` lines keep their trailing padding.
 
 Expected parser rules and intentional safety differences are documented in
 `docs/StripToolCompatibilityBaseline.md`.

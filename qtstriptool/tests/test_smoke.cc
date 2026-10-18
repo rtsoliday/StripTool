@@ -2056,6 +2056,60 @@ private slots:
     QVERIFY(!loaded.curves[0].unitsSet);
     QCOMPARE(QString::fromStdString(loaded.curves[1].units), QStringLiteral("mA"));
   }
+  void readsLegacyWrittenUnitsFixture() {
+    // Motif StripTool saves whatever EGU each channel reported on connect,
+    // including an empty value and units such as "deg C".
+    auto model = striptool::makeDefaultModel();
+    const auto result = striptool::readConfigurationFile(
+        fixture("legacy-written-units-1.2.stp"), model);
+    QVERIFY2(result.success, result.diagnostics.empty() ? "parse failed"
+                                 : result.diagnostics.front().message.c_str());
+    QVERIFY(!result.legacyFormat);
+    QCOMPARE(QString::fromStdString(model.curves[0].name), QStringLiteral("test:units:none"));
+    QCOMPARE(QString::fromStdString(model.curves[2].name), QStringLiteral("test:units:degc"));
+    QVERIFY(!model.curves[0].unitsSet);
+    QVERIFY(!model.curves[1].unitsSet);
+    QVERIFY(!model.curves[2].unitsSet);
+    QVERIFY(model.curves[3].unitsSet);
+    QCOMPARE(QString::fromStdString(model.curves[3].units), QStringLiteral("mm"));
+    QCOMPARE(model.curves[2].maximum, 23.0);
+
+    std::ostringstream output;
+    QVERIFY(striptool::writeConfiguration(output, model));
+    const auto text = output.str();
+    std::istringstream lines(text);
+    std::string line;
+    int unitsLines = 0;
+    while (std::getline(lines, line)) {
+      const auto separator = line.find_first_of(" \t");
+      const std::string key = line.substr(0, separator);
+      if (key.size() < 6 || key.compare(key.size() - 6, 6, ".Units") != 0) continue;
+      ++unitsLines;
+      const auto first = line.find_first_not_of(" \t", separator);
+      QVERIFY2(first != std::string::npos, line.c_str());
+      QVERIFY2(line.find_first_of(" \t", first) == std::string::npos, line.c_str());
+    }
+    QCOMPARE(unitsLines, 1);
+    QVERIFY(text.find("Strip.Curve.3.Units           mm\n") != std::string::npos);
+
+    auto reloaded = striptool::makeDefaultModel();
+    std::istringstream input(text);
+    const auto reloadResult = striptool::readConfiguration(input, reloaded);
+    QVERIFY2(reloadResult.success, reloadResult.diagnostics.empty() ? "parse failed"
+                                       : reloadResult.diagnostics.front().message.c_str());
+    QVERIFY(!reloaded.curves[0].unitsSet);
+    QVERIFY(!reloaded.curves[2].unitsSet);
+    QCOMPARE(QString::fromStdString(reloaded.curves[3].units), QStringLiteral("mm"));
+
+    // Name stays strict: legacy never writes an empty or multi-word name.
+    std::istringstream emptyName("StripConfig 1.2\nStrip.Curve.0.Name            \n");
+    QVERIFY(!striptool::readConfiguration(emptyName, reloaded).success);
+    std::istringstream spacedName("StripConfig 1.2\nStrip.Curve.0.Name            a b\n");
+    QVERIFY(!striptool::readConfiguration(spacedName, reloaded).success);
+    std::istringstream longUnits("StripConfig 1.2\nStrip.Curve.0.Units " +
+                                 std::string(striptool::kMaximumUnitsLength + 1, 'u') + "\n");
+    QVERIFY(!striptool::readConfiguration(longUnits, reloaded).success);
+  }
   void configurationNumbersIgnoreCommaLocale() {
     const auto restoreLocale = qScopeGuard([] { std::setlocale(LC_NUMERIC, "C"); });
     if (!useCommaNumericLocale()) QSKIP("no comma-decimal locale is installed");

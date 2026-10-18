@@ -185,7 +185,8 @@ CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixtur
                configurationOmitsDiscoveredUnitsThatAreNotOneWord \
                followsLegacySearchOrder fileWorkflowIsTransactionalAndTracksRecentFiles \
                configurationNumbersIgnoreCommaLocale configurationAcceptsLegacyCommaDecimals \
-               configurationRoundTripsSubnormalLimits
+               configurationRoundTripsSubnormalLimits \
+               readsLegacyWrittenUnitsFixture
 UI_TESTS = mainWindowHasStableScaffold controlsWindowEditsTheSharedModel \
            typedTimingValuesApplyOnceWhenEntered \
            helpTopicsSearchAndWindowReuse aboutDialogCreditsAndHelpHandoff \

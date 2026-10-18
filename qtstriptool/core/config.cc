@@ -226,14 +226,18 @@ ConfigResult parseCurrent(const std::vector<std::string>& lines,
       if (!parseInteger(parts[2], index) || index < 0 || index >= 10)
         return fail(i + 1, "curve index must be between 0 and 9");
       auto& curve = candidate.curves[static_cast<std::size_t>(index)];
-      if (parts[3] == "Name" || parts[3] == "Units") {
+      if (parts[3] == "Name") {
         const std::string word = trim(value);
-        valid = !word.empty() && word.find_first_of(" \t") == std::string::npos;
-        if (parts[3] == "Name") {
-          valid = valid && checkLength(word, kMaximumCurveNameLength);
-          if (valid) { curve.name = word; curve.nameSet = true; }
-        } else {
-          valid = valid && checkLength(word, kMaximumUnitsLength);
+        valid = !word.empty() && word.find_first_of(" \t") == std::string::npos &&
+                checkLength(word, kMaximumCurveNameLength);
+        if (valid) { curve.name = word; curve.nameSet = true; }
+      } else if (parts[3] == "Units") {
+        // Motif StripTool saves the units Channel Access reported, which may
+        // be empty or several words such as "deg C". Those are ignored so the
+        // channel supplies its units again.
+        const std::string word = trim(value);
+        if (!word.empty() && word.find_first_of(" \t") == std::string::npos) {
+          valid = checkLength(word, kMaximumUnitsLength);
           if (valid) { curve.units = word; curve.unitsSet = true; }
         }
       } else if (parts[3] == "Comment") {
