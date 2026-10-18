@@ -241,6 +241,8 @@ one sample per bin and can miss short spikes. To refine the current view, choose
 **View > Historical Range** and select **OK**: the dialog starts with the
 visible range, which is retrieved at the bin size for its own span (one second
 for any range up to 10,000 seconds) and joined with the data already plotted.
+Selecting **OK** also moves the graph to that range and turns auto-scroll off;
+choose **View > Auto Scroll** to follow live data again.
 
 ## Open, save, export, and print
 
