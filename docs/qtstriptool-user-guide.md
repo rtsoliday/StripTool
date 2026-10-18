@@ -26,9 +26,14 @@ Double dashes and separate values are also accepted, such as `--history 3600`.
 
 For a bare relative configuration name, Qt StripTool checks the current
 directory and then each directory in `STRIP_FILE_SEARCH_PATH`. Absolute paths
-and paths containing a directory component are used directly. If the explicit
-file cannot be loaded, the application tries `StripTool.stp` in the current
-directory and otherwise starts with compiled defaults. Each failure is reported
+and paths containing a directory component are used directly. With no
+configuration argument, or if the explicit file cannot be loaded, the
+application loads `StripTool.stp` from the current directory if it exists (this
+name is not searched along `STRIP_FILE_SEARCH_PATH`) and otherwise starts with
+compiled defaults. A loaded `StripTool.stp` becomes the current configuration:
+its curves connect at startup, the graph status bar shows `Loaded` and its
+path, and **File > Save** writes back to that file without asking for a name.
+Use **File > Save As** to save elsewhere. Each failure is reported
 on standard error with the file and line, such as
 `qtstriptool: /data/beam.stp:2: invalid value for Strip.Time.Timespan; trying StripTool.stp`.
 The message ends with `; trying StripTool.stp` only when a different
@@ -49,10 +54,11 @@ known differences in the compatibility guide.
 
 ## Configure curves
 
-The Controls window opens at startup when no configuration file is given, and
-is always available through **Window > Show Controls**. Its **File > Dismiss**
-hides Controls while the graph window is open, including when it is minimized.
-After **Dismiss Graph**, Controls is the only remaining window and cannot be
+The Controls window opens at startup when no configuration file is given on
+the command line, even if `StripTool.stp` was loaded from the current
+directory, and is always available through **Window > Show Controls**. Its
+**File > Dismiss** hides Controls while the graph window is open, including
+when it is minimized. After **Dismiss Graph**, Controls is the only remaining window and cannot be
 dismissed: **File > Dismiss** asks whether to exit, and **No** keeps Controls
 open.
 

@@ -4,7 +4,7 @@ You need a built `qtstriptool` and a reachable EPICS Channel Access process vari
 
 ## Open the graph and Controls
 
-Run `qtstriptool` without a configuration file. The graph and Controls windows open together. Later, use **Window > Show Controls** in the graph to reopen Controls. **File > Dismiss** in Controls hides it while the graph is open. If you dismissed the graph, Controls is the only remaining window, so **File > Dismiss** asks whether to exit instead; choose **No** to keep working.
+Run `qtstriptool` without a configuration file. The graph and Controls windows open together. If the current directory contains `StripTool.stp`, Qt StripTool loads it and its curves connect, and **File > Save** later writes back to that file; run it from a directory without that file to start from compiled defaults. Later, use **Window > Show Controls** in the graph to reopen Controls. **File > Dismiss** in Controls hides it while the graph is open. If you dismissed the graph, Controls is the only remaining window, so **File > Dismiss** asks whether to exit instead; choose **No** to keep working.
 
 <figure class="doc-shot">
   <img src="../assets/screenshots/controls-curves.png" alt="Controls window Curves tab showing the PV field, a connected CPU_Usage curve, plotting options, limits, and status" />
