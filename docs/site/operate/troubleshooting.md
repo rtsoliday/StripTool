@@ -3,7 +3,7 @@
 | Symptom | Check |
 | --- | --- |
 | Build cannot find EPICS Base | Set `EPICS_BASE` to a built Base tree containing `include/cadef.h` and host libraries. |
-| Build cannot find Qt | Install Qt Widgets, Network, and PrintSupport development files and the matching `moc`/`rcc` tools, or choose an installed major with `QT_VERSION=5` or `6`. |
+| Build cannot find Qt | Install Qt 5.15 or Qt 6 development files for Core, Gui, Widgets, Network, and PrintSupport, plus the matching `moc` and `rcc` tools, or choose an installed major with `QT_VERSION=5` or `6`. Qt Test is also required to run the tests, and the Windows build requires it to build at all. |
 | PV remains disconnected | Verify the PV with site Channel Access tools, the `EPICS_CA_*` address settings, and the network path. |
 | Startup `.stp` file is not found | Use an absolute path or check `STRIP_FILE_SEARCH_PATH`. A name containing a directory component is not searched along that path. |
 | Historical Range fails | Check the Archiver endpoint and `QTSTRIPTOOL_ARCHIVER_URL`. Local `CPU_Usage` has no archive data. |

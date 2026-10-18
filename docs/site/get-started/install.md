@@ -1,6 +1,6 @@
 # Install and build Qt StripTool
 
-Qt StripTool is built from this repository with GNU Make. It needs a C++17 compiler, Qt 5.15 or Qt 6 development files for Widgets, Network, and PrintSupport (plus Test to run the test suite), and a built EPICS Base with Channel Access. The legacy Motif program has separate dependencies and is not required to build `qtstriptool`.
+Qt StripTool is built from this repository with GNU Make. It needs a C++17 compiler, a built EPICS Base with Channel Access, and Qt 5.15 or Qt 6 development files for Core, Gui, Widgets, Network, and PrintSupport, plus the matching `moc` and `rcc` tools. Qt Test is also required to run the tests, and the Windows build requires it to build at all. The legacy Motif program has separate dependencies and is not required to build `qtstriptool`.
 
 ## Build
 

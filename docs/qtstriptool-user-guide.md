@@ -311,8 +311,11 @@ changing the executable name.
 
 - **Build says EPICS Base is missing:** set `EPICS_BASE` to a built Base tree
   containing `include/cadef.h` and host libraries.
-- **Build says Qt is missing:** install Qt Widgets/PrintSupport/Test development
-  files or select an installed major with `QT_VERSION=5|6`.
+- **Build says Qt is missing:** install Qt 5.15 or Qt 6 development files for
+  Core, Gui, Widgets, Network, and PrintSupport, plus the matching `moc` and
+  `rcc` tools, or select an installed major with `QT_VERSION=5|6`. Qt Test is
+  also required to run the tests, and the Windows build requires it to build
+  at all.
 - **PV remains disconnected:** verify the PV with site CA tools and check the
   EPICS CA address-list environment and network path.
 - **Startup file is not found:** use an absolute path or inspect
