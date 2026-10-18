@@ -17,7 +17,7 @@ You can also drag PVs in from MEDM or QtEDM: hold the middle mouse button on a P
 
 ## Timing and appearance
 
-The **Timing** tab sets history length, bounded sample count, the local `CPU_Usage` sampling interval, and a separate display refresh interval. Channel Access curves record monitor updates when delivered; their values are not resampled by that interval. `CPU_Usage` is a local pseudo-curve and does not open a Channel Access subscription.
+The **Timing** tab sets history length, bounded sample count, the local `CPU_Usage` sampling interval, and a separate display refresh interval. Channel Access curves record monitor updates when delivered; their values are not resampled by that interval. `CPU_Usage` is a local pseudo-curve and does not open a Channel Access subscription. To plot it, enter `CPU_Usage` (exact and case-sensitive) as a curve name. It shows Qt StripTool's own process CPU time, summed over all of its threads, as a percentage of one CPU core, averaged over each `CPU_Usage` sampling interval and capped at 100%. It does not show overall workstation load.
 
 <figure class="doc-shot doc-shot--medium">
   <img src="../assets/screenshots/controls-timing.png" alt="Controls window Timing tab with history length, sample count, CPU sample interval, and refresh interval fields" />

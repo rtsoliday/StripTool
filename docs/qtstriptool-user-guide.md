@@ -102,7 +102,11 @@ and Maximum shown in Controls; curves added afterward also use their
 configured or provider-supplied limits.
 
 `CPU_Usage` is a local pseudo-curve and does not open a Channel Access
-subscription. Channel Access curves record monitor updates as they arrive,
+subscription. To plot it, enter `CPU_Usage` (exact and case-sensitive) as a
+curve name. It shows qtstriptool's own process CPU time, summed over all of
+its threads, as a percentage of one CPU core, averaged over each `CPU_Usage`
+sampling interval and capped at 100%. It does not show overall workstation
+load. Channel Access curves record monitor updates as they arrive,
 using workstation delivery time together with the IOC value and alarm
 metadata; the sampling interval does not resample them. This common clock
 keeps curves aligned when IOC clocks differ. Traces use step lines on both
