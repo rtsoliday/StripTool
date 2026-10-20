@@ -1,6 +1,8 @@
 # Motif StripTool and Qt StripTool build dispatcher.
 .DEFAULT_GOAL := all
-STRIPTOOL_TOP_LEVEL := 1
+QT_MODULES := Core Gui Widgets Network PrintSupport
+# Discover Base here; individual components enforce their own requirements.
+EPICS_OPTIONAL_LIBS := ca Com
 include Makefile.rules
 
 .PHONY: all striptool qtstriptool test-qtstriptool test-qtstriptool-core \
@@ -19,19 +21,17 @@ DOCS_BASE ?= /
 export QT_VERSION HAVE_QT EPICS_BASE
 QT_SUBMAKE = $(MAKE) -C qtstriptool
 
-all: check-dependencies $(if $(HAVE_LEGACY),striptool) qtstriptool
+all: check-dependencies $(if $(HAVE_MOTIF),striptool) qtstriptool
 
 check-dependencies:
 ifeq ($(OS),Windows)
 	@echo "Legacy Motif StripTool is not built on Windows."
-else ifeq ($(HAVE_LEGACY),)
+else ifeq ($(HAVE_MOTIF),)
 	@echo ""
 	@echo "=========================================="
-	@echo "NOTE: Legacy StripTool dependencies were not found."
-	@echo "  EPICS Base: $(if $(HAVE_EPICS),found,missing)"
-	@echo "  Motif:      $(if $(HAVE_MOTIF),found,missing)"
+	@echo "NOTE: Motif development files were not found."
 	@echo "Skipping the Motif-based StripTool build."
-	@echo "Set EPICS_BASE or install the Motif development package to enable it."
+	@echo "Install the Motif development package to enable it."
 	@echo "=========================================="
 	@echo ""
 endif
@@ -44,8 +44,8 @@ striptool:
 ifeq ($(OS),Windows)
 	@echo "Legacy Motif StripTool is not supported by this dispatcher on Windows."
 	@exit 1
-else ifeq ($(HAVE_LEGACY),)
-	@echo "EPICS Base and Motif development files are required for legacy StripTool."
+else ifeq ($(HAVE_MOTIF),)
+	@echo "Motif development files are required for legacy StripTool."
 	@exit 1
 else
 	+$(MAKE) -C striptool EPICS_BASE="$(EPICS_BASE)"
@@ -82,7 +82,7 @@ test-ioc: test-qtstriptool-ioc
 
 test-visual: test-qtstriptool-visual
 
-install: check-dependencies $(if $(HAVE_LEGACY),striptool) qtstriptool
+install: check-dependencies $(if $(HAVE_MOTIF),striptool) qtstriptool
 
 # Build the standalone HTML documentation without Qt or EPICS.
 docs:

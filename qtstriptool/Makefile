@@ -1,4 +1,7 @@
 .DEFAULT_GOAL := all
+QT_REQUIRED := 1
+QT_MODULES := Core Gui Widgets Network PrintSupport
+EPICS_REQUIRED_LIBS := ca Com
 include ../Makefile.rules
 
 OBJ_DIR := O.$(OS)-$(ARCH)-qt$(QT_VERSION)
@@ -38,12 +41,11 @@ $(error EPICS Base not found; set EPICS_BASE=/path/to/built/base)
 endif
 endif
 
-CXXFLAGS ?= -O2 -g -Wall -Wextra -std=c++17 -fPIC
 
 ifeq ($(OS),Windows)
 CXX = cl
 CXXFLAGS = /nologo /O2 /W3 /external:anglebrackets /external:W0 /MD /EHsc \
-           /permissive- /Zc:lambda /Zc:__cplusplus /utf-8 /std:c++17
+           /permissive- /Zc:lambda /Zc:__cplusplus /utf-8 $(CXX_STD_FLAGS)
 CPPFLAGS = /I. /I$(OBJ_DIR) /I"$(EPICS_BASE)/include" \
            /I"$(EPICS_BASE)/include/compiler/msvc" \
            /I"$(EPICS_BASE)/include/os/WIN32" \
@@ -58,17 +60,13 @@ define compile_cxx
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(1) $(CXXFLAGS) /c $< /Fo$@
 endef
 define link_exe
-	link /nologo /OUT:$@ $^ $(QT_LIBS) $(1) $(EPICS_LIBS)
+	link /nologo $(LDFLAGS) /OUT:$@ $^ $(QT_LIBS) $(1) $(EPICS_LIBS)
 endef
 else
 CPPFLAGS += -I. -I$(OBJ_DIR) -I$(EPICS_BASE)/include
 MOC_CPPFLAGS = $(CPPFLAGS)
-EPICS_LIB_DIR := $(EPICS_BASE)/lib/$(EPICS_HOST_ARCH)
-EPICS_LIBS = $(EPICS_LIB_DIR)/libca.a $(EPICS_LIB_DIR)/libCom.a
-EPICS_SYSTEM_LIBS = -lpthread -ldl -lrt -lm
-ifeq ($(OS),Darwin)
-EPICS_SYSTEM_LIBS = -lpthread -lm
-endif
+EPICS_LIBS = $(CA_LIBS)
+EPICS_SYSTEM_LIBS = $(EPICS_SYS_LIBS)
 CPPFLAGS += -I$(EPICS_BASE)/include/compiler/$(if $(filter Darwin,$(OS)),clang,gcc) \
             -I$(EPICS_BASE)/include/os/$(OS)
 define compile_cxx
@@ -76,7 +74,7 @@ define compile_cxx
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(1) $(CXXFLAGS) -MMD -MP -c $< -o $@
 endef
 define link_exe
-	$(CXX) $(LDFLAGS) -o $@ $^ -Wl,-rpath,$(EPICS_LIB_DIR) \
+	$(CXX) $(LDFLAGS) -o $@ $^ -Wl,-rpath,$(EPICS_BASE_LIB_DIR) \
 	  $(EPICS_LIBS) $(EPICS_SYSTEM_LIBS) $(QT_LIBS) $(1)
 endef
 endif
@@ -89,6 +87,14 @@ QT_LIBS += $(shell $(PKG_CONFIG) --libs xcb)
 endif
 endif
 
+CUSTOM_COMPILE_RULES := 1
+CUSTOM_CLEAN := 1
+PROD = qtstriptool
+qtstriptool_OBJS = $(APP_OBJECTS) $(MOC_OBJECTS) $(OBJ_DIR)/main.$(OBJEXT) $(RESOURCE_OBJECT)
+qtstriptool_LIBS = $(EPICS_LIBS) $(EPICS_SYSTEM_LIBS) $(QT_LIBS)
+BUILD_OBJECTS += $(OBJ_DIR)/tests/test_smoke.$(OBJEXT) $(OBJ_DIR)/tests/test_channel_access.$(OBJEXT)
+BUILD_GENERATED += $(MOC_SOURCES) $(RESOURCE_SOURCE) $(OBJ_DIR)/test_smoke.moc $(OBJ_DIR)/test_channel_access.moc
+CUSTOM_LINK_PRODUCTS += qtstriptool
 include ../Makefile.build
 
 .PHONY: all test test-core test-config test-ui test-performance test-report test-memory \

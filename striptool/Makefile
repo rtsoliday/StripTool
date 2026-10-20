@@ -1,5 +1,8 @@
 # Standalone and EPICS-extensions build for legacy Motif StripTool.
 .DEFAULT_GOAL := all
+QT_MODULES :=
+EPICS_REQUIRED_LIBS := ca Com
+MOTIF_REQUIRED := 1
 include ../Makefile.rules
 
 USE_CLUES ?= YES
@@ -30,7 +33,8 @@ $(error Could not determine EPICS_HOST_ARCH; set it to the Base build architectu
 endif
 endif
 
-CFLAGS ?= -O2 -g -Wall -std=gnu99
+# Legacy sources use GNU C99 independently of shared optimization defaults.
+CFLAGS += -std=gnu99
 CPPFLAGS += -DUNIX -DUSE_MOTIF -I. -I$(EPICS_BASE)/include \
             -I$(EPICS_BASE)/include/compiler/$(if $(filter Darwin,$(OS)),clang,gcc) \
             -I$(EPICS_BASE)/include/os/$(OS) \
@@ -95,16 +99,12 @@ ifeq ($(ARCHIVER_CALL),AAPI)
 OPTIONAL_LIBS += -lAAPI_client -lAAPI_common
 endif
 
-EPICS_LIB_DIR := $(EPICS_BASE)/lib/$(EPICS_HOST_ARCH)
-EPICS_LIBS := $(EPICS_LIB_DIR)/libca.a $(EPICS_LIB_DIR)/libCom.a
+EPICS_LIBS = $(CA_LIBS)
 X_LIBS := $(XM_LIB) $(MOTIF_STATIC_DEP_LIBS) $(MOTIF_STATIC_EXTRA_LIBS) \
           $(if $(filter YES,$(USE_XMU)),$(XMU_LIB)) \
           $(if $(filter YES,$(USE_XPM)),$(XPM_LIB)) $(XT_LIB) $(X11_LIB) \
           $(XEXT_LIB) $(XP_LIB)
-SYSTEM_LIBS := -lpthread -ldl -lrt -lm
-ifeq ($(OS),Darwin)
-SYSTEM_LIBS := -lpthread -lm
-endif
+SYSTEM_LIBS = $(EPICS_SYS_LIBS)
 
 OBJECTS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(filter %.c,$(SOURCES))) \
            $(patsubst %.cc,$(OBJ_DIR)/%.o,$(filter %.cc,$(SOURCES)))
@@ -114,7 +114,7 @@ PROGRAM := $(OBJ_DIR)/StripTool
 all: install-program
 
 $(PROGRAM): $(OBJECTS)
-	$(CXX) -o $@ $^ $(LDFLAGS) -Wl,-rpath,$(EPICS_LIB_DIR) \
+	$(CXX) -o $@ $^ $(LDFLAGS) -Wl,-rpath,$(EPICS_BASE_LIB_DIR) \
 	  $(EPICS_LIBS) $(OPTIONAL_LIBS) $(X_LIBS) $(SYSTEM_LIBS)
 
 $(OBJ_DIR)/%.o: %.c $(BUILD_FILES) | prepare-output
@@ -123,6 +123,13 @@ $(OBJ_DIR)/%.o: %.c $(BUILD_FILES) | prepare-output
 $(OBJ_DIR)/%.o: %.cc $(BUILD_FILES) | prepare-output
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
+CUSTOM_COMPILE_RULES := 1
+CUSTOM_CLEAN := 1
+PROD = StripTool
+StripTool_OBJS = $(OBJECTS)
+StripTool_LIBS = $(EPICS_LIBS) $(OPTIONAL_LIBS) $(X_LIBS) $(SYSTEM_LIBS)
+BUILD_CONFIG_VARIABLES += USE_CLUES USE_SDDS USE_XMU USE_XPM STRIP_DAQ STRIP_HISTORY ARCHIVER_CALL USE_ARCHIVE_RECORD
+CUSTOM_LINK_PRODUCTS += StripTool
 include ../Makefile.build
 -include $(wildcard $(OBJ_DIR)/*.d)
 
