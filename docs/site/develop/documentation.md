@@ -21,7 +21,7 @@ Build with the exact URL prefix, including leading and trailing slashes:
 make docs DOCS_BASE=/manuals/QtStripTool/
 ```
 
-Copy the complete contents of `docs/html/` to that server directory. A root build copied into a subdirectory will have broken asset and navigation URLs. Rebuild when the prefix changes. Use `make docs-clean` to remove generated HTML without deleting authored pages.
+Copy the complete contents of `docs/html/` to that server directory. A root build copied into a subdirectory will have broken asset and navigation URLs. Rebuild when the prefix changes. Both `make clean` and `make docs-clean` remove generated HTML while preserving authored pages and installed documentation dependencies.
 
 ## Edit and verify
 

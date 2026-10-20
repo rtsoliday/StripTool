@@ -85,6 +85,9 @@ test-visual: test-qtstriptool-visual
 install: check-dependencies $(if $(HAVE_MOTIF),striptool) qtstriptool
 
 # Build the standalone HTML documentation without Qt or EPICS.
+# Cleanup uses Python 3 on PATH, independent of the toolkit interpreter.
+# An explicit command-line PYTHON setting still takes precedence.
+docs-clean docs-distclean: PYTHON = $(if $(filter Windows,$(OS)),python,python3)
 docs:
 	$(PYTHON) scripts/build-docs.py --base "$(DOCS_BASE)"
 
@@ -128,7 +131,7 @@ else
 	@echo "Package: O.package/qtstriptool-$(PACKAGE_VERSION)-$(OS)-$(ARCH).tar.gz"
 endif
 
-clean:
+clean: docs-clean
 	+$(MAKE) -C striptool clean
 	+$(MAKE) -C qtstriptool clean
 
