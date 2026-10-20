@@ -114,7 +114,7 @@ PROGRAM := $(OBJ_DIR)/StripTool
 all: install-program
 
 $(PROGRAM): $(OBJECTS)
-	$(CXX) -o $@ $^ $(LDFLAGS) -Wl,-rpath,$(EPICS_BASE_LIB_DIR) \
+	$(CXX) -o $@ $(filter %.$(OBJEXT),$^) $(LDFLAGS) -Wl,-rpath,$(EPICS_BASE_LIB_DIR) \
 	  $(EPICS_LIBS) $(OPTIONAL_LIBS) $(X_LIBS) $(SYSTEM_LIBS)
 
 $(OBJ_DIR)/%.o: %.c $(BUILD_FILES) | prepare-output

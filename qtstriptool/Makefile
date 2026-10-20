@@ -60,7 +60,7 @@ define compile_cxx
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(1) $(CXXFLAGS) /c $< /Fo$@
 endef
 define link_exe
-	link /nologo $(LDFLAGS) /OUT:$@ $^ $(QT_LIBS) $(1) $(EPICS_LIBS)
+	link /nologo $(LDFLAGS) /OUT:$@ $(filter %.$(OBJEXT),$^) $(QT_LIBS) $(1) $(EPICS_LIBS)
 endef
 else
 CPPFLAGS += -I. -I$(OBJ_DIR) -I$(EPICS_BASE)/include
@@ -74,7 +74,7 @@ define compile_cxx
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(1) $(CXXFLAGS) -MMD -MP -c $< -o $@
 endef
 define link_exe
-	$(CXX) $(LDFLAGS) -o $@ $^ -Wl,-rpath,$(EPICS_BASE_LIB_DIR) \
+	$(CXX) $(LDFLAGS) -o $@ $(filter %.$(OBJEXT),$^) -Wl,-rpath,$(EPICS_BASE_LIB_DIR) \
 	  $(EPICS_LIBS) $(EPICS_SYSTEM_LIBS) $(QT_LIBS) $(1)
 endef
 endif
