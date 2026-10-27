@@ -101,6 +101,11 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   textAction->setObjectName(QStringLiteral("exportTextAction"));
   auto* csvAction = fileMenu->addAction(tr("Export &CSV…"));
   csvAction->setObjectName(QStringLiteral("exportCsvAction"));
+  QAction* sddsAction = nullptr;
+  if (ExportService::sddsAvailable()) {
+    sddsAction = fileMenu->addAction(tr("Export &SDDS…"));
+    sddsAction->setObjectName(QStringLiteral("exportSddsAction"));
+  }
   auto* snapshotAction = fileMenu->addAction(tr("Save S&napshot…"));
   snapshotAction->setObjectName(QStringLiteral("snapshotAction"));
   fileMenu->addSeparator();
@@ -255,14 +260,21 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
                                                        tr("Text files (*.txt);;All files (*)"));
     if (path.isEmpty()) return;
     QString error;
-    if (!exportData(path, false, &error)) QMessageBox::critical(this, tr("Export Failed"), error);
+    if (!exportData(path, ExportFormat::Text, &error)) QMessageBox::critical(this, tr("Export Failed"), error);
   });
   connect(csvAction, &QAction::triggered, this, [this] {
     const QString path = QFileDialog::getSaveFileName(this, tr("Export CSV Data"), {},
                                                        tr("CSV files (*.csv);;All files (*)"));
     if (path.isEmpty()) return;
     QString error;
-    if (!exportData(path, true, &error)) QMessageBox::critical(this, tr("Export Failed"), error);
+    if (!exportData(path, ExportFormat::Csv, &error)) QMessageBox::critical(this, tr("Export Failed"), error);
+  });
+  if (sddsAction) connect(sddsAction, &QAction::triggered, this, [this] {
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export SDDS Data"), {},
+                                                       tr("SDDS files (*.sdds);;All files (*)"));
+    if (path.isEmpty()) return;
+    QString error;
+    if (!exportData(path, ExportFormat::Sdds, &error)) QMessageBox::critical(this, tr("Export Failed"), error);
   });
   connect(snapshotAction, &QAction::triggered, this, [this] {
     QString selectedFilter;
@@ -427,6 +439,7 @@ MainWindow::MainWindow(StripToolModel model, QWidget* parent)
   plotMenu_->addAction(snapshotAction);
   plotMenu_->addAction(textAction);
   plotMenu_->addAction(csvAction);
+  if (sddsAction) plotMenu_->addAction(sddsAction);
   plotMenu_->addSeparator();
   auto* dismissAction = plotMenu_->addAction(tr("Dismiss Graph"));
   dismissAction->setObjectName(QStringLiteral("dismissGraphAction"));
@@ -608,7 +621,7 @@ bool MainWindow::saveConfiguration(const QString& path, QString* error) {
   return true;
 }
 
-bool MainWindow::exportData(const QString& path, bool csv, QString* error) const {
+bool MainWindow::exportData(const QString& path, ExportFormat format, QString* error) const {
   CurveSamples samples;
   const auto range = plotWidget_->visibleTimeRange();
   for (std::size_t i = 0; i < samples.size(); ++i) {
@@ -621,8 +634,18 @@ bool MainWindow::exportData(const QString& path, bool csv, QString* error) const
   }
   std::string detail;
   const auto outputPath = std::filesystem::u8path(path.toStdString());
-  const bool ok = csv ? ExportService::writeCsvFile(outputPath, model_, samples, &detail)
-                      : ExportService::writeTextFile(outputPath, model_, samples, &detail);
+  bool ok = false;
+  switch (format) {
+    case ExportFormat::Text:
+      ok = ExportService::writeTextFile(outputPath, model_, samples, &detail);
+      break;
+    case ExportFormat::Csv:
+      ok = ExportService::writeCsvFile(outputPath, model_, samples, &detail);
+      break;
+    case ExportFormat::Sdds:
+      ok = ExportService::writeSddsFile(outputPath, model_, samples, &detail);
+      break;
+  }
   if (!ok && error) *error = QString::fromStdString(detail);
   return ok;
 }

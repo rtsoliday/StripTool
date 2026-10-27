@@ -1,5 +1,6 @@
 #pragma once
 #include "core/model.h"
+#include "services/export_service.h"
 #include <QHash>
 #include <QMainWindow>
 #include <QPoint>
@@ -33,7 +34,7 @@ public:
   void showControls();
   bool openConfiguration(const QString& path, QString* error = nullptr);
   bool saveConfiguration(const QString& path, QString* error = nullptr);
-  bool exportData(const QString& path, bool csv, QString* error = nullptr) const;
+  bool exportData(const QString& path, ExportFormat format, QString* error = nullptr) const;
   bool saveSnapshot(const QString& path, QString* error = nullptr) const;
   bool saveSnapshot(const QString& path, const QString& defaultFormat,
                     QString* error = nullptr) const;

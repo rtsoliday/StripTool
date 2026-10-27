@@ -7,7 +7,7 @@ This repository builds two EPICS trend applications side by side:
 
 Qt StripTool 1.0.0 is the first normal release. It supports live Channel Access,
 ten-curve controls, compatible configuration load/save, graph interaction,
-annotations, Archiver Appliance history, text/CSV and image export, and Qt
+annotations, Archiver Appliance history, text/CSV, optional SDDS and image export, and Qt
 printing. It remains a separately named application so sites can keep the
 legacy StripTool available where a documented difference matters.
 
@@ -38,7 +38,7 @@ length, sample capacity, refresh rate, graph colors, and grid styling.
 ### Investigate events and share results
 
 Zoom into a time range and add movable, editable annotations to mark events
-and explain changes. Export the visible data as CSV or text, save a graph
+and explain changes. Export the visible data as CSV, text, or SDDS (when available), save a graph
 snapshot, or use print preview and Qt printing to share the result.
 
 ![Zoomed Qt StripTool graph with RF trip and Beam recovery annotations on the demonstration traces](docs/screenshots/qtstriptool/graph-annotations.jpg)
@@ -68,6 +68,18 @@ matching `moc` and `rcc` tools. Qt Test is also required to run the tests, and
 the Windows build requires it to build at all. Unix builds normally discover
 Qt with `pkg-config`; Qt 6 may also be discovered with `qmake6`. Select a major
 version explicitly with `QT_VERSION=5` or `QT_VERSION=6`.
+
+SDDS export is enabled automatically when compatible SDDS headers and libraries
+can be linked. The build tries the sibling `SDDS` checkout (`include` and
+`lib/<OS>-<ARCH>`), configured EPICS extensions directories, and
+`/usr/local/epics/extensions`. Set `SDDS_REPO=/path/to/SDDS` to select another
+checkout, or set both `SDDS_INCLUDE_DIR` and `SDDS_LIB_DIR` to select an installed
+copy. These explicit directory overrides disable fallback searching; pointing
+them to nonexistent directories builds without SDDS. Core SDDS headers and
+libraries always come from the same installation. Missing or unusable SDDS
+dependencies silently omit the SDDS export action; text and CSV remain available.
+Discovery compiles a link probe without executing it, with diagnostic logs under
+`qtstriptool/O.<OS>-<ARCH>-qt<version>/sdds-probe-*.log`.
 
 On Linux, the build prefers `/usr/bin/pkg-config` so an active Conda
 environment does not select Conda's Qt through its `pkg-config` wrapper.

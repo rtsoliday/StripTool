@@ -53,8 +53,12 @@ bugs, or exact pixels.
   samples; archived strings and waveforms are ignored.
 - **CDEV:** the Qt build supports Channel Access and the local `CPU_Usage`
   provider; it has no CDEV provider.
-- **SDDS:** plain text and CSV are supported; optional legacy SDDS export is
-  not enabled.
+- **SDDS:** binary SDDS export is built automatically when compatible headers
+  and libraries are found; otherwise its menu action is silently omitted.
+  Like legacy SDDS output, it uses `Time` in epoch seconds and a column per PV
+  with units and comments. Qt aligns independent curve timestamps using their
+  sorted union, writing NaN for missing samples and gaps without interpolation.
+  Alarm status and severity are available through text/CSV instead.
 - **Text/CSV layout:** Qt currently writes one row per curve sample with an ISO
   timestamp, curve name, value, status, and severity. Legacy StripTool writes
   one row per timestamp with a column for each curve. Consumers of legacy dump

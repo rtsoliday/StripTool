@@ -30,6 +30,7 @@
 #include <QDateTimeEdit>
 #include <QIcon>
 #include <QFileInfo>
+#include <QFile>
 #include <QImage>
 #include <QInputDialog>
 #include <QElapsedTimer>
@@ -71,6 +72,10 @@
 #include <sstream>
 #include <thread>
 #include <type_traits>
+#ifdef STRIPTOOL_HAVE_SDDS
+#include <SDDS.h>
+#include <cstdlib>
+#endif
 
 namespace striptool {
 // Inject protocol callbacks without a network server; production ingress and
@@ -1677,6 +1682,196 @@ private slots:
     QVERIFY(csv.str().find("timestamp,curve,value,status,severity") == 0);
     QVERIFY(csv.str().find("\"pv,\"\"quoted\"\"\"") != std::string::npos);
   }
+  void sddsExportAvailabilityMatchesMenu() {
+    striptool::MainWindow window;
+    QCOMPARE(window.findChild<QAction*>(QStringLiteral("exportSddsAction")) != nullptr,
+             striptool::ExportService::sddsAvailable());
+#ifdef STRIPTOOL_HAVE_SDDS
+    QVERIFY(striptool::ExportService::sddsAvailable());
+#else
+    QVERIFY(!striptool::ExportService::sddsAvailable());
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("unsupported.sdds"));
+    QString error;
+    QVERIFY(!window.exportData(path, striptool::ExportFormat::Sdds, &error));
+    QVERIFY(error.contains(QStringLiteral("unavailable")));
+    QVERIFY(!QFileInfo::exists(path));
+#endif
+  }
+  void exportsSddsDataAndMetadata() {
+#ifndef STRIPTOOL_HAVE_SDDS
+    QSKIP("SDDS support is not compiled in");
+#else
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = std::filesystem::u8path(
+        directory.filePath(QStringLiteral("binary data.sdds")).toStdString());
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    model.curves[0].name = "ring:I";
+    model.curves[0].units = "mA";
+    model.curves[0].comment = "Beam current, \"measured\"";
+    model.curves[2].nameSet = true;
+    model.curves[2].name = "ring:V";
+    model.curves[2].units = "V";
+    model.curves[2].plotted = false;
+    const auto epoch = std::chrono::system_clock::from_time_t(0);
+    striptool::CurveSamples samples;
+    const double exact = 1.2345678901234567;
+    samples[0] = {{epoch, 2.0},
+                  {epoch - std::chrono::milliseconds(250), exact},
+                  {epoch, 3.0},
+                  {epoch + std::chrono::milliseconds(250), 999, 0, 0, false},
+                  {epoch + std::chrono::milliseconds(500), 4.0}};
+    samples[2] = {{epoch + std::chrono::milliseconds(125), 5.0},
+                  {epoch + std::chrono::milliseconds(250), std::numeric_limits<double>::quiet_NaN(), 1, 2},
+                  {epoch + std::chrono::milliseconds(500), 6.0}};
+    samples[1] = {{epoch + std::chrono::seconds(99), 123}}; // Unconfigured slot.
+    std::string error = "old error";
+    QVERIFY2(striptool::ExportService::writeSddsFile(path, model, samples, &error), error.c_str());
+    QVERIFY(error.empty());
+    SDDS_DATASET reader{};
+    auto filename = path.string();
+    QVERIFY(SDDS_InitializeInput(&reader, filename.data()));
+    const auto cleanup = qScopeGuard([&] { SDDS_Terminate(&reader); });
+    QCOMPARE(reader.layout.data_mode.mode, int32_t{SDDS_BINARY});
+    QCOMPARE(reader.layout.n_columns, int32_t{3});
+    QCOMPARE(QByteArray(reader.layout.column_definition[0].name), QByteArray("Time"));
+    QCOMPARE(QByteArray(reader.layout.column_definition[0].units), QByteArray("seconds"));
+    QCOMPARE(QByteArray(reader.layout.column_definition[1].name), QByteArray("ring:I"));
+    QCOMPARE(QByteArray(reader.layout.column_definition[1].units), QByteArray("mA"));
+    // SDDS readers retain namelist escapes in descriptions.
+    QByteArray description(reader.layout.column_definition[1].description);
+    description.replace("\\\"", "\"");
+    QCOMPARE(description, QByteArray(model.curves[0].comment.c_str()));
+    QCOMPARE(QByteArray(reader.layout.column_definition[2].name), QByteArray("ring:V"));
+    for (int i = 0; i < 3; ++i)
+      QCOMPARE(reader.layout.column_definition[i].type, int32_t{SDDS_DOUBLE});
+    QVERIFY(SDDS_ReadPage(&reader) > 0);
+    QCOMPARE(SDDS_CountRowsOfInterest(&reader), decltype(SDDS_CountRowsOfInterest(&reader)){5});
+    std::string timeName = "Time", currentName = "ring:I", voltageName = "ring:V";
+    double* time = SDDS_GetColumnInDoubles(&reader, timeName.data());
+    double* current = SDDS_GetColumnInDoubles(&reader, currentName.data());
+    double* voltage = SDDS_GetColumnInDoubles(&reader, voltageName.data());
+    const auto freeColumns = qScopeGuard([&] { std::free(time); std::free(current); std::free(voltage); });
+    QVERIFY(time && current && voltage);
+    const double expectedTimes[] = {-0.25, 0, 0.125, 0.25, 0.5};
+    for (int i = 0; i < 5; ++i) QCOMPARE(time[i], expectedTimes[i]);
+    QCOMPARE(current[0], exact);
+    QCOMPARE(current[1], 3.0);
+    QVERIFY(std::isnan(current[2]));
+    QVERIFY(std::isnan(current[3]));
+    QCOMPARE(current[4], 4.0);
+    QVERIFY(std::isnan(voltage[0]) && std::isnan(voltage[1]));
+    QCOMPARE(voltage[2], 5.0);
+    QVERIFY(std::isnan(voltage[3]));
+    QCOMPARE(voltage[4], 6.0);
+    QCOMPARE(SDDS_ReadPage(&reader), int32_t{-1});
+#endif
+  }
+  void exportsEmptyAndExtremeSddsData() {
+#ifndef STRIPTOOL_HAVE_SDDS
+    QSKIP("SDDS support is not compiled in");
+#else
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    auto model = striptool::makeDefaultModel();
+    striptool::CurveSamples samples;
+    const auto path = std::filesystem::u8path(directory.filePath(QStringLiteral("empty.sdds")).toStdString());
+    for (int mode = 0; mode < 3; ++mode) {
+      if (mode > 0) {
+        model.curves[0].nameSet = true;
+        model.curves[0].name = "limits";
+      }
+      if (mode == 2) samples[0] = {{std::chrono::system_clock::time_point::min(), -1},
+                                    {std::chrono::system_clock::time_point::max(), 1}};
+      std::string error;
+      QVERIFY2(striptool::ExportService::writeSddsFile(path, model, samples, &error), error.c_str());
+      SDDS_DATASET reader{};
+      auto filename = path.string();
+      QVERIFY(SDDS_InitializeInput(&reader, filename.data()));
+      const auto cleanup = qScopeGuard([&] { SDDS_Terminate(&reader); });
+      QCOMPARE(reader.layout.n_columns, int32_t{mode == 0 ? 1 : 2});
+      QVERIFY(SDDS_ReadPage(&reader) > 0);
+      QCOMPARE(SDDS_CountRowsOfInterest(&reader), decltype(SDDS_CountRowsOfInterest(&reader)){mode == 2 ? 2 : 0});
+      if (mode == 2) {
+        std::string name = "Time";
+        double* time = SDDS_GetColumnInDoubles(&reader, name.data());
+        const auto release = qScopeGuard([&] { std::free(time); });
+        QVERIFY(time);
+        QCOMPARE(time[0], std::chrono::duration<double>(std::chrono::system_clock::time_point::min().time_since_epoch()).count());
+        QCOMPARE(time[1], std::chrono::duration<double>(std::chrono::system_clock::time_point::max().time_since_epoch()).count());
+      }
+    }
+#endif
+  }
+  void sddsExportRejectsInvalidNamesAndDestinations() {
+#ifndef STRIPTOOL_HAVE_SDDS
+    QSKIP("SDDS support is not compiled in");
+#else
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    model.curves[1].nameSet = true;
+    model.curves[1].name = "duplicate";
+    striptool::CurveSamples samples;
+    const auto path = std::filesystem::u8path(directory.filePath(QStringLiteral("preserved.sdds")).toStdString());
+    { std::ofstream existing(path); existing << "keep existing data"; }
+    for (const auto& name : {"duplicate", "Time", "invalid name", ""}) {
+      model.curves[0].name = name;
+      std::string error;
+      QVERIFY(!striptool::ExportService::writeSddsFile(path, model, samples, &error));
+      QVERIFY(!error.empty());
+      std::ifstream existing(path);
+      QCOMPARE(std::string(std::istreambuf_iterator<char>{existing}, {}), std::string("keep existing data"));
+    }
+    model.curves[0].name = "valid";
+    std::string error;
+    const auto missing = path.parent_path() / "missing" / "output.sdds";
+    QVERIFY(!striptool::ExportService::writeSddsFile(missing, model, samples, &error));
+    QVERIFY(!error.empty());
+#endif
+  }
+  void mainWindowExportsVisibleSddsSamples() {
+#ifndef STRIPTOOL_HAVE_SDDS
+    QSKIP("SDDS support is not compiled in");
+#else
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    model.curves[0].name = "visible:test";
+    striptool::MainWindow window(model);
+    const auto epoch = std::chrono::system_clock::from_time_t(1000);
+    window.plotWidget()->setCurveSamples(0,
+        {{epoch - std::chrono::seconds(1), 99}, {epoch, 1},
+         {epoch + std::chrono::seconds(1), 2},
+         {epoch + std::chrono::seconds(2), 9, 0, 0, false},
+         {epoch + std::chrono::seconds(3), 99}});
+    window.plotWidget()->setVisibleTimeRange({epoch, epoch + std::chrono::seconds(2)});
+    const QString path = directory.filePath(QStringLiteral("\u6e2c\u5b9a-\u00e9.sdds"));
+    QString error;
+    QVERIFY2(window.exportData(path, striptool::ExportFormat::Sdds, &error), qPrintable(error));
+    // The SDDS reader also uses narrow filenames; copy to an ASCII basename
+    // so this test checks Unicode destinations even with the Windows CRT.
+    const QString readerPath = directory.filePath(QStringLiteral("read.sdds"));
+    QVERIFY(QFile::copy(path, readerPath));
+    SDDS_DATASET reader{};
+    auto filename = readerPath.toLocal8Bit();
+    QVERIFY(SDDS_InitializeInput(&reader, filename.data()));
+    const auto cleanup = qScopeGuard([&] { SDDS_Terminate(&reader); });
+    QVERIFY(SDDS_ReadPage(&reader) > 0);
+    QCOMPARE(SDDS_CountRowsOfInterest(&reader), decltype(SDDS_CountRowsOfInterest(&reader)){3});
+    std::string name = "visible:test";
+    double* values = SDDS_GetColumnInDoubles(&reader, name.data());
+    const auto release = qScopeGuard([&] { std::free(values); });
+    QVERIFY(values);
+    QCOMPARE(values[0], 1.0);
+    QCOMPARE(values[1], 2.0);
+    QVERIFY(std::isnan(values[2]));
+#endif
+  }
   void noHistoryProviderReportsFailureAndCancellation() {
     striptool::NoHistoryProvider provider;
     QSignalSpy failed(&provider, &striptool::HistoryProvider::requestFailed);
@@ -1884,7 +2079,7 @@ private slots:
       const QString path = temporary.filePath(csv ? QStringLiteral("gap.csv")
                                                   : QStringLiteral("gap.txt"));
       QString error;
-      QVERIFY2(window.exportData(path, csv, &error), qPrintable(error));
+      QVERIFY2(window.exportData(path, csv ? striptool::ExportFormat::Csv : striptool::ExportFormat::Text, &error), qPrintable(error));
       std::ifstream input(path.toStdString());
       const std::string content((std::istreambuf_iterator<char>(input)),
                                 std::istreambuf_iterator<char>());
@@ -2156,7 +2351,7 @@ private slots:
                                       &error), qPrintable(error));
     QVERIFY2(window.openConfiguration(root.filePath(QStringLiteral("saved.stp")),
                                       &error), qPrintable(error));
-    QVERIFY2(window.exportData(root.filePath(QStringLiteral("data.csv")), true,
+    QVERIFY2(window.exportData(root.filePath(QStringLiteral("data.csv")), striptool::ExportFormat::Csv,
                                &error), qPrintable(error));
     QVERIFY2(window.saveSnapshot(root.filePath(QStringLiteral("plot.png")),
                                  &error), qPrintable(error));
@@ -2234,7 +2429,7 @@ private slots:
     for (const bool csv : {false, true}) {
       const auto output = folder + (csv ? QStringLiteral("/\u6e2c\u5b9a.csv")
                                         : QStringLiteral("/\u6e2c\u5b9a.txt"));
-      QVERIFY2(window.exportData(output, csv, &error), qPrintable(error));
+      QVERIFY2(window.exportData(output, csv ? striptool::ExportFormat::Csv : striptool::ExportFormat::Text, &error), qPrintable(error));
       QVERIFY(QFileInfo::exists(output));
     }
   }
@@ -2252,7 +2447,7 @@ private slots:
     window.plotWidget()->setVisibleTimeRange(
         {base + std::chrono::seconds(5), base + std::chrono::seconds(15)});
     const QString path = temporary.filePath(QStringLiteral("visible.csv"));
-    QVERIFY(window.exportData(path, true));
+    QVERIFY(window.exportData(path, striptool::ExportFormat::Csv));
     std::ifstream input(path.toStdString());
     const std::string content((std::istreambuf_iterator<char>(input)),
                               std::istreambuf_iterator<char>());

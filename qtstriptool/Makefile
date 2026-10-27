@@ -14,7 +14,7 @@ CORE = core/application.cc core/command_line.cc core/model.cc core/config.cc cor
        core/plot_data.cc
 SERVICES = services/runtime_capabilities.cc services/acquisition_manager.cc \
            services/channel_access.cc services/cpu_usage_provider.cc \
-           services/file_workflow.cc services/export_service.cc \
+           services/file_workflow.cc services/export_service.cc services/sdds_export.cc \
            services/history_provider.cc
 UI = ui/main_window.cc ui/plot_widget.cc ui/controls_window.cc \
      ui/history_dialog.cc ui/help.cc ui/about_banner.cc ui/pv_drop.cc ui/motif_pv_drop.cc
@@ -60,7 +60,7 @@ define compile_cxx
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(1) $(CXXFLAGS) /c $< /Fo$@
 endef
 define link_exe
-	link /nologo $(LDFLAGS) /OUT:$@ $(filter %.$(OBJEXT),$^) $(QT_LIBS) $(1) $(EPICS_LIBS)
+	link /nologo $(LDFLAGS) /OUT:$@ $(filter %.$(OBJEXT),$^) $(QT_LIBS) $(1) $(EPICS_LIBS) $(SDDS_LINK_LIBS)
 endef
 else
 CPPFLAGS += -I. -I$(OBJ_DIR) -I$(EPICS_BASE)/include
@@ -75,7 +75,7 @@ define compile_cxx
 endef
 define link_exe
 	$(CXX) $(LDFLAGS) -o $@ $(filter %.$(OBJEXT),$^) -Wl,-rpath,$(EPICS_BASE_LIB_DIR) \
-	  $(EPICS_LIBS) $(EPICS_SYSTEM_LIBS) $(QT_LIBS) $(1)
+	  $(EPICS_LIBS) $(EPICS_SYSTEM_LIBS) $(QT_LIBS) $(1) $(SDDS_LINK_LIBS)
 endef
 endif
 
@@ -87,11 +87,61 @@ QT_LIBS += $(shell $(PKG_CONFIG) --libs xcb)
 endif
 endif
 
+# Optional SDDS: try complete installations in priority order. Explicit include
+# or library overrides are authoritative, including nonexistent paths (useful
+# for building/testing without SDDS). Never borrow a core library from another
+# installation. The link probe is compiled, never executed, and stays quiet.
+SDDS_REPO ?= $(abspath $(RULES_DIR)../SDDS)
+ifneq ($(strip $(SDDS_INCLUDE_DIR) $(SDDS_LIB_DIR)),)
+SDDS_CANDIDATES := explicit
+else
+SDDS_CANDIDATES := sibling extensions aps
+endif
+sdds_include_explicit = $(SDDS_INCLUDE_DIR)
+sdds_library_explicit = $(SDDS_LIB_DIR)
+sdds_include_sibling = $(SDDS_REPO)/include
+sdds_library_sibling = $(SDDS_REPO)/lib/$(OS)-$(ARCH)
+sdds_include_extensions = $(or $(EXTENSIONS_INCLUDE_DIR),$(EPICS_INC_DIR))
+sdds_library_extensions = $(or $(EXTENSIONS_LIB_DIR),$(EPICS_LIB_DIR))
+sdds_include_aps = /usr/local/epics/extensions/include
+sdds_library_aps = /usr/local/epics/extensions/lib/$(EPICS_HOST_ARCH)
+sdds_lib = $(if $(strip $(2)),$(if $(filter Windows,$(OS)),$(wildcard $(2)/$(1).lib),$(call find_lib,$(1),a dylib so,$(2))))
+sdds_files = $(foreach lib,SDDS1 rpnlib mdbmth mdblib,$(call sdds_lib,$(lib),$(sdds_library_$(1)))) \
+             $(or $(call sdds_lib,lzma,$(sdds_library_$(1))),$(LZMA_LIB)) \
+             $(or $(call sdds_lib,z,$(sdds_library_$(1))),$(Z_LIB))
+sdds_includes = $(if $(filter Windows,$(OS)),/I"$(sdds_include_$(1))" /I"$(sdds_include_$(1))/../lzma",-I"$(sdds_include_$(1))")
+sdds_windows_gsl = $(foreach lib,gsl gslcblas,$(or $(call sdds_lib,$(lib),$(sdds_library_$(1))),$(call sdds_lib,$(lib),$(WINDOWS_GSL_LIB_DIR))))
+sdds_links = $(foreach lib,$(call sdds_files,$(1)),"$(lib)") \
+             $(if $(filter Windows,$(OS)),$(foreach lib,$(call sdds_windows_gsl,$(1)),"$(lib)") /LIBPATH:"$(sdds_library_$(1))" $(LIB_LINK_DIRS),$(GSL_LINK_LIBS) -lm $(call epics_rpath,$(call sdds_files,$(1)),$(sdds_library_$(1))))
+ifeq ($(OS),Windows)
+sdds_probe_command = $(CXX) $(CPPFLAGS) $(CXXFLAGS) $(call sdds_includes,$(1)) build/sdds_link_probe.cc /Fo"$(OBJ_DIR)/sdds-probe.obj" /Fe"$(OBJ_DIR)/sdds-probe.exe" /link $(LDFLAGS) $(call sdds_links,$(1))
+else
+sdds_probe_command = $(CXX) $(CPPFLAGS) $(CXXFLAGS) $(call sdds_includes,$(1)) build/sdds_link_probe.cc $(LDFLAGS) -o "$(OBJ_DIR)/sdds-probe" $(call sdds_links,$(1))
+endif
+sdds_probe = $(if $(and $(wildcard $(sdds_include_$(1))/SDDS.h),$(call sdds_lib,SDDS1,$(sdds_library_$(1)))),$(shell mkdir -p "$(OBJ_DIR)"; $(call sdds_probe_command,$(1)) > "$(OBJ_DIR)/sdds-probe-$(1).log" 2>&1 && echo yes))
+sdds_first_usable = $(if $(strip $(1)),$(if $(call sdds_probe,$(firstword $(1))),$(firstword $(1)),$(call sdds_first_usable,$(wordlist 2,$(words $(1)),$(1)))))
+ifneq ($(SKIP_DEPENDENCY_CHECK),1)
+# Probe on each invocation so replaced headers/libraries and toolchain changes
+# are recognized without a clean build, including recovery from a failed probe.
+SDDS_SELECTED := $(call sdds_first_usable,$(SDDS_CANDIDATES))
+endif
+ifneq ($(SDDS_SELECTED),)
+SDDS_LINK_LIBS := $(call sdds_links,$(SDDS_SELECTED))
+SDDS_DEPENDENCIES := $(call sdds_files,$(SDDS_SELECTED)) $(if $(filter Windows,$(OS)),$(call sdds_windows_gsl,$(SDDS_SELECTED)),$(wildcard $(filter-out -%,$(GSL_LINK_LIBS))))
+SDDS_HEADERS := $(wildcard $(sdds_include_$(SDDS_SELECTED))/SDDS*.h)
+CPPFLAGS += $(call sdds_includes,$(SDDS_SELECTED)) $(if $(filter Windows,$(OS)),/DSTRIPTOOL_HAVE_SDDS,-DSTRIPTOOL_HAVE_SDDS)
+ifeq ($(OS),Windows)
+MOC_CPPFLAGS += -DSTRIPTOOL_HAVE_SDDS
+endif
+endif
+
 CUSTOM_COMPILE_RULES := 1
 CUSTOM_CLEAN := 1
 PROD = qtstriptool
 qtstriptool_OBJS = $(APP_OBJECTS) $(MOC_OBJECTS) $(OBJ_DIR)/main.$(OBJEXT) $(RESOURCE_OBJECT)
-qtstriptool_LIBS = $(EPICS_LIBS) $(EPICS_SYSTEM_LIBS) $(QT_LIBS)
+qtstriptool_LIBS = $(EPICS_LIBS) $(EPICS_SYSTEM_LIBS) $(QT_LIBS) $(SDDS_LINK_LIBS)
+qtstriptool_DEPS = $(SDDS_DEPENDENCIES)
+BUILD_CONFIG_VARIABLES += SDDS_SELECTED SDDS_LINK_LIBS SDDS_REPO SDDS_INCLUDE_DIR SDDS_LIB_DIR
 BUILD_OBJECTS += $(OBJ_DIR)/tests/test_smoke.$(OBJEXT) $(OBJ_DIR)/tests/test_channel_access.$(OBJEXT)
 BUILD_GENERATED += $(MOC_SOURCES) $(RESOURCE_SOURCE) $(OBJ_DIR)/test_smoke.moc $(OBJ_DIR)/test_channel_access.moc
 CUSTOM_LINK_PRODUCTS += qtstriptool
@@ -107,6 +157,8 @@ $(PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(OBJ_DIR)/main.$(OBJEXT) $(RESOURCE_O
 
 $(OBJ_DIR)/%.$(OBJEXT): %.cc $(HEADERS) $(BUILD_FILES) | prepare-output
 	$(call compile_cxx,)
+
+$(OBJ_DIR)/services/sdds_export.$(OBJEXT) $(OBJ_DIR)/tests/test_smoke.$(OBJEXT): $(SDDS_HEADERS)
 
 $(RESOURCE_SOURCE): resources/qtstriptool.qrc resources/qtstriptool.svg \
                     ../docs/qtstriptool-user-guide.md | prepare-output
@@ -148,10 +200,10 @@ $(OBJ_DIR)/test_channel_access.moc: tests/test_channel_access.cc $(HEADERS) | pr
 $(OBJ_DIR)/tests/test_channel_access.$(OBJEXT): tests/test_channel_access.cc $(OBJ_DIR)/test_channel_access.moc $(HEADERS) $(BUILD_FILES)
 	$(call compile_cxx,$(QT_TEST_CFLAGS))
 
-$(TEST_PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(RESOURCE_OBJECT) $(OBJ_DIR)/tests/test_smoke.$(OBJEXT)
+$(TEST_PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(RESOURCE_OBJECT) $(OBJ_DIR)/tests/test_smoke.$(OBJEXT) $(SDDS_DEPENDENCIES)
 	$(call link_exe,$(QT_TEST_LIBS))
 
-$(IOC_TEST_PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(RESOURCE_OBJECT) $(OBJ_DIR)/tests/test_channel_access.$(OBJEXT)
+$(IOC_TEST_PROGRAM): $(APP_OBJECTS) $(MOC_OBJECTS) $(RESOURCE_OBJECT) $(OBJ_DIR)/tests/test_channel_access.$(OBJEXT) $(SDDS_DEPENDENCIES)
 	$(call link_exe,$(QT_TEST_LIBS))
 
 CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
@@ -180,6 +232,9 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              archiverRequestsIdentifyApplicationVersion \
              activeHistoryRequestCanBeDestroyedSafely exportReportsWriteFailures \
              exportsTextAndCsvData exportsPreEpochTimestamps exportsClockMinimumWithoutOverflow \
+             sddsExportAvailabilityMatchesMenu exportsSddsDataAndMetadata \
+             exportsEmptyAndExtremeSddsData sddsExportRejectsInvalidNamesAndDestinations \
+             mainWindowExportsVisibleSddsSamples \
              applicationUsesCNumericLocale \
              exportsGapSamplesAsInvalidNan mainWindowExportEndsWithTrailingGap \
              liveSamplesClearErrorAndLaterOutageEndsTrace \

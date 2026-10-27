@@ -12,9 +12,15 @@
 namespace striptool {
 
 using CurveSamples = std::array<std::vector<Sample>, kMaximumCurves>;
+enum class ExportFormat { Text, Csv, Sdds };
 
 class ExportService final {
 public:
+  static bool sddsAvailable();
+  static bool writeSddsFile(const std::filesystem::path& path,
+                            const StripToolModel& model,
+                            const CurveSamples& samples,
+                            std::string* error = nullptr);
   static bool writeText(std::ostream& output, const StripToolModel& model,
                         const CurveSamples& samples);
   static bool writeCsv(std::ostream& output, const StripToolModel& model,

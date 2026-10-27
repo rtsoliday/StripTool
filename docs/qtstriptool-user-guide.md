@@ -270,6 +270,19 @@ Configuration and data-export files support non-ASCII file and folder names.
   A genuine NaN reading carries its own alarm severity. Earlier builds omitted
   gap rows, so downstream parsers should treat them as missing data rather
   than readings.
+- **Export SDDS** appears in the File menu and the plot's right-click menu when
+  SDDS support was found at build time. It writes
+  one binary SDDS page for the visible time range, with a double-precision
+  `Time` column in Unix epoch seconds and one double-precision column per
+  configured PV, in curve-slot order. PV columns carry their units and comments.
+  Rows use the sorted union of sample timestamps, including fractional seconds;
+  missing samples and disconnect gaps are NaN, without interpolation. For
+  repeated timestamps within a curve, the last supplied sample wins. Configured
+  curves are included even when their plot toggle is off. An empty range writes
+  a valid zero-row page. The name `Time` is reserved, and invalid SDDS column
+  names or duplicate PV names cause an export error. Use text or CSV when alarm
+  status and severity are needed. SDDS output is uncompressed binary regardless
+  of the chosen filename suffix. A failed export preserves an existing file.
 - **Save Snapshot** writes the graph as PNG or JPEG according to the chosen
   filename/filter. If the filename has no extension, the selected format's
   `.png` or `.jpg` extension is added automatically.
@@ -277,7 +290,7 @@ Configuration and data-export files support non-ASCII file and folder names.
   Available printers and PDF support come from the platform's Qt print backend.
 
 Saving always writes the complete supported model. Legacy partial group
-load/save selection is not present. SDDS export is not built.
+load/save selection is not present.
 
 ## Get help
 
