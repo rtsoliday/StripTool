@@ -116,7 +116,7 @@ sdds_files = $(foreach lib,SDDS1 rpnlib mdbmth mdblib,$(call sdds_lib,$(lib),$(s
 sdds_includes = $(if $(filter Windows,$(OS)),/I"$(sdds_include_$(1))" /I"$(sdds_include_$(1))/../lzma",-I"$(sdds_include_$(1))")
 sdds_windows_gsl = $(foreach lib,gsl gslcblas,$(or $(call sdds_lib,$(lib),$(sdds_library_$(1))),$(call sdds_lib,$(lib),$(WINDOWS_GSL_LIB_DIR))))
 sdds_links = $(foreach lib,$(call sdds_files,$(1)),"$(lib)") \
-             $(if $(filter Windows,$(OS)),$(foreach lib,$(call sdds_windows_gsl,$(1)),"$(lib)") /LIBPATH:"$(sdds_library_$(1))" $(LIB_LINK_DIRS),$(GSL_LINK_LIBS) -lm $(call epics_rpath,$(call sdds_files,$(1)),$(sdds_library_$(1))))
+             $(if $(filter Windows,$(OS)),$(foreach lib,$(call sdds_windows_gsl,$(1)),"$(lib)") /LIBPATH:"$(sdds_library_$(1))" $(LIB_LINK_DIRS),$(GSL_LINK_LIBS) $(if $(filter Darwin,$(OS)),,-lm) $(call epics_rpath,$(call sdds_files,$(1)),$(sdds_library_$(1))))
 ifeq ($(OS),Windows)
 sdds_probe_command = $(CXX) $(CPPFLAGS) $(CXXFLAGS) $(call sdds_includes,$(1)) build/sdds_link_probe.cc /Fo"$(OBJ_DIR)/sdds-probe.obj" /Fe"$(OBJ_DIR)/sdds-probe.exe" /link $(LDFLAGS) $(call sdds_links,$(1))
 else
