@@ -49,6 +49,18 @@ std::string csvQuote(const std::string& value) {
   return '"' + escaped + '"';
 }
 
+std::string csvSpreadsheetText(const std::string& value) {
+  // Quoting preserves CSV structure, but spreadsheet programs can still
+  // evaluate a quoted cell whose first character starts a formula.
+  const bool formula = !value.empty() &&
+      (value[0] == '=' || value[0] == '+' || value[0] == '-' || value[0] == '@' ||
+       value.rfind("\xEF\xBC\x9D", 0) == 0 || // full-width equals
+       value.rfind("\xEF\xBC\x8B", 0) == 0 || // full-width plus
+       value.rfind("\xEF\xBC\x8D", 0) == 0 || // full-width minus
+       value.rfind("\xEF\xBC\xA0", 0) == 0);  // full-width at
+  return csvQuote(formula ? "\t" + value : value);
+}
+
 // EPICS INVALID_ALARM: no valid data.
 constexpr std::uint16_t kInvalidSeverity = 3;
 
@@ -109,7 +121,7 @@ bool ExportService::writeCsv(std::ostream& output, const StripToolModel& model,
     if (!model.curves[curve].nameSet) continue;
     for (const auto& sample : samples[curve]) {
       output << csvQuote(timestamp(sample.timestamp)) << ','
-             << csvQuote(model.curves[curve].name) << ',';
+             << csvSpreadsheetText(model.curves[curve].name) << ',';
       writeReading(output, sample, ',');
       output << '\n';
     }

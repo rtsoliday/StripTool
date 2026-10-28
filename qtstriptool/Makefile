@@ -64,6 +64,10 @@ define link_exe
 endef
 else
 CPPFLAGS += -I. -I$(OBJ_DIR) -I$(EPICS_BASE)/include
+ifeq ($(OS),Linux)
+CXXFLAGS += -fPIE -fstack-protector-strong
+LDFLAGS += -pie -Wl,-z,relro,-z,now
+endif
 MOC_CPPFLAGS = $(CPPFLAGS)
 EPICS_LIBS = $(CA_LIBS)
 EPICS_SYSTEM_LIBS = $(EPICS_SYS_LIBS)
@@ -239,12 +243,15 @@ CORE_TESTS = metadataIsConfigured defaultsAreToolkitNeutral \
              exportsGapSamplesAsInvalidNan mainWindowExportEndsWithTrailingGap \
              liveSamplesClearErrorAndLaterOutageEndsTrace \
              archiverRequestsEncodePlusInPvNames \
+             exportsCsvNeutralizesFormulaNames \
              loadDiagnosticsNameFileLineAndActualFallback \
              testProcessKeepsChannelAccessAndArchiveLocal \
              unterminatedChannelAccessStringsStayInBounds
 CONFIG_TESTS = readsCanonicalFixture derivesSamplesWhenOmitted readsLegacyFixture \
                preservesUnknownFieldsAcrossRoundTrip \
-               rejectsMalformedInputTransactionally clampsLegacyNumericRanges \
+               rejectsMalformedInputTransactionally rejectsOversizedConfigurationsTransactionally \
+               writerRejectsConfigurationsBeyondReadLimits \
+               clampsLegacyNumericRanges \
                appliesLayersInOrder writerRejectsInvalidModels \
                configurationRoundTripsFullDoublePrecision \
                configurationReportsCloseFailures \

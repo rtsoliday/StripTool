@@ -1682,6 +1682,24 @@ private slots:
     QVERIFY(csv.str().find("timestamp,curve,value,status,severity") == 0);
     QVERIFY(csv.str().find("\"pv,\"\"quoted\"\"\"") != std::string::npos);
   }
+  void exportsCsvNeutralizesFormulaNames() {
+    auto model = striptool::makeDefaultModel();
+    model.curves[0].nameSet = true;
+    striptool::CurveSamples samples;
+    samples[0].push_back({std::chrono::system_clock::from_time_t(0), 1.0, 0, 0});
+    for (const std::string name : {"=1+1", "+1+1", "-1+1", "@SUM(1,1)",
+                                   u8"＝1+1", u8"＋1+1", u8"－1+1", u8"＠SUM(1,1)"}) {
+      model.curves[0].name = name;
+      std::ostringstream csv;
+      QVERIFY(striptool::ExportService::writeCsv(csv, model, samples));
+      QVERIFY2(csv.str().find("\"\t" + name + "\"") != std::string::npos,
+               name.c_str());
+    }
+    model.curves[0].name = "ordinary:pv";
+    std::ostringstream csv;
+    QVERIFY(striptool::ExportService::writeCsv(csv, model, samples));
+    QVERIFY(csv.str().find("\"ordinary:pv\"") != std::string::npos);
+  }
   void sddsExportAvailabilityMatchesMenu() {
     striptool::MainWindow window;
     QCOMPARE(window.findChild<QAction*>(QStringLiteral("exportSddsAction")) != nullptr,
@@ -2692,6 +2710,86 @@ private slots:
     QVERIFY(!striptool::readConfiguration(badIndex, model).success);
     std::istringstream badPrecision("StripConfig 1.2\nStrip.Curve.0.Precision -1\n");
     QVERIFY(!striptool::readConfiguration(badPrecision, model).success);
+  }
+  void rejectsOversizedConfigurationsTransactionally() {
+    auto model = striptool::makeDefaultModel();
+    model.title = "original";
+    const auto rejected = [&](const std::string& content) {
+      std::istringstream input(content);
+      const auto result = striptool::readConfiguration(input, model);
+      return !result.success && model.title == "original" &&
+             !result.diagnostics.empty();
+    };
+    QVERIFY(rejected("StripConfig 1.2\nStrip.Title changed\n" +
+                     std::string(64 * 1024 + 1, 'x')));
+    std::string tooManyLines = "StripConfig 1.2\nStrip.Title changed\n";
+    tooManyLines.append(10000, '\n');
+    QVERIFY(rejected(tooManyLines));
+    std::string tooManyBytes = "StripConfig 1.2\nStrip.Title changed\n";
+    for (int i = 0; i < 1025; ++i) {
+      tooManyBytes.append(4095, 'x');
+      tooManyBytes += '\n';
+    }
+    QVERIFY(rejected(tooManyBytes));
+  }
+  void writerRejectsConfigurationsBeyondReadLimits() {
+    auto model = striptool::makeDefaultModel();
+    std::istringstream longTitle(
+        "StripConfig 1.2\nStrip.Title " + std::string(65520, 'A') + "\n");
+    QVERIFY(striptool::readConfiguration(longTitle, model).success);
+    std::ostringstream output;
+    output << "untouched";
+    std::string error;
+    QVERIFY(!striptool::writeConfiguration(output, model, &error));
+    QCOMPARE(error, std::string("configuration line exceeds the 64 KiB limit"));
+    QCOMPARE(output.str(), std::string("untouched"));
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = std::filesystem::u8path(
+        (directory.path() + QStringLiteral("/config.stp")).toStdString());
+    {
+      std::ofstream original(path);
+      original << "original";
+    }
+    QVERIFY(!striptool::FileWorkflow::save(path, model, &error));
+    std::ifstream preserved(path);
+    std::string saved;
+    preserved >> saved;
+    QCOMPARE(saved, std::string("original"));
+
+    model = striptool::makeDefaultModel();
+    std::string nearLimit = "StripConfig 1.2\n";
+    for (int i = 0; i < 5000; ++i)
+      nearLimit += "X " + std::string(809, 'a') + "\n";
+    std::istringstream largeInput(nearLimit);
+    QVERIFY(striptool::readConfiguration(largeInput, model).success);
+    std::ostringstream largeOutput;
+    error.clear();
+    QVERIFY(!striptool::writeConfiguration(largeOutput, model, &error));
+    QCOMPARE(error, std::string("configuration exceeds the 4 MiB size limit"));
+    QVERIFY(largeOutput.str().empty());
+
+    model = striptool::makeDefaultModel();
+    std::string nearLineLimit = "StripConfig 1.2\n";
+    for (int i = 0; i < 9998; ++i) nearLineLimit += "X 1\n";
+    std::istringstream manyLines(nearLineLimit);
+    QVERIFY(striptool::readConfiguration(manyLines, model).success);
+    std::ostringstream lineOutput;
+    error.clear();
+    QVERIFY(!striptool::writeConfiguration(lineOutput, model, &error));
+    QCOMPARE(error, std::string("configuration exceeds the line count limit"));
+    QVERIFY(lineOutput.str().empty());
+
+    model = striptool::makeDefaultModel();
+    std::istringstream boundaryTitle(
+        "StripConfig 1.2\nStrip.Title " + std::string(65506, 'B') + "\n");
+    QVERIFY(striptool::readConfiguration(boundaryTitle, model).success);
+    std::ostringstream boundaryOutput;
+    QVERIFY(striptool::writeConfiguration(boundaryOutput, model));
+    auto reopened = striptool::makeDefaultModel();
+    std::istringstream boundaryRead(boundaryOutput.str());
+    QVERIFY(striptool::readConfiguration(boundaryRead, reopened).success);
   }
   void clampsLegacyNumericRanges() {
     auto model = striptool::makeDefaultModel();

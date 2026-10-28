@@ -12,6 +12,36 @@
 namespace striptool {
 namespace {
 
+constexpr std::size_t kMaximumConfigurationBytes = 4 * 1024 * 1024;
+constexpr std::size_t kMaximumConfigurationLineBytes = 64 * 1024;
+constexpr std::size_t kMaximumConfigurationLines = 10000;
+
+struct ConfigurationLimits {
+  std::size_t bytes = 0;
+  std::size_t lineBytes = 0;
+  std::size_t lines = 0;
+
+  const char* add(char character) {
+    if (++bytes > kMaximumConfigurationBytes)
+      return "configuration exceeds the 4 MiB size limit";
+    if (character == '\n') {
+      if (lines >= kMaximumConfigurationLines)
+        return "configuration exceeds the line count limit";
+      ++lines;
+      lineBytes = 0;
+    } else if (lineBytes++ >= kMaximumConfigurationLineBytes) {
+      return "configuration line exceeds the 64 KiB limit";
+    }
+    return nullptr;
+  }
+
+  const char* finish() const {
+    return lineBytes != 0 && lines >= kMaximumConfigurationLines
+               ? "configuration exceeds the line count limit"
+               : nullptr;
+  }
+};
+
 std::string trim(const std::string& value) {
   const auto first = value.find_first_not_of(" \t\r\n");
   if (first == std::string::npos) return {};
@@ -309,11 +339,26 @@ std::string number(double value, int precision = std::numeric_limits<double>::ma
 ConfigResult readConfiguration(std::istream& input, StripToolModel& model) {
   std::vector<std::string> lines;
   std::string line;
-  while (std::getline(input, line)) {
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    lines.push_back(line);
+  ConfigurationLimits limits;
+  char character = 0;
+  while (input.get(character)) {
+    if (const char* error = limits.add(character))
+      return fail(lines.size() + 1, error);
+    if (character == '\n') {
+      if (!line.empty() && line.back() == '\r') line.pop_back();
+      lines.push_back(std::move(line));
+      line.clear();
+    } else {
+      line += character;
+    }
   }
   if (input.bad()) return fail(0, "unable to read configuration");
+  if (!line.empty()) {
+    if (const char* error = limits.finish())
+      return fail(lines.size() + 1, error);
+    if (line.back() == '\r') line.pop_back();
+    lines.push_back(std::move(line));
+  }
   if (lines.empty()) return fail(0, "configuration is empty");
   // Some Windows tools start UTF-8 text with a byte order mark. Drop it from
   // the stored line so neither the header check nor parseLegacy sees it.
@@ -353,7 +398,7 @@ ConfigResult readConfigurationFile(const std::filesystem::path& path,
   return result;
 }
 
-bool writeConfiguration(std::ostream& output, const StripToolModel& model,
+bool writeConfiguration(std::ostream& destination, const StripToolModel& model,
                         std::string* error) {
   if (model.timing.timespanSeconds < 1 || model.timing.numberOfSamples < 1 ||
       model.timing.numberOfSamples > 65536 ||
@@ -380,6 +425,9 @@ bool writeConfiguration(std::ostream& output, const StripToolModel& model,
       return false;
     }
   }
+  // Build the complete file before touching the destination. A configuration
+  // that Save succeeds on must also fit the reader's limits on the next Open.
+  std::ostringstream output;
   writeField(output, "StripConfig", "1.2");
   writeField(output, "Strip.Title", singleLine(model.title));
   for (const auto& field : model.unknownFields) writeField(output, field.key, field.value);
@@ -425,6 +473,23 @@ bool writeConfiguration(std::ostream& output, const StripToolModel& model,
     writeField(output, prefix + "PlotStatus", curve.plotted ? "1" : "0");
   }
   if (!output) {
+    if (error) *error = "unable to write configuration";
+    return false;
+  }
+  const std::string content = output.str();
+  ConfigurationLimits limits;
+  for (char character : content) {
+    if (const char* limitError = limits.add(character)) {
+      if (error) *error = limitError;
+      return false;
+    }
+  }
+  if (const char* limitError = limits.finish()) {
+    if (error) *error = limitError;
+    return false;
+  }
+  destination.write(content.data(), static_cast<std::streamsize>(content.size()));
+  if (!destination) {
     if (error) *error = "unable to write configuration";
     return false;
   }

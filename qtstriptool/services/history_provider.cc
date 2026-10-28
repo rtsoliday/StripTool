@@ -213,7 +213,9 @@ HistoryRequestId ArchiverHistoryProvider::request(const QString& channel,
   }
 
   const QUrl url = requestUrl(retrievalRoot_, channel, range);
-  if (!url.isValid() || url.scheme().isEmpty() || url.host().isEmpty()) {
+  if (!url.isValid() || (url.scheme() != QStringLiteral("https") &&
+                         url.scheme() != QStringLiteral("http")) ||
+      url.host().isEmpty()) {
     QMetaObject::invokeMethod(this, [this, id] {
       emit requestFailed(id, tr("The EPICS Archiver URL is invalid."));
     }, Qt::QueuedConnection);
@@ -221,6 +223,8 @@ HistoryRequestId ArchiverHistoryProvider::request(const QString& channel,
   }
 
   QNetworkRequest request(url);
+  request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                       QNetworkRequest::SameOriginRedirectPolicy);
   request.setHeader(QNetworkRequest::UserAgentHeader,
                     QStringLiteral("qtstriptool/") + applicationVersion());
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)

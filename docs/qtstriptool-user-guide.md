@@ -255,6 +255,8 @@ Configuration and data-export files support non-ASCII file and folder names.
 - **File > Open**, **Save**, and **Save As** read and write Motif-readable
   `StripConfig 1.2` files. Open Recent is stored with Qt application settings.
   An Open error names the file and, for a malformed file, the failing line.
+  Input is limited to 4 MiB, 64 KiB per line, and 10,000 lines. Save checks the
+  same limits and leaves an existing file intact if the output would exceed one.
 - **Restore Defaults** in Controls replaces the current model with compiled
   defaults.
 - **Export Text** and **Export CSV** write samples in the visible time range.
@@ -269,7 +271,9 @@ Configuration and data-export files support non-ASCII file and folder names.
   buffer, where the graph's gap before the oldest retained live sample begins.
   A genuine NaN reading carries its own alarm severity. Earlier builds omitted
   gap rows, so downstream parsers should treat them as missing data rather
-  than readings.
+  than readings. CSV curve names beginning with a spreadsheet formula prefix
+  receive a leading tab inside the quoted field. Consumers that require the
+  original PV name should remove that tab after parsing the CSV.
 - **Export SDDS** appears in the File menu and the plot's right-click menu when
   SDDS support was found at build time. It writes
   one binary SDDS page for the visible time range, with a double-precision
