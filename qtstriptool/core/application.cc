@@ -6,7 +6,7 @@
 #include <clocale>
 namespace striptool {
 QString applicationName() { return QStringLiteral("Qt StripTool"); }
-QString applicationVersion() { return QStringLiteral("1.0.0"); }
+QString applicationVersion() { return QStringLiteral("1.1.0"); }
 QString versionText() {
   return QStringLiteral("%1 %2 (Qt %3, EPICS %4)")
       .arg(applicationName(), applicationVersion(), qtVersion(), epicsVersion());

@@ -22,7 +22,7 @@ what the build files intend to support.
 | History lifecycle | `StripHistory.h` | Cancellable provider interface | Automated | no-history and deterministic providers |
 | APS archive backend | Site-selected legacy backend | Native Archiver Appliance JSON provider | Automated basics; operational validation open | Parser, URL, asynchronous retrieval, cancellation, and automatic backfill tests |
 | Printing | X11/shell print path | Qt PrintSupport | Build/UI action automated; output manual | Print to PDF and inspect |
-| SDDS output | Optional compile path | Not enabled | Site decision | Confirm operational requirement |
+| SDDS output | Optional compile path | Optional binary export of the visible range | Round-trip and menu tests | `make test-qtstriptool-core`; compatible SDDS headers and libraries enable the export |
 
 ## Platform gate record
 

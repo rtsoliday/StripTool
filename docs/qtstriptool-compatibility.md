@@ -6,15 +6,15 @@ acquisition, and plotting code. The detailed behavioral contract is in
 `StripToolCompatibilityBaseline.md`; test and platform evidence is maintained
 in `QtParityMatrix.md`.
 
-## Release status: 1.0.0
+## Release status for 1.1.0
 
-Qt StripTool 1.0.0 is the first normal release of the Qt application. It
-includes live Channel Access, ten-curve connection and plotting controls,
-configuration load/save, annotations, text/CSV and image exports, Qt printing,
-and a cancellable EPICS Archiver Appliance provider.
+Qt StripTool 1.1.0 includes live Channel Access, ten-curve connection and
+plotting controls, configuration load/save, annotations, text/CSV and image
+exports, optional binary SDDS export, Qt printing, and a cancellable EPICS
+Archiver Appliance provider.
 
 The Qt executable remains qtstriptool and the Motif executable remains
-StripTool. Version 1.0.0 is a release of the Qt application under its own name;
+StripTool. Version 1.1.0 is a release of the Qt application under its own name;
 it does not assert complete compatibility with every legacy extension or site
 deployment. The known differences below remain relevant to migrations.
 

@@ -38,6 +38,7 @@ export default defineConfig({
         { text: 'Configuration files', link: '/reference/configuration' }
       ]},
       { text: 'PROJECT & DEVELOPMENT', collapsed: true, items: [
+        { text: 'Release notes', link: '/project/release-notes' },
         { text: 'Compatibility & release status', link: '/understand/compatibility' },
         { text: 'Appearance', link: '/understand/appearance' },
         { text: 'Performance', link: '/understand/performance' },

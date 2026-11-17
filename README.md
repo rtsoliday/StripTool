@@ -5,11 +5,13 @@ This repository builds two EPICS trend applications side by side:
 - `StripTool` is the maintained legacy Motif application in `striptool/`.
 - `qtstriptool` is the C++17/Qt replacement in `qtstriptool/`.
 
-Qt StripTool 1.0.0 is the first normal release. It supports live Channel Access,
+Qt StripTool 1.1.0 supports live Channel Access,
 ten-curve controls, compatible configuration load/save, graph interaction,
 annotations, Archiver Appliance history, text/CSV, optional SDDS and image export, and Qt
 printing. It remains a separately named application so sites can keep the
 legacy StripTool available where a documented difference matters.
+
+[Qt StripTool 1.1.0 release notes](docs/site/project/release-notes.md)
 
 ## Qt StripTool highlights
 

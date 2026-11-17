@@ -4,7 +4,7 @@ Qt StripTool displays timestamped EPICS Channel Access values for as many as
 ten process variables. The graph and controls windows share one configuration;
 changes made in Controls immediately affect the graph and acquisition.
 
-This guide describes Qt StripTool 1.0.0. The legacy StripTool executable remains
+This guide describes Qt StripTool 1.1.0. The legacy StripTool executable remains
 available for workflows that depend on one of the documented differences and
 for site-specific rollback.
 
@@ -169,6 +169,8 @@ and To fields accept times from 1970-01-01 to 2100-01-01 UTC. The
 default retrieval root is `http://asddtn03.aps4.anl.gov:17668/retrieval`. Set
 `QTSTRIPTOOL_ARCHIVER_URL` to another retrieval root, or directly to its
 `data/getData.json` endpoint, before starting qtstriptool to override it.
+HTTP redirects must keep the same scheme, host, and port. Set the override
+to the final endpoint when a service redirects elsewhere.
 Requests use automatic `lastSample` reduction to keep long ranges responsive:
 the Archiver keeps the last sample in each bin, and the bin is sized from the
 requested span so that each PV returns at most about 10,000 points, never less

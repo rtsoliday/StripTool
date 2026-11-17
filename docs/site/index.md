@@ -9,6 +9,8 @@ description: Plot an EPICS PV, configure curves, and find Qt StripTool operating
 
 <p class="doc-intro">Plot live process variables, inspect historical values, and carry your StripTool configurations into the Qt application.</p>
 
+[Qt StripTool 1.1.0 release notes](./project/release-notes)
+
 <figure class="doc-shot">
   <img src="./assets/screenshots/graph-overview.png" alt="Qt StripTool graph window with a blue step trace, time axis, legend, and navigation toolbar" />
   <figcaption>The graph window with an illustrative CPU_Usage trace. The waveform is example data; the interface is captured from Qt StripTool.</figcaption>
@@ -31,7 +33,7 @@ bin/Linux-x86_64/qtstriptool
 
 The Controls window opens when no configuration file is given on the command line. If the current directory contains `StripTool.stp`, that file is loaded first and its curves connect; otherwise Qt StripTool starts with compiled defaults. Enter a process variable, select **Connect**, and use the graph to see monitor updates. [Plot your first PV](./get-started/first-trend) walks through the controls and expected result.
 
-<div class="doc-note"><strong>Using Motif StripTool today?</strong> Qt StripTool 1.0.0 is a normal release under its own executable name. Review the <a href="./understand/compatibility.html">known differences and rollout guide</a> when changing an operator launcher.</div>
+<div class="doc-note"><strong>Using Motif StripTool today?</strong> Qt StripTool 1.1.0 is a normal release under its own executable name. Review the <a href="./understand/compatibility.html">known differences and rollout guide</a> when changing an operator launcher.</div>
 
 ## Find a task
 

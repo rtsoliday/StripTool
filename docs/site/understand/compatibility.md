@@ -1,6 +1,6 @@
 # Compatibility and release status
 
-Qt StripTool 1.0.0 is the first normal release. It provides live Channel Access,
+Qt StripTool 1.1.0 provides live Channel Access,
 ten curves, controls, configuration load/save, annotations, export, printing,
 and an EPICS Archiver Appliance provider. The legacy StripTool executable
 remains available for workflows that depend on documented differences.
@@ -16,7 +16,12 @@ remains available for workflows that depend on documented differences.
 
 ## Differences to review
 
-The Qt history provider uses an EPICS Archiver Appliance; the legacy CAR/AAPI/LANL providers are not ported. Text and CSV exports write one row per curve sample, whereas legacy dump files use one row per timestamp; a disconnect, CA error, or lost-update gap, or for a curve with archived history the first live sample discarded from the buffer, is a row with value `nan` and severity 3 (INVALID) instead of a `BadVal` cell. Partial configuration-group load/save, CDEV, SDDS export, arbitrary X resources, and legacy printer commands are not available. Qt widgets, fonts, dialogs, and print backends follow the selected platform style.
+The Qt history provider uses an EPICS Archiver Appliance; the legacy CAR/AAPI/LANL providers are not ported. Text and CSV exports write one row per curve sample, whereas legacy dump files use one row per timestamp; a disconnect, CA error, or lost-update gap, or for a curve with archived history the first live sample discarded from the buffer, is a row with value `nan` and severity 3 (INVALID) instead of a `BadVal` cell. Partial configuration-group load/save, CDEV, arbitrary X resources, and legacy printer commands are not available. Qt widgets, fonts, dialogs, and print backends follow the selected platform style.
+
+Binary [SDDS export](../operate/files#export-sdds) is available when compatible
+SDDS libraries are found at build time. It writes the visible range with a
+`Time` column and a column for each configured PV. Independent timestamps are
+aligned by their sorted union, with NaN for missing samples and gaps.
 
 The Qt executable is named `qtstriptool` and installs alongside `StripTool`. The project does not install a `StripTool` alias or a system-wide `.stp` MIME registration.
 

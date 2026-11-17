@@ -2573,7 +2573,7 @@ private slots:
              qPrintable(output.err));
     QVERIFY2(!output.err.contains(QStringLiteral("trying StripTool.stp")), qPrintable(output.err));
     output = run({QStringLiteral("--version")});
-    QVERIFY2(output.out.contains(QStringLiteral("Qt StripTool")), qPrintable(output.out));
+    QVERIFY2(output.out.contains(QStringLiteral("Qt StripTool 1.1.0")), qPrintable(output.out));
 
     // StripTool.stp is promised only when it is a different, existing file.
     QVERIFY(write(QStringLiteral("StripTool.stp"),

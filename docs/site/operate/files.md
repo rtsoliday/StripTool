@@ -10,7 +10,26 @@ Use a `.stp` file to preserve curve definitions, timing, and appearance. Runtime
 
 ## Export samples
 
-**File > Export Text** and **Export CSV** write samples in the visible time range. Qt StripTool writes one row per curve sample, with timestamp, curve, value, status, and severity. Timestamps are UTC in ISO 8601 form with milliseconds, such as `2026-10-16T14:05:09.250Z`. Live Channel Access samples carry the workstation time at which each update was received, not the IOC timestamp; archived samples keep their archive timestamps. A row with value `nan` and severity 3 (INVALID) marks a gap from a disconnect, CA error, or lost updates. For a curve with archived history, such a row also marks the first live sample discarded from the buffer, where the graph's gap before the oldest retained live sample begins. A genuine NaN reading carries its own alarm severity. Earlier builds omitted gap rows, so downstream parsers should treat them as missing data rather than readings. CSV curve names beginning with a spreadsheet formula prefix receive a leading tab inside the quoted field; consumers needing the original PV name should remove that tab after parsing. Legacy StripTool dump files instead have one row per timestamp and a column for each curve, so check consumers before changing an automated export workflow. SDDS export is not built.
+**File > Export Text** and **Export CSV** write samples in the visible time range. Qt StripTool writes one row per curve sample, with timestamp, curve, value, status, and severity. Timestamps are UTC in ISO 8601 form with milliseconds, such as `2026-10-16T14:05:09.250Z`. Live Channel Access samples carry the workstation time at which each update was received, not the IOC timestamp; archived samples keep their archive timestamps. A row with value `nan` and severity 3 (INVALID) marks a gap from a disconnect, CA error, or lost updates. For a curve with archived history, such a row also marks the first live sample discarded from the buffer, where the graph's gap before the oldest retained live sample begins. A genuine NaN reading carries its own alarm severity. Earlier builds omitted gap rows, so downstream parsers should treat them as missing data rather than readings. CSV curve names beginning with a spreadsheet formula prefix receive a leading tab inside the quoted field; consumers needing the original PV name should remove that tab after parsing. Legacy StripTool dump files instead have one row per timestamp and a column for each curve, so check consumers before changing an automated export workflow.
+
+## Export SDDS
+
+**Export SDDS** appears in the File menu and graph's context menu when
+compatible SDDS libraries were found at build time. It saves the visible
+time range as one binary SDDS page with a double-precision `Time` column in
+Unix epoch seconds and one double-precision column per configured PV.
+Each PV column carries its units and comments. All configured curves are
+included, even when their plot toggle is off.
+
+Rows use the sorted union of sample timestamps. Missing samples and
+disconnect gaps are NaN, without interpolation. For repeated timestamps
+within a curve, the last supplied sample wins. An empty range produces a
+valid zero-row page. The name `Time` is reserved, and invalid SDDS column
+names or duplicate PV names cause an export error.
+
+Text and CSV exports include alarm status and severity. SDDS output is
+uncompressed binary regardless of the filename suffix. A failed export
+preserves an existing destination file.
 
 ## Capture and print the graph
 

@@ -12,6 +12,17 @@ make qtstriptool
 
 The executable is copied to `bin/<OS>-<architecture>/qtstriptool`. The [repository README](https://github.com/rtsoliday/StripTool#dependencies) describes platform dependencies and the complete build and test commands.
 
+## SDDS export
+
+Compatible SDDS headers and libraries enable [binary SDDS export](../operate/files#export-sdds)
+automatically. The build searches the sibling `SDDS` checkout, configured
+EPICS extensions directories, and `/usr/local/epics/extensions`.
+Set `SDDS_REPO=/path/to/SDDS` for another checkout, or set both
+`SDDS_INCLUDE_DIR` and `SDDS_LIB_DIR` for an installed copy. Explicit directory
+overrides control the search. Missing or unusable dependencies omit the
+SDDS export action. Detection logs are written to
+`qtstriptool/O.<OS>-<architecture>-qt<version>/sdds-probe-*.log`.
+
 ## Run
 
 ```sh
